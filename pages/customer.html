@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Customer | Tower of Dove</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/base.css">
+<link rel="stylesheet" href="../css/customer.css">
+<link rel="icon" type="image/png" href="../images/logo.png?v=2">
+</head>
+<body>
+
+<header class="top">
+  <a class="brand" href="../index.html"><img class="logo" src="../images/logo.png" alt="" width="34" height="34">Tower of Dove</a>
+  <div class="ta">
+    <span class="who" id="who"></span>
+    <a class="tl" href="../index.html">Log out</a>
+  </div>
+</header>
+
+<nav class="cnav" aria-label="Customer sections">
+  <button type="button" data-t="c-book" class="on">Book a studio</button>
+  <button type="button" data-t="c-rent">Rent equipment</button>
+  <button type="button" data-t="c-bk">My bookings</button>
+  <button type="button" data-t="c-rental">My rental</button>
+</nav>
+
+<main class="wrap">
+
+  <!-- ===== Book a studio ===== -->
+  <section id="c-book" class="pg on">
+    <h1>Book a studio</h1>
+    <p class="sub">Pick a room, then a date and time. We hold your slot for 15 minutes while you finish.</p>
+    <div class="grid g2">
+      <div>
+        <div class="grid ge" id="cs"></div>
+        <div class="card" style="margin-top:16px">
+          <h3>Available times</h3>
+          <div class="row" style="margin:10px 0">
+            <input type="date" id="bd" value="2026-10-10" aria-label="Date" style="max-width:190px">
+            <span class="mut">Grayed-out times are already booked</span>
+          </div>
+          <div class="slots" id="slots"></div>
+        </div>
+      </div>
+
+      <form class="card sticky" id="bf" novalidate>
+        <h2>Your booking</h2>
+        <div class="row"><span id="sumS"></span><span class="mut" id="sumR"></span></div>
+
+        <label for="dur">Duration</label>
+        <select id="dur">
+          <option value="1">1 hour</option>
+          <option value="2" selected>2 hours</option>
+          <option value="3">3 hours</option>
+          <option value="4">4 hours</option>
+        </select>
+
+        <label for="nm">Name</label>
+        <input id="nm" value="Juan Dela Cruz" autocomplete="name">
+        <label for="ph">Phone</label>
+        <input id="ph" value="0917 123 4567" autocomplete="tel">
+
+        <label for="pm">Payment method</label>
+        <select id="pm"><option>GCash</option><option>Cash</option></select>
+        <div id="grw">
+          <label for="gr">GCash reference number</label>
+          <input id="gr" placeholder="13-digit reference" inputmode="numeric">
+        </div>
+
+        <div class="tot"><span>Total</span><span id="tot">₱0</span></div>
+        <div class="hold" id="hold"></div>
+        <div id="bmsg" hidden role="status"></div>
+        <button class="btn gold full" type="submit">Submit booking</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- ===== Rent equipment ===== -->
+  <section id="c-rent" class="pg">
+    <h1>Rent equipment</h1>
+    <p class="sub">Add gear to a studio you booked, or rent it to take outside the studio.</p>
+    <div class="grid g2">
+      <div class="grid ge" id="eq" style="align-items:start"></div>
+
+      <form id="rf" class="card sticky">
+        <h2>Rental summary</h2>
+        <label style="margin-top:0">How will you use it?</label>
+        <div class="seg" id="rm">
+          <button type="button" class="on" data-m="addon">Add-on to my studio booking</button>
+          <button type="button" class="m" data-m="out">Outside rent</button>
+        </div>
+        <p class="mut" id="rmh"></p>
+        <div id="bundle-tag-wrap"></div>
+        <ul class="list" id="cart" style="margin-top:8px"></ul>
+        <div class="tot"><span>Total</span><span id="ctt">₱0</span></div>
+
+        <div id="fa">
+          <label for="lb">Attach to booking</label>
+          <select id="lb"></select>
+        </div>
+
+        <div id="fo" hidden>
+          <label for="pd">Pick-up date & time (at the studio)</label>
+          <div style="display:flex; gap:10px;">
+            <input id="pd" type="date" value="2026-10-10" style="flex:2;">
+            <input id="pt" type="time" value="10:00" style="flex:1;" aria-label="Pick-up time">
+          </div>
+
+          <label for="rd" style="margin-top:10px">Return date & time</label>
+          <div style="display:flex; gap:10px;">
+            <input id="rd" type="date" value="2026-10-11" style="flex:2;">
+            <input id="rt" type="time" value="22:00" style="flex:1;" aria-label="Return time">
+          </div>
+
+          <label for="oc" style="margin-top:10px">Contact number</label>
+          <input id="oc" value="0917 123 4567">
+          <label for="sm-link">Backup contact (optional)</label>
+          <input id="sm-link" placeholder="Facebook/Messenger/Instagram link or handle">
+          <label for="vt">ID type</label>
+          <select id="vt">
+            <option>Driver's license</option><option>Passport</option><option>UMID</option>
+            <option>National ID (PhilSys)</option><option>Postal ID</option><option>School ID</option>
+          </select>
+          <label for="vf">Attach valid ID</label>
+          <input id="vf" type="file" accept="image/*,.pdf">
+          <p class="mut" style="margin-top:4px">Required for outside rentals. Upload a clear photo or PDF of the front of your ID (JPG, PNG or PDF).</p>
+        </div>
+
+        <div id="rmsg" hidden role="status"></div>
+        <button class="btn gold full" id="rq" type="submit">Request rental</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- ===== My bookings ===== -->
+  <section id="c-bk" class="pg">
+    <h1>My bookings</h1>
+    <p class="sub">Changes and cancellations close 24 hours before your session.</p>
+    <div class="card"><div class="tw" id="mybk"></div></div>
+
+    <p class="mut" style="margin-top:12px">Booked as a guest? Look up a booking with its reference and your phone number.</p>
+    <div class="row" style="max-width:520px;margin-top:8px">
+      <input id="fref" placeholder="Booking reference" aria-label="Booking reference">
+      <input id="fph" placeholder="Phone number" aria-label="Phone number">
+      <button class="btn line" id="find" type="button">Find booking</button>
+    </div>
+    <div id="fres" hidden style="max-width:520px" role="status"></div>
+  </section>
+
+  <!-- ===== My rental ===== -->
+  <section id="c-rental" class="pg">
+    <h1>My rental</h1>
+    <p class="sub">Equipment tied to your studio bookings.</p>
+    <div class="card"><div class="tw" id="myrent"></div></div>
+  </section>
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../js/data.js"></script>
+<script src="../js/customer.js"></script>
+</body>
+</html>
