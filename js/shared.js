@@ -32,33 +32,41 @@ const ROUTES = {
   admin:    'pages/admin.html#a-over'   // owner and staff dashboard
 };
 
-/* Studios. status: Available | Occupied | Maintenance | Unavailable
-   c1 / c2 are the gradient colours used until you add real photos. */
-const STUDIOS = [
-  { id: 'A', desc: 'Drum and full band room',  rate: 350, status: 'Available',   c1: '#C92C3E', c2: '#3D0C14' },
-  { id: 'B', desc: 'Vocal and acoustic booth', rate: 250, status: 'Occupied',    c1: '#C98512', c2: '#33220A' },
-  { id: 'C', desc: 'Mid-size band room',       rate: 300, status: 'Available',   c1: '#8E161F', c2: '#1E0A0F' },
-  { id: 'D', desc: 'Production room',          rate: 280, status: 'Maintenance', c1: '#4A4A55', c2: '#16161A' }
-];
+/* Studios and equipment are loaded from Supabase when the page opens (see loadCatalog).
+   Page scripts must wait for `dataReady` before using them.
+   Studio: { dbId, id: 'A', desc, rate, status, c1, c2 }   status: Available | Maintenance | Unavailable */
+const STUDIOS = [];
+const EQUIPMENT = [];
+const STUDIO_COLORS = [['#C92C3E', '#3D0C14'], ['#C98512', '#33220A'], ['#8E161F', '#1E0A0F'], ['#4A4A55', '#16161A']];
 
-/* Equipment. addon = rentable inside the studio (price per session),
-   outside = rentable to take away (price per day, 8 hrs minimum).
-   Optional fields: img (image URL), desc (short description). */
-const drumSet = (name, kit, vip, price) => ({
-  name, category: 'Drums', addonPrice: price, outsidePrice: price,
-  stock: 1, addon: true, outside: true, drum: { kit, vip }
-});
-const EQUIPMENT = [
-  { name: 'Electric guitar',     category: 'Guitars',    addonPrice: 100, outsidePrice: 250, stock: 4, addon: true, outside: true },
-  { name: 'Guitar amplifier',    category: 'Amplifiers', addonPrice: 150, outsidePrice: 350, stock: 4, addon: true, outside: true },
-  drumSet('Set A Drum Set', 'RDX drum set', false, 2700),
-  drumSet('Set B Drum Set', 'RDX drum set', true,  3000),
-  drumSet('Set C Drum Set', 'Steely drum set (high-end model)', false, 2500),
-  drumSet('Set D Drum Set', 'Steely drum set (high-end model)', true,  2800),
-  { name: 'Drum kit add-ons',    category: 'Drums',      addonPrice: 120, outsidePrice: 0,   stock: 2, addon: true, outside: false },
-  { name: 'Keyboard',            category: 'Keyboards',  addonPrice: 200, outsidePrice: 500, stock: 1, addon: true, outside: true },
-  { name: 'Multi-effects pedal', category: 'Effects',    addonPrice: 80,  outsidePrice: 150, stock: 3, addon: true, outside: true }
-];
+async function loadCatalog() {
+  const [st, eq] = await Promise.all([
+    sb.from('studio').select('*').order('studio_id'),
+    sb.from('v_equipment_stock').select('*').order('equipment_id')
+  ]);
+  if (st.error || eq.error) {
+    console.error(st.error, eq.error);
+    toast('Could not load studios and equipment. Check your connection.');
+    return;
+  }
+  STUDIOS.length = 0;
+  EQUIPMENT.length = 0;
+  st.data.forEach((s, i) => {
+    const c = STUDIO_COLORS[i % STUDIO_COLORS.length];
+    STUDIOS.push({
+      dbId: s.studio_id, id: s.name.replace(/^studio\s*/i, ''), desc: s.description || '',
+      rate: +s.hourly_rate, status: s.status, img: s.image, c1: c[0], c2: c[1]
+    });
+  });
+  eq.data.forEach(e => EQUIPMENT.push({
+    id: e.equipment_id, name: e.name, category: e.category_name, desc: e.description, img: e.image,
+    addonPrice: +e.add_on_rate || 0, outsidePrice: +e.outside_rate || 0,
+    stock: e.stock_status === 'Unavailable' ? 0 : e.available, total: e.total_quantity,
+    addon: e.allow_addon, outside: e.allow_outside, minHours: e.min_hours,
+    drum: e.is_drum_set ? { kit: e.drum_kit, vip: e.is_vip } : null
+  }));
+}
+const dataReady = loadCatalog();
 
 /* Bookable hourly slots (10:00 AM to 9:00 PM start times). */
 const SLOTS = ['10:00 AM', '11:00 AM', '12:00 PM', '1:00 PM', '2:00 PM', '3:00 PM',
@@ -100,80 +108,104 @@ function toast(message) {
   toastTimer = setTimeout(() => (t.hidden = true), 4000);
 }
 
-/* DEMO bookings so the calendar and availability check have something to show.
-   status: Pending | Confirmed | Active | Completed | Cancelled
-   mine: true = shown under "My bookings" for the signed-in customer.
-   Replace this with a fetch() to your backend. */
-const BOOKINGS = [
-  { ref: 'TOD-1043', studio: 'B', date: dayOffset(0),  start: '1:00 PM',  hours: 3, status: 'Active',    payment: 'Verified', mine: true  },
-  { ref: 'TOD-1042', studio: 'A', date: dayOffset(1),  start: '2:00 PM',  hours: 2, status: 'Confirmed', payment: 'Verified', mine: true  },
-  { ref: 'TOD-1044', studio: 'C', date: dayOffset(0),  start: '6:00 PM',  hours: 2, status: 'Pending',   payment: 'Pending',  mine: false },
-  { ref: 'TOD-1045', studio: 'A', date: dayOffset(3),  start: '10:00 AM', hours: 1, status: 'Pending',   payment: 'Pending',  mine: true  },
-  { ref: 'TOD-1046', studio: 'D', date: dayOffset(-2), start: '4:00 PM',  hours: 2, status: 'Completed', payment: 'Verified', mine: true  },
-  { ref: 'TOD-1047', studio: 'B', date: dayOffset(4),  start: '3:00 PM',  hours: 2, status: 'Cancelled', payment: 'Rejected', mine: true  },
-  { ref: 'TOD-1048', studio: 'A', date: dayOffset(0),  start: '2:00 PM',  hours: 2, status: 'Confirmed', payment: 'Verified', mine: false }
-];
+/* The signed-in customer's own bookings (filled by customer.js).
+   status: Pending | Confirmed | Active | Completed | Cancelled | Rejected */
+const BOOKINGS = [];
 
-/* Slot indexes already taken for a studio on a date.
-   ignoreRef lets a booking ignore itself (used when rescheduling). */
-function takenSlots(studioIdx, dateISO, ignoreRef) {
-  const taken = new Set();
-  const id = STUDIOS[studioIdx].id;
+/* Taken hours per studio and day, loaded from the database (get_busy_slots).
+   Key: 'studioDbId|YYYY-MM-DD'  ->  Set of slot indexes (0 = 10:00 AM). */
+const BUSY = {};
 
-  BOOKINGS.forEach(b => {
-    if (b.studio === id && b.date === dateISO && b.status !== 'Cancelled' && b.ref !== ignoreRef) {
-      const first = SLOTS.indexOf(b.start);
-      for (let h = 0; h < b.hours; h++) taken.add(first + h);
+async function loadBusy(studioIdx, fromDate, toDate) {
+  const s = STUDIOS[studioIdx];
+  if (!s) return;
+  for (const k of Object.keys(BUSY)) {
+    const [id, d] = k.split('|');
+    if (+id === s.dbId && d >= fromDate && d <= toDate) delete BUSY[k];
+  }
+  const { data, error } = await sb.rpc('get_busy_slots', {
+    p_studio_id: s.dbId,
+    p_from: manilaTS(fromDate, 0),
+    p_to: new Date(new Date(manilaTS(toDate, 0)).getTime() + 864e5).toISOString(),
+    p_token: HOLD_TOKEN
+  });
+  if (error) { console.error(error); toast('Could not load availability.'); return; }
+  (data || []).forEach(r => {
+    const end = new Date(r.end_at).getTime();
+    for (let t = new Date(r.start_at).getTime(); t < end; t += 3600e3) {
+      const p = manilaParts(new Date(t)), idx = p.hour - 10;
+      if (idx < 0 || idx >= SLOTS.length) continue;
+      const key = s.dbId + '|' + p.date;
+      (BUSY[key] = BUSY[key] || new Set()).add(idx);
     }
   });
+}
 
-  // hours currently held by another customer's open booking form
-  const locks = readLocks(), now = Date.now();
-  for (const key in locks) {
-    const [sid, d, idx] = key.split('|');
-    if (locks[key].x > now && locks[key].o !== ME && sid === id && d === dateISO) taken.add(+idx);
+/* Slot indexes already taken for a studio on a date (call loadBusy first).
+   ignoreRef lets a booking ignore itself (used when rescheduling). */
+function takenSlots(studioIdx, dateISO, ignoreRef) {
+  const s = STUDIOS[studioIdx];
+  const taken = new Set(BUSY[s.dbId + '|' + dateISO] || []);
+  if (ignoreRef) {
+    const b = BOOKINGS.find(x => x.ref === ignoreRef);
+    if (b && b.studio === s.id && b.date === dateISO) {
+      const first = SLOTS.indexOf(b.start);
+      for (let h = 0; h < b.hours; h++) taken.delete(first + h);
+    }
   }
   return taken;
 }
 
 
 /* ============================ 3. SLOT HOLDS ============================
-   lockAcquire claims every hour or none, so two customers can never hold
-   the same hour. Holds expire (LOCK_TTL) and are mirrored to localStorage
-   so other browser tabs see them. In production do this on the server. */
+   While someone fills in a booking form, the hours are held on the server
+   for 2 minutes (hold_slot). One token = one browser = one hold at a time. */
 
-const ME = Math.random().toString(36).slice(2);
+const HOLD_TOKEN = 'h' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+const ME = HOLD_TOKEN;                  // old name, still used by admin.js
 const LOCK_TTL = 2 * 60 * 1000;
-const LOCK_KEY = 'tod_locks';
 
-const readLocks  = () => { try { return JSON.parse(localStorage.getItem(LOCK_KEY) || '{}'); } catch (e) { return {}; } };
-const writeLocks = o  => { try { localStorage.setItem(LOCK_KEY, JSON.stringify(o)); } catch (e) { /* storage blocked */ } };
-
-function lockAcquire(keys, who) {
-  const locks = readLocks(), now = Date.now();
-  for (const k in locks) if (locks[k].x < now || locks[k].o === who) delete locks[k];
-  if (keys.some(k => locks[k])) return false;
-  keys.forEach(k => (locks[k] = { o: who, x: now + LOCK_TTL }));
-  writeLocks(locks);
-  return true;
+async function holdSlots(studioIdx, date, first, hours) {
+  const s = STUDIOS[studioIdx];
+  const { data, error } = await sb.rpc('hold_slot', {
+    p_studio_id: s.dbId,
+    p_start_at: manilaTS(date, 10 + first),
+    p_end_at: manilaTS(date, 10 + first + hours),
+    p_token: HOLD_TOKEN
+  });
+  if (error) { console.error(error); return false; }
+  return data === true;
 }
-function lockRelease(who) {
-  const locks = readLocks();
-  for (const k in locks) if (locks[k].o === who) delete locks[k];
-  writeLocks(locks);
+async function releaseHold() {
+  try { await sb.rpc('release_hold', { p_token: HOLD_TOKEN }); } catch (e) { /* ignore */ }
 }
-const lockKeys = (studioIdx, date, first, hours) =>
-  Array.from({ length: hours }, (_, j) => `${STUDIOS[studioIdx].id}|${date}|${first + j}`);
 
 
 /* ============================ SESSION ============================
-   DEMO: the signed-in user is kept in localStorage so every page can show
-   who is logged in. Replace with a real server session in production. */
+   The real login lives in Supabase Auth. We also keep { role, label } in
+   localStorage so the sidebar can render instantly on every page. */
 const SESSION_KEY = 'tod_user';
 const getUser = () => { try { return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch (e) { return null; } };
 const setUser = u => { try { localStorage.setItem(SESSION_KEY, JSON.stringify(u)); } catch (e) { /* storage blocked */ } };
 const clearUser = () => { try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* storage blocked */ } };
-function logout() { clearUser(); navigate('home'); }
+const isMember = () => { const u = getUser(); return !!u && u.role === 'customer'; };
+
+async function logout() {
+  try { await sb.auth.signOut(); } catch (e) { /* ignore */ }
+  clearUser();
+  navigate('home');
+}
+
+// the Supabase session ended (expired or signed out elsewhere): forget the cached user
+sb.auth.getSession().then(({ data }) => {
+  if (!data.session && getUser()) { clearUser(); location.reload(); }
+});
+
+// the dashboard is for owner and staff only
+if (document.body.dataset.role === 'admin') {
+  const u = getUser();
+  if (!u || (u.role !== 'owner' && u.role !== 'staff')) location.replace(ROOT + 'pages/login.html#login');
+}
 
 
 /* ============================ 4. NAVIGATION ============================ */

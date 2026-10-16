@@ -114,7 +114,7 @@ function initCarousel() {
 
 /* ============================ AVAILABILITY ============================ */
 
-function checkAvailability() {
+async function checkAvailability() {
   const i = +$('#qs').value, studio = STUDIOS[i];
   const date = $('#qd').value, time = $('#qt').value;
   const box = $('#avail');
@@ -128,6 +128,7 @@ function checkAvailability() {
     return;
   }
 
+  await loadBusy(i, date, date);
   const taken = takenSlots(i, date);
   const openTimes = SLOTS.filter((_, k) => !taken.has(k));
   let html;
@@ -194,9 +195,12 @@ function initCardButtons() {
 
 /* ============================ START ============================ */
 
+dataReady.then(() => {
+
 renderStudioOptions();
 renderStudios();
 renderEquipment();
 initCarousel();
 initAvailability();
 initCardButtons();
+});

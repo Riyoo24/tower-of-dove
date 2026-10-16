@@ -69,6 +69,7 @@
               <input id="pd" type="date">
               <label for="rd">Return date</label>
               <input id="rd" type="date">
+              <div id="on-wrap"><label for="on">Your name</label><input id="on" autocomplete="name"></div>
               <label for="oc">Contact number</label>
               <input id="oc" placeholder="09XX XXX XXXX" autocomplete="tel">
               <label for="sm-link">Backup contact (optional)</label>
@@ -135,6 +136,8 @@
   <dialog class="dlg" id="dlg" aria-label="Details"></dialog>
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="../js/supabase-config.js"></script>
   <script src="../js/shared.js"></script>
   <script src="../js/customer.js"></script>
 </body>

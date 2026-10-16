@@ -13,20 +13,12 @@
 
 /* ============================ 1. STATE & TABS ============================ */
 
-/* DEMO rentals so "My rental" has rows. Replace with data from your backend.
+/* Rentals of the signed-in customer (loaded from the database).
    type: 'addon' (tied to a booking) | 'out' (taken outside the studio)
-   status: Pending | Approved | In Use | Returned | Rejected */
-const RENTALS = [
-  { ref: 'TOD-1043', item: 'Electric guitar',     qty: 1, type: 'addon', when: `${shortDate(dayOffset(0))}, 1:00 PM`,  ret: `${shortDate(dayOffset(0))}, 4:00 PM`,  status: 'In Use'   },
-  { ref: 'TOD-1043', item: 'Guitar amplifier',    qty: 1, type: 'addon', when: `${shortDate(dayOffset(0))}, 1:00 PM`,  ret: `${shortDate(dayOffset(0))}, 4:00 PM`,  status: 'In Use'   },
-  { ref: 'TOD-1042', item: 'Keyboard',            qty: 1, type: 'addon', when: `${shortDate(dayOffset(1))}, 2:00 PM`,  ret: `${shortDate(dayOffset(1))}, 4:00 PM`,  status: 'Pending'  },
-  { ref: 'OUT-2003', item: 'Set B Drum Set',      qty: 1, type: 'out',   when: `${shortDate(dayOffset(3))} to ${shortDate(dayOffset(4))}`, ret: shortDate(dayOffset(4)), status: 'Approved' },
-  { ref: 'TOD-1046', item: 'Multi-effects pedal', qty: 1, type: 'addon', when: `${shortDate(dayOffset(-2))}, 4:00 PM`, ret: `${shortDate(dayOffset(-2))}, 6:00 PM`, status: 'Returned' }
-];
-let outCounter = 2005;            // last OUT- reference number used
+   status: Pending | Approved | In Use | Returned | Rejected | Cancelled */
+let RENTALS = [];
 
-const firstOpenStudio = Math.max(0, STUDIOS.findIndex(s => !isClosed(s)));
-let selStudio = firstOpenStudio;  // studio picked in the booking tab
+let selStudio = 0;               // studio picked in the booking tab (set once data loads)
 let selDate = TODAY;              // day picked on the calendar
 let calMonth = new Date();        // month shown on the calendar
 calMonth.setDate(1);
@@ -98,6 +90,13 @@ function renderBook() {
   $('#bk-now').disabled = isClosed(STUDIOS[selStudio]);
 }
 
+/* Load the month's taken hours from the database, then draw the calendar. */
+async function refreshBook() {
+  const y = calMonth.getFullYear(), m = calMonth.getMonth();
+  await loadBusy(selStudio, `${y}-${pad(m + 1)}-01`, `${y}-${pad(m + 1)}-${pad(new Date(y, m + 1, 0).getDate())}`);
+  renderBook();
+}
+
 function initBookTab() {
   $('#c-book').addEventListener('click', e => {
     const pick = e.target.closest('.pick'), day = e.target.closest('.cd');
@@ -107,7 +106,7 @@ function initBookTab() {
     else if (e.target.closest('#cal-n')) calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1);
     else if (e.target.closest('#bk-now')) return openBook();
     else return;
-    renderBook();
+    (day ? renderBook : refreshBook)();
   });
 }
 
@@ -122,10 +121,12 @@ function drawSlots() {
   $('#bk-t').textContent = peso(STUDIOS[draft.si].rate * draft.h);
 }
 
-/* Try to hold hours t..t+h for this customer. */
-function moveDraft(t, h) {
+/* Try to hold hours t..t+h for this customer (held on the server for 2 minutes). */
+async function moveDraft(t, h) {
   if (t + h > SLOTS.length) { bkError('That runs past closing time. Choose a shorter duration.'); return false; }
-  if (!lockAcquire(lockKeys(draft.si, draft.d, t, h), ME)) {
+  if (!(await holdSlots(draft.si, draft.d, t, h))) {
+    await holdSlots(draft.si, draft.d, draft.t, draft.h);   // a failed move drops the old hold, so take it back
+    await loadBusy(draft.si, draft.d, draft.d);
     bkError('Those hours were just taken by another customer.');
     drawSlots();
     return false;
@@ -136,14 +137,16 @@ function moveDraft(t, h) {
   return true;
 }
 
-function openBook(startIndex) {
-  const si = selStudio, d = selDate, taken = takenSlots(si, d);
+async function openBook(startIndex) {
+  const si = selStudio, d = selDate;
+  await loadBusy(si, d, d);
+  const taken = takenSlots(si, d);
   let t = startIndex;
   if (t == null || t < 0) t = SLOTS.findIndex((_, i) => !taken.has(i));
   if (t < 0 || taken.has(t)) return toast('No free times for that day.');
 
   const h = (t + 1 < SLOTS.length && !taken.has(t + 1)) ? 2 : 1;
-  if (!lockAcquire(lockKeys(si, d, t, h), ME)) return toast('That slot was just taken. Pick another time.');
+  if (!(await holdSlots(si, d, t, h))) return toast('That slot was just taken. Pick another time.');
 
   draft = { si, d, t, h };
   const s = STUDIOS[si];
@@ -189,12 +192,16 @@ function openBook(startIndex) {
     const b = e.target.closest('button');
     if (b && !b.disabled) moveDraft(+b.dataset.i, draft.h);
   };
-  $('#bk-h').onchange = e => { if (!moveDraft(draft.t, +e.target.value)) e.target.value = draft.h; };
+  $('#bk-h').onchange = async e => { if (!(await moveDraft(draft.t, +e.target.value))) e.target.value = draft.h; };
   $('#bk-m').onchange = e => { $('#bk-gw').hidden = e.target.value !== 'GCash'; };
   $('#bk-x').onclick = () => bkDlg.close();
 
   // any activity keeps the hold alive
-  const keepAlive = () => { idleUntil = Date.now() + LOCK_TTL; if (draft) lockAcquire(lockKeys(draft.si, draft.d, draft.t, draft.h), ME); };
+  let lastHold = Date.now();
+  const keepAlive = () => {
+    idleUntil = Date.now() + LOCK_TTL;
+    if (draft && Date.now() - lastHold > 30000) { lastHold = Date.now(); holdSlots(draft.si, draft.d, draft.t, draft.h); }
+  };
   ['pointerdown', 'keydown', 'input', 'touchstart'].forEach(ev => bkDlg.addEventListener(ev, keepAlive));
   bkDlg.addEventListener('scroll', keepAlive, true);
 
@@ -207,14 +214,14 @@ function openBook(startIndex) {
 
   bkDlg.onclose = () => {
     clearInterval(idleTimer);
-    lockRelease(ME);
+    releaseHold();
     const why = draft && draft.why;
     draft = null;
-    renderBook();
+    refreshBook();
     if (why === 'timeout') toast('Booking closed after 2 minutes of inactivity. Your slot was released.');
   };
 
-  $('#bkf').onsubmit = ev => {
+  $('#bkf').onsubmit = async ev => {
     ev.preventDefault();
     const name = $('#bk-n').value.trim(), phone = $('#bk-p').value.trim();
     const method = $('#bk-m').value, gcash = $('#bk-g').value.replace(/\s/g, '');
@@ -223,32 +230,83 @@ function openBook(startIndex) {
     if (!/^[\d\s+()-]{7,}$/.test(phone)) return bkError('Enter a valid phone number.');
     if (method === 'GCash' && !/^\d{13}$/.test(gcash)) return bkError('Enter the 13-digit GCash reference.');
 
-    const now = takenSlots(draft.si, draft.d);
-    if (Array.from({ length: draft.h }, (_, j) => draft.t + j).some(i => now.has(i))) {
-      return bkError('Your slot is no longer available. Pick another time.');
-    }
+    const [first, ...rest] = name.split(/\s+/);
+    const btn = ev.target.querySelector('.btn.gold');
+    btn.disabled = true;
+    const { data, error } = await sb.rpc('create_booking', {
+      p_studio_id: STUDIOS[draft.si].dbId,
+      p_start_at: manilaTS(draft.d, 10 + draft.t),
+      p_end_at: manilaTS(draft.d, 10 + draft.t + draft.h),
+      p_first_name: first, p_last_name: rest.join(' '), p_number: phone,
+      p_payment_method: method, p_gcash_reference: method === 'GCash' ? gcash : null,
+      p_hold_token: HOLD_TOKEN
+    });
+    btn.disabled = false;
+    if (error) return bkError(error.message);
 
-    const ref = addBooking({ si: draft.si, d: draft.d, t: draft.t, h: draft.h, name, phone, method, gcash });
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!isMember()) rememberGuestBooking({ ref: row.booking_ref, studio: STUDIOS[draft.si].id, date: draft.d, start: SLOTS[draft.t], hours: draft.h });
     draft.why = 'done';
     bkDlg.close();
-    toast(`Booking ${ref} submitted. Keep this reference to look it up later.`);
+    loadMyBookings();
+    toast(`Booking ${row.booking_ref} submitted. Keep this reference to look it up later.`);
   };
 
   bkDlg.showModal();
 }
 
-/* Adds the booking to BOOKINGS. In production, send this to your server. */
-function addBooking(o) {
-  const next = Math.max(...BOOKINGS.map(b => +b.ref.slice(4))) + 1;
-  const ref = 'TOD-' + next;
-  BOOKINGS.push({
-    ref, studio: STUDIOS[o.si].id, date: o.d, start: SLOTS[o.t], hours: o.h,
-    status: 'Pending', payment: 'Pending', mine: true,
-    name: o.name, phone: o.phone, method: o.method, gcash: o.gcash
-  });
+/* ---- data from the database ---- */
+
+const BK_STATUS = { 'Approved': 'Confirmed', 'In Progress': 'Active' };   // database -> labels used on this page
+const RN_STATUS = { 'Active': 'In Use' };
+const studioLetter = dbId => (STUDIOS.find(s => s.dbId === dbId) || {}).id;
+const fmtD = ts => ts ? shortDate(manilaParts(ts).date) : '';
+
+/* Guests have no account, so their booking references are remembered in this browser
+   (only so they can attach rentals). Everything else for guests is the reference lookup. */
+const GUEST_KEY = 'tod_guest_bookings';
+const guestBookings = () => { try { return JSON.parse(localStorage.getItem(GUEST_KEY) || '[]'); } catch (e) { return []; } };
+function rememberGuestBooking(b) {
+  try { localStorage.setItem(GUEST_KEY, JSON.stringify([...guestBookings(), b])); } catch (e) { /* storage blocked */ }
+}
+
+async function loadMyBookings() {
+  BOOKINGS.length = 0;
+  if (isMember()) {
+    const { data, error } = await sb.from('v_booking_summary').select('*').order('start_at');
+    if (error) { console.error(error); toast('Could not load your bookings.'); }
+    (data || []).forEach(r => {
+      const p = manilaParts(r.start_at);
+      BOOKINGS.push({
+        ref: r.booking_ref, studio: studioLetter(r.studio_id), date: p.date, start: SLOTS[p.hour - 10],
+        hours: Math.round(+r.hours), status: BK_STATUS[r.status] || r.status,
+        payment: r.payment_status || 'Pending', mine: true
+      });
+    });
+  } else {
+    guestBookings().forEach(b => BOOKINGS.push({ ...b, status: 'Pending', payment: 'Pending', mine: true }));
+  }
   renderMyBookings();
   renderAttachOptions();
-  return ref;
+}
+
+async function loadMyRentals() {
+  RENTALS = [];
+  if (isMember()) {
+    const { data, error } = await sb.from('v_rental_lines').select('*').order('created_at', { ascending: false });
+    if (error) console.error(error);
+    (data || []).forEach(r => {
+      const addon = r.rental_type === 'Add-on', bk = addon ? BOOKINGS.find(b => b.ref === r.booking_ref) : null;
+      RENTALS.push({
+        ref: addon ? r.booking_ref : r.rental_ref, item: r.equipment_name, qty: r.quantity,
+        type: addon ? 'addon' : 'out',
+        when: addon ? (bk ? `${shortDate(bk.date)}, ${bk.start}` : fmtD(r.due_at)) : `${fmtD(r.pickup_date)} to ${fmtD(r.return_date)}`,
+        ret:  addon ? (bk ? `${shortDate(bk.date)}, ${endTime(bk.start, bk.hours)}` : fmtD(r.due_at)) : fmtD(r.return_date),
+        status: RN_STATUS[r.status] || r.status
+      });
+    });
+  }
+  renderMyRentals();
 }
 
 
@@ -357,6 +415,7 @@ function renderAttachOptions() {
 function initRentTab() {
   const today = TODAY;
   $('#pd').min = $('#rd').min = today;
+  $('#on-wrap').hidden = isMember();
   $('#pd').value = dayOffset(1);
   $('#rd').value = dayOffset(2);
 
@@ -388,39 +447,66 @@ function initRentTab() {
   $('#rq').addEventListener('click', requestRental);
 }
 
-function requestRental() {
+async function requestRental() {
   const keys = Object.keys(cart);
   if (!keys.length) return toast('Add at least one item first.');
+  const items = keys.map(i => ({ equipment_id: EQUIPMENT[i].id, quantity: cart[i].q }));
+  const btn = $('#rq');
+  btn.disabled = true;
 
-  let ref, when, ret;
-  if (rentMode === 'addon') {
-    const b = BOOKINGS.find(x => x.ref === $('#lb').value);
-    if (!b) return toast('Attach the rental to a studio booking first.');
-    ref = b.ref;
-    when = `${shortDate(b.date)}, ${b.start}`;
-    ret = `${shortDate(b.date)}, ${endTime(b.start, b.hours)}`;
-  } else {
-    const pd = $('#pd').value, rd = $('#rd').value;
-    if (!pd || !rd) return toast('Choose a pick-up and return date.');
-    if (pd < TODAY) return toast('Pick-up date cannot be in the past.');
-    if (rd < pd) return toast('Return date must be on or after the pick-up date.');
-    if (!/^[\d\s+()-]{7,}$/.test($('#oc').value.trim())) return toast('Enter a valid contact number.');
-    if (!$('#vf').files.length) return toast('Attach a valid ID.');
-    ref = 'OUT-' + (++outCounter);
-    when = `${shortDate(pd)} to ${shortDate(rd)}`;
-    ret = shortDate(rd);
+  try {
+    let args;
+    if (rentMode === 'addon') {
+      const ref = $('#lb').value;
+      if (!ref) return toast('Attach the rental to a studio booking first.');
+      args = { p_type: 'Add-on', p_items: items, p_booking_ref: ref };
+    } else {
+      const pd = $('#pd').value, rd = $('#rd').value, contact = $('#oc').value.trim();
+      const name = isMember() ? '' : $('#on').value.trim();
+      const file = $('#vf').files[0];
+      if (!pd || !rd) return toast('Choose a pick-up and return date.');
+      if (pd < TODAY) return toast('Pick-up date cannot be in the past.');
+      if (rd < pd) return toast('Return date must be on or after the pick-up date.');
+      if (!isMember() && !name) return toast('Enter your name.');
+      if (!/^[\d\s+()-]{7,}$/.test(contact)) return toast('Enter a valid contact number.');
+      if (!file) return toast('Attach a valid ID.');
+
+      // upload the ID photo first; the request stores only its path
+      const ext = ((file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '')) || 'jpg';
+      const path = `${crypto.randomUUID()}/${Date.now()}.${ext}`;
+      const up = await sb.storage.from('rental-ids').upload(path, file, { contentType: file.type });
+      if (up.error) return toast('Could not upload your ID: ' + up.error.message);
+
+      // pick-up 10:00 AM (or the next hour if today); same-day rentals run 8 hours, otherwise whole days
+      const nowHour = manilaParts(new Date()).hour;
+      const pickHour = pd === TODAY ? Math.min(21, Math.max(10, nowHour + 1)) : 10;
+      const pickup = new Date(manilaTS(pd, pickHour));
+      const days = Math.round((new Date(rd + 'T00:00') - new Date(pd + 'T00:00')) / 864e5);
+      const back = new Date(pickup.getTime() + (days > 0 ? days * 24 : 8) * 3600e3);
+      const [first, ...rest] = name.split(/\s+/);
+
+      args = {
+        p_type: 'Outside', p_items: items,
+        p_first_name: first || null, p_last_name: rest.join(' ') || null, p_number: contact,
+        p_pickup_date: pickup.toISOString(), p_return_date: back.toISOString(),
+        p_contact_number: contact, p_backup_contact: $('#sm-link').value.trim() || null,
+        p_id_type: $('#vt').value, p_id_image_path: path
+      };
+    }
+
+    const { data, error } = await sb.rpc('request_rental', args);
+    if (error) return toast(error.message);
+    const row = Array.isArray(data) ? data[0] : data;
+
+    cart = {};
+    $('#vf').value = '';
+    renderCart();
+    await loadMyRentals();
+    toast(`Rental request ${rentMode === 'addon' ? args.p_booking_ref : row.rental_ref} submitted. Staff will review it. Keep this reference.`);
+  } finally {
+    btn.disabled = false;
+    updateRequestButton();
   }
-
-  keys.forEach(i => RENTALS.push({
-    ref, item: EQUIPMENT[i].name, qty: cart[i].q, type: rentMode, when, ret, status: 'Pending'
-  }));
-
-  cart = {};
-  $('#vf').value = '';
-  renderCart();
-  updateRequestButton();
-  renderMyRentals();
-  toast(`Rental request ${ref} submitted. Staff will review it. Keep this reference.`);
 }
 
 
@@ -475,12 +561,12 @@ function confirmCancel(b) {
       <button class="btn line" data-close>Keep booking</button>
       <button class="btn bad" id="do-cancel">Cancel booking</button>
     </div>`);
-  $('#do-cancel').onclick = () => {
-    b.status = 'Cancelled';
+  $('#do-cancel').onclick = async () => {
+    const { error } = await sb.rpc('cancel_booking', { p_booking_ref: b.ref });
+    if (error) return toast(error.message);
     dlg.close();
-    renderMyBookings();
-    renderAttachOptions();
-    renderBook();
+    await loadMyBookings();
+    await refreshBook();
     toast(`${b.ref} cancelled.`);
   };
 }
@@ -499,7 +585,8 @@ function openReschedule(b) {
       <button class="btn gold" id="rs-save" disabled>Save new time</button>
     </div>`);
 
-  const draw = () => {
+  const draw = async () => {
+    await loadBusy(si, pick.date, pick.date);
     const taken = takenSlots(si, pick.date, b.ref);
     $('#rs-slots').innerHTML = SLOTS.map((t, i) => {
       const fits = i + b.hours <= SLOTS.length && Array.from({ length: b.hours }, (_, j) => !taken.has(i + j)).every(Boolean);
@@ -514,13 +601,16 @@ function openReschedule(b) {
     const btn = e.target.closest('button');
     if (btn && !btn.disabled) { pick.t = +btn.dataset.i; draw(); }
   };
-  $('#rs-save').onclick = () => {
-    b.date = pick.date;
-    b.start = SLOTS[pick.t];
+  $('#rs-save').onclick = async () => {
+    const date = pick.date, t = pick.t;
+    const { error } = await sb.rpc('reschedule_booking', {
+      p_booking_ref: b.ref, p_start_at: manilaTS(date, 10 + t), p_end_at: manilaTS(date, 10 + t + b.hours)
+    });
+    if (error) return toast(error.message);
     dlg.close();
-    renderMyBookings();
-    renderBook();
-    toast(`${b.ref} moved to ${shortDate(b.date)} at ${b.start}.`);
+    await loadMyBookings();
+    await refreshBook();
+    toast(`${b.ref} moved to ${shortDate(date)} at ${SLOTS[t]}.`);
   };
 }
 
@@ -537,21 +627,23 @@ function initBookingsTab() {
     else if (btn.dataset.act === 'cancel') confirmCancel(b);
   });
 
-  /* Guest lookup by reference code. DEMO: checks the in-page data only. */
-  $('#gb-form').addEventListener('submit', e => {
+  /* Guest lookup by reference code. */
+  $('#gb-form').addEventListener('submit', async e => {
     e.preventDefault();
-    const ref = normRef($('#gb-ref').value), b = findBooking(ref), box = $('#gb-res');
+    const ref = normRef($('#gb-ref').value), box = $('#gb-res');
     box.hidden = false;
-    if (!b) { box.innerHTML = notFound(ref, 'booking'); return; }
-    const s = STUDIOS[studioIndex(b.studio)];
+    const { data, error } = await sb.rpc('lookup_booking', { p_ref: ref });
+    if (error || !data) { box.innerHTML = notFound(ref, 'booking'); return; }
+    const a = manilaParts(data.start_at), z = manilaParts(data.end_at), hrs = z.hour - a.hour;
+    const status = BK_STATUS[data.status] || data.status;
     box.innerHTML = `
-      <div class="row"><h3>${b.ref}</h3>${badge(b.status)}</div>
+      <div class="row"><h3>${esc(data.booking_ref)}</h3>${badge(status)}</div>
       <dl class="dl">
-        <dt>Studio</dt><dd>Studio ${b.studio}, ${esc(s.desc)}</dd>
-        <dt>Date</dt><dd>${longDate(b.date)}</dd>
-        <dt>Time</dt><dd>${b.start} to ${endTime(b.start, b.hours)} (${b.hours} hr${b.hours > 1 ? 's' : ''})</dd>
-        <dt>Total</dt><dd>${peso(s.rate * b.hours)}</dd>
-        <dt>Payment</dt><dd>${badge(b.payment)}</dd>
+        <dt>Studio</dt><dd>${esc(data.studio)}${data.studio_description ? ', ' + esc(data.studio_description) : ''}</dd>
+        <dt>Date</dt><dd>${longDate(a.date)}</dd>
+        <dt>Time</dt><dd>${SLOTS[a.hour - 10]} to ${endTime(SLOTS[a.hour - 10], hrs)} (${hrs} hr${hrs > 1 ? 's' : ''})</dd>
+        <dt>Total</dt><dd>${peso(+data.total)}</dd>
+        <dt>Payment</dt><dd>${badge(data.payment_status || 'Pending')}</dd>
       </dl>
       <p class="mut">Bookings are confirmed after staff verify your payment.</p>`;
   });
@@ -568,15 +660,16 @@ function applyAccessMode() {
 }
 
 function initRentalLookup() {
-  $('#gr-form').addEventListener('submit', e => {
+  $('#gr-form').addEventListener('submit', async e => {
     e.preventDefault();
-    const ref = normRef($('#gr-ref').value), list = RENTALS.filter(r => r.ref === ref), box = $('#gr-res');
+    const ref = normRef($('#gr-ref').value), box = $('#gr-res');
     box.hidden = false;
-    if (!list.length) { box.innerHTML = notFound(ref, 'rental'); return; }
-    const type = list[0].type === 'addon' ? '<span class="b addon">Add-on</span>' : '<span class="b out">Outside</span>';
-    box.innerHTML = `<div class="row"><h3>${ref}</h3><span>${type}</span></div>
+    const { data: list, error } = await sb.rpc('lookup_rental', { p_ref: ref });
+    if (error || !list || !list.length) { box.innerHTML = notFound(ref, 'rental'); return; }
+    const type = list[0].rental_type === 'Add-on' ? '<span class="b addon">Add-on</span>' : '<span class="b out">Outside</span>';
+    box.innerHTML = `<div class="row"><h3>${esc(ref)}</h3><span>${type}</span></div>
       <div class="tw" style="margin-top:8px">${table(['Equipment', 'Qty', 'Return by', 'Status'],
-        list.map(r => [esc(r.item), String(r.qty), r.ret, badge(r.status)]))}</div>`;
+        list.map(r => [esc(r.equipment), String(r.quantity), r.return_by ? shortDate(manilaParts(r.return_by).date) : '', badge(RN_STATUS[r.status] || r.status)]))}</div>`;
   });
 }
 
@@ -597,7 +690,7 @@ function renderMyRentals() {
 
 /* ============================ 6. START ============================ */
 
-function applyUrlParams() {
+async function applyUrlParams() {
   const q = new URLSearchParams(location.search);
 
   const studio = studioIndex(q.get('studio'));
@@ -610,7 +703,7 @@ function applyUrlParams() {
     calMonth.setDate(1);
   }
 
-  renderBook();
+  await refreshBook();
 
   const time = q.get('time');
   if (time && SLOTS.includes(time) && !isClosed(STUDIOS[selStudio])) openBook(SLOTS.indexOf(time));
@@ -630,16 +723,16 @@ initRentTab();
 initBookingsTab();
 initRentalLookup();
 applyAccessMode();
-
-renderEquipment();
-renderCart();
-renderRentMode();
-renderAttachOptions();
-renderMyBookings();
-renderMyRentals();
-showTab();
-applyUrlParams();
-
 window.addEventListener('hashchange', showTab);
-// another browser tab opened or closed a booking form: refresh what is taken
-window.addEventListener('storage', () => { renderBook(); if (draft) drawSlots(); });
+
+// wait for studios and equipment to load, then draw everything
+dataReady.then(async () => {
+  selStudio = Math.max(0, STUDIOS.findIndex(s => !isClosed(s)));
+  renderEquipment();
+  renderCart();
+  renderRentMode();
+  showTab();
+  await loadMyBookings();
+  await loadMyRentals();
+  await applyUrlParams();
+});

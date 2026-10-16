@@ -5,21 +5,31 @@
    ===================================================================== */
 
 
-/* ============================ DEMO SIGN-IN ============================
-   There is no server yet, so any username and password work.
-   The username "owner" or "staff" signs in as that role; anything else
-   is a customer. Replace these two functions with fetch() calls to your
-   backend and return { role, label } when it accepts the credentials. */
+/* ============================ SIGN-IN (Supabase Auth) ============================
+   Usernames are turned into fake emails (juan -> juan@towerofdove.app).
+   Owner and staff have a row in app_user; everyone else is a customer.
+   Both functions return { role, label } or throw an Error with a message to show. */
 
-function signIn(username, password) {
-  const k = username.toLowerCase();
-  if (k === 'owner') return { role: 'owner', label: 'Owner' };
-  if (k === 'staff') return { role: 'staff', label: 'Staff' };
-  return { role: 'customer', label: username };
+async function signIn(username, password) {
+  const { data, error } = await sb.auth.signInWithPassword({ email: toEmail(username), password });
+  if (error) throw new Error('Wrong username or password.');
+
+  const { data: staff } = await sb.from('app_user')
+    .select('role, first_name').eq('auth_user_id', data.user.id).maybeSingle();
+
+  if (staff) return { role: staff.role.toLowerCase(), label: staff.role === 'Owner' ? 'Owner' : staff.first_name };
+  return { role: 'customer', label: username.trim() };
 }
 
-function register(details) {
-  return { role: 'customer', label: details.name };
+async function register(d) {
+  const { data, error } = await sb.auth.signUp({
+    email: toEmail(d.username),
+    password: d.password,
+    options: { data: { kind: 'customer', full_name: d.name, username: d.username.trim().toLowerCase(), number: d.phone } }
+  });
+  if (error) throw new Error(/already/i.test(error.message) ? 'That username is already taken.' : error.message);
+  if (!data.session) throw new Error('Account created, but sign-in is blocked. In Supabase turn off Authentication > Providers > Email > Confirm email.');
+  return { role: 'customer', label: d.name };
 }
 
 /* Send each role to its home page. */
@@ -54,16 +64,17 @@ function showMode(mode) {
 
 const modeFromHash = () => location.hash === '#register' ? 'register' : 'login';
 
-$('#f-login').addEventListener('submit', e => {
+$('#f-login').addEventListener('submit', async e => {
   e.preventDefault();
   const username = $('#lu').value.trim(), password = $('#lp').value;
   if (!username) return showError('#login-err', 'Enter your username.');
   if (!password) return showError('#login-err', 'Enter your password.');
   showError('#login-err', '');
-  enter(signIn(username, password));
+  try { enter(await signIn(username, password)); }
+  catch (err) { showError('#login-err', err.message); }
 });
 
-$('#f-reg').addEventListener('submit', e => {
+$('#f-reg').addEventListener('submit', async e => {
   e.preventDefault();
   const name = $('#rg-name').value.trim(), phone = $('#rg-phone').value.trim();
   const username = $('#rg-user').value.trim();
@@ -72,10 +83,12 @@ $('#f-reg').addEventListener('submit', e => {
   if (!name) return showError('#reg-err', 'Enter your full name.');
   if (!/^[\d\s+()-]{7,}$/.test(phone)) return showError('#reg-err', 'Enter a valid phone number.');
   if (!username) return showError('#reg-err', 'Choose a username.');
+  if (!/^[a-z0-9_.]{3,30}$/i.test(username)) return showError('#reg-err', 'Username: 3 to 30 letters, numbers, dots or underscores, no spaces.');
   if (pass.length < 8) return showError('#reg-err', 'Use a password with at least 8 characters.');
   if (pass !== pass2) return showError('#reg-err', 'The two passwords do not match.');
   showError('#reg-err', '');
-  enter(register({ name, phone, username, password: pass }));
+  try { enter(await register({ name, phone, username, password: pass })); }
+  catch (err) { showError('#reg-err', err.message); }
 });
 
 // tabs change the hash, so the sidebar links and the tabs always agree
