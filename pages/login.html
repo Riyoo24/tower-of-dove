@@ -1,89 +1,69 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Log in | Tower of Dove</title>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../css/base.css">
-<link rel="stylesheet" href="../css/login.css">
-<link rel="icon" type="image/png" href="../images/logo.png">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Log in | Tower of Dove Music Studio</title>
+  <link rel="icon" type="image/png" href="../assets/img/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css">
 </head>
-<body>
+<body data-active="">
 
-<header class="top">
-  <a class="brand" href="../index.html"><img class="logo" src="../images/logo.png" alt="" width="34" height="34">Tower of Dove</a>
-  <nav class="tn" aria-label="Site">
-    <a href="../index.html#studios">Studios</a>
-    <a href="../index.html#equipment">Equipment</a>
-  </nav>
-</header>
+  <!-- The sidebar and mobile bar are injected by shared.js -->
+  <main class="page" id="auth">
+    <div class="card login">
+      <img class="logo-lg" src="../assets/img/logo.png" alt="Tower of Dove logo">
 
-<main class="auth-wrap">
-  <div class="card auth">
-    <img class="logo-lg" src="../images/logo.png" alt="Tower of Dove" width="72" height="72">
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" data-at="login" class="on" aria-selected="true">Log in</button>
+        <button type="button" role="tab" data-at="register" aria-selected="false">Register</button>
+      </div>
 
-    <div class="tabs" role="tablist" aria-label="Account">
-      <button type="button" role="tab" data-at="login" class="on" aria-selected="true">Log in</button>
-      <button type="button" role="tab" data-at="reg" aria-selected="false">Register</button>
+      <!-- Log in -->
+      <form id="f-login" novalidate>
+        <h1>Welcome back</h1>
+        <p class="sub">Log in to see your bookings and rentals.</p>
+
+        <label for="lu">Username</label>
+        <input id="lu" autocomplete="username">
+        <label for="lp">Password</label>
+        <input id="lp" type="password" autocomplete="current-password">
+
+        <div class="alert" id="login-err" hidden></div>
+        <button class="btn gold full" type="submit">Log in</button>
+        <p class="mut" style="margin-top:12px"><button type="button" class="lk" id="forgot">Forgot password?</button></p>
+      </form>
+
+      <!-- Register -->
+      <form id="f-reg" hidden novalidate>
+        <h1>Create your account</h1>
+        <p class="sub">Keep every booking and rental in one place.</p>
+
+        <label for="rg-name">Full name</label>
+        <input id="rg-name" autocomplete="name">
+        <label for="rg-phone">Phone number</label>
+        <input id="rg-phone" placeholder="09XX XXX XXXX" autocomplete="tel">
+        <label for="rg-user">Username</label>
+        <input id="rg-user" autocomplete="username">
+        <label for="rg-pass">Password</label>
+        <input id="rg-pass" type="password" autocomplete="new-password">
+        <label for="rg-pass2">Confirm password</label>
+        <input id="rg-pass2" type="password" autocomplete="new-password">
+
+        <div class="alert" id="reg-err" hidden></div>
+        <button class="btn gold full" type="submit">Create account</button>
+      </form>
+
+      <p class="mut login-foot">Only booking once? <button type="button" class="lk" id="guest">Continue as guest</button>. You get a booking reference to look it up later.</p>
     </div>
+  </main>
 
-    <!-- ===== Log in ===== -->
-    <form id="f-login" novalidate>
-      <h1>Welcome back</h1>
-      <p class="sub">Log in to see your bookings and rentals.</p>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-      <label for="lu">Username</label>
-      <input id="lu" autocomplete="username" required>
-
-      <label for="lp">Password</label>
-      <div class="pw">
-        <input id="lp" type="password" autocomplete="current-password" required>
-        <button type="button" class="pw-toggle" data-for="lp" aria-label="Show password">Show</button>
-      </div>
-
-      <div class="alert" id="lerr" hidden role="alert"></div>
-      <button class="btn gold full" type="submit">Log in</button>
-      <p class="mut" style="margin-top:12px"><a href="#" id="forgot">Forgot password?</a></p>
-      <div class="hold" id="fmsg" hidden role="status"></div>
-    </form>
-
-    <!-- ===== Register ===== -->
-    <form id="f-reg" hidden novalidate>
-      <h1>Create your account</h1>
-      <p class="sub">Keep every booking and rental in one place.</p>
-
-      <label for="rg-name">Full name</label>
-      <input id="rg-name" autocomplete="name" required>
-
-      <label for="rg-phone">Phone number</label>
-      <input id="rg-phone" type="tel" autocomplete="tel" placeholder="09XX XXX XXXX" required>
-
-      <label for="rg-user">Username</label>
-      <input id="rg-user" autocomplete="username" required>
-
-      <label for="rg-pass">Password</label>
-      <div class="pw">
-        <input id="rg-pass" type="password" autocomplete="new-password" required>
-        <button type="button" class="pw-toggle" data-for="rg-pass" aria-label="Show password">Show</button>
-      </div>
-      <p class="mut" style="margin-top:4px">At least 8 characters.</p>
-
-      <label for="rg-pass2">Confirm password</label>
-      <input id="rg-pass2" type="password" autocomplete="new-password" required>
-
-      <div class="alert" id="rerr" hidden role="alert"></div>
-      <button class="btn gold full" type="submit">Create account</button>
-    </form>
-
-    <p class="mut guest">Only booking once? <a href="customer.html?role=guest&tab=book" id="guest">Continue as guest</a>. You get a booking reference to look it up later.</p>
-  </div>
-</main>
-
-<!-- Load Supabase JS Client CDN -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-<script src="../js/data.js"></script>
-<script src="../js/login.js"></script>
+  <script src="../js/shared.js"></script>
+  <script src="../js/login.js"></script>
 </body>
 </html>
