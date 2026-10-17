@@ -26,11 +26,11 @@ async function register(d) {
   const { data, error } = await sb.auth.signUp({
     email: toEmail(d.username),
     password: d.password,
-    options: { data: { kind: 'customer', full_name: d.name, username: d.username.trim().toLowerCase(), number: d.phone } }
+    options: { data: { kind: 'customer', first_name: d.first, last_name: d.last, full_name: d.first + ' ' + d.last, username: d.username.trim().toLowerCase(), number: d.phone } }
   });
   if (error) throw new Error(/already/i.test(error.message) ? 'That username is already taken.' : error.message);
   if (!data.session) throw new Error('Account created, but sign-in is blocked. In Supabase turn off Authentication > Providers > Email > Confirm email.');
-  return { role: 'customer', label: d.name };
+  return { role: 'customer', label: d.first };
 }
 
 /* Send each role to its home page. */
@@ -77,18 +77,19 @@ $('#f-login').addEventListener('submit', async e => {
 
 $('#f-reg').addEventListener('submit', async e => {
   e.preventDefault();
-  const name = $('#rg-name').value.trim(), phone = $('#rg-phone').value.trim();
+  const first = $('#rg-fn').value.trim(), last = $('#rg-ln').value.trim(), phone = $('#rg-phone').value.trim();
   const username = $('#rg-user').value.trim();
   const pass = $('#rg-pass').value, pass2 = $('#rg-pass2').value;
 
-  if (!name) return showError('#reg-err', 'Enter your full name.');
+  if (!first) return showError('#reg-err', 'Enter your first name.');
+  if (!last) return showError('#reg-err', 'Enter your last name.');
   if (!/^[\d\s+()-]{7,}$/.test(phone)) return showError('#reg-err', 'Enter a valid phone number.');
   if (!username) return showError('#reg-err', 'Choose a username.');
   if (!/^[a-z0-9_.]{3,30}$/i.test(username)) return showError('#reg-err', 'Username: 3 to 30 letters, numbers, dots or underscores, no spaces.');
   if (pass.length < 8) return showError('#reg-err', 'Use a password with at least 8 characters.');
   if (pass !== pass2) return showError('#reg-err', 'The two passwords do not match.');
   showError('#reg-err', '');
-  try { enter(await register({ name, phone, username, password: pass })); }
+  try { enter(await register({ first, last, phone, username, password: pass })); }
   catch (err) { showError('#reg-err', err.message); }
 });
 

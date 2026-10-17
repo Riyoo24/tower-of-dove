@@ -17,6 +17,7 @@
    type: 'addon' (tied to a booking) | 'out' (taken outside the studio)
    status: Pending | Approved | In Use | Returned | Rejected | Cancelled */
 let RENTALS = [];
+let ADDONS = {};   // booking reference -> [{ name, qty, price }] add-on equipment on that booking
 
 let selStudio = 0;               // studio picked in the booking tab (set once data loads)
 let selDate = TODAY;              // day picked on the calendar
@@ -111,15 +112,55 @@ function initBookTab() {
   });
 }
 
+/* ---- success pop-up: stays open until the customer presses Done (no timer) ---- */
+const okDlg = $('#okdlg');
+function showSuccess({ title, label, ref, lines, note }) {
+  okDlg.innerHTML = `
+    <div class="in ok">
+      <div class="okic" aria-hidden="true"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>
+      <h2>${esc(title)}</h2>
+      <p class="mut">${esc(label)}</p>
+      <div class="okref" id="ok-ref">${esc(ref)}</div>
+      <button type="button" class="btn line sm" id="ok-copy">Copy code</button>
+      ${(lines && lines.length) ? `<dl class="dl" style="text-align:left;margin-top:14px">${lines.map(l => `<dt>${esc(l[0])}</dt><dd>${esc(l[1])}</dd>`).join('')}</dl>` : ''}
+      <p class="mut" style="margin-top:12px">${esc(note)}</p>
+      <div class="acts" style="justify-content:center"><button type="button" class="btn gold" id="ok-done">Done</button></div>
+    </div>`;
+  $('#ok-done').onclick = () => okDlg.close();
+  $('#ok-copy').onclick = async e => {
+    try { await navigator.clipboard.writeText(ref); e.target.textContent = 'Copied'; }
+    catch (err) { e.target.textContent = 'Select the code above to copy'; }
+  };
+  okDlg.showModal();
+  $('#ok-done').focus();
+}
+
 /* ---- booking form (modal) ---- */
 const bkDlg = $('#bkdlg');
 const bkError = msg => { const x = $('#bk-e'); x.textContent = msg; x.hidden = !msg; };
+
+/* add-on equipment picked in the booking form: [{ equipment_id, quantity }] */
+const addOnSelection = () => $$('#bk-ad select').map(s => ({ equipment_id: +s.dataset.eq, quantity: +s.value })).filter(x => x.quantity > 0);
+const addOnPrice = id => { const e = EQUIPMENT.find(x => x.id === id); return e ? e.addonPrice : 0; };
+
+/* studio price + add-ons = total (also the amount to pay by GCash) */
+function updateTotals() {
+  const studio = STUDIOS[draft.si].rate * draft.h;
+  const sel = addOnSelection(), addons = sel.reduce((n, x) => n + addOnPrice(x.equipment_id) * x.quantity, 0);
+  $('#bk-hh').textContent = pl(draft.h, 'hr');
+  $('#bk-st').textContent = peso(studio);
+  $('#bk-adr').hidden = !sel.length;
+  $('#bk-ao').textContent = peso(addons);
+  $('#bk-t').textContent = peso(studio + addons);
+  if ($('#bk-qa')) $('#bk-qa').textContent = peso(studio + addons);
+}
+const pl = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
 
 function drawSlots() {
   const taken = takenSlots(draft.si, draft.d);
   $('#bk-slots').innerHTML = SLOTS.map((t, i) =>
     `<button type="button" data-i="${i}" class="${i === draft.t ? 'sel' : ''}" ${taken.has(i) ? 'disabled' : ''}>${t}</button>`).join('');
-  $('#bk-t').textContent = peso(STUDIOS[draft.si].rate * draft.h);
+  updateTotals();
 }
 
 /* Try to hold hours t..t+h for this customer (held on the server for 2 minutes). */
@@ -136,6 +177,16 @@ async function moveDraft(t, h) {
   bkError('');
   drawSlots();
   return true;
+}
+
+function addOnRows() {
+  const list = EQUIPMENT.filter(e => e.addon && e.stock > 0);
+  if (!list.length) return '<p class="mut">No add-on equipment is available right now.</p>';
+  return list.map(e => `
+    <div class="ad">
+      <div><b>${esc(e.name)}</b><div class="mut">${peso(e.addonPrice)} ${e.drum ? 'per rental' : 'per session'}</div></div>
+      <select data-eq="${e.id}" aria-label="Quantity of ${esc(e.name)}">${Array.from({ length: Math.min(e.stock, 10) + 1 }, (_, n) => `<option value="${n}">${n}</option>`).join('')}</select>
+    </div>`).join('');
 }
 
 async function openBook(startIndex) {
@@ -165,19 +216,37 @@ async function openBook(startIndex) {
         <label for="bk-h">Duration</label>
         <select id="bk-h">${[1, 2, 3, 4].map(x => `<option value="${x}" ${x === h ? 'selected' : ''}>${x} hour${x > 1 ? 's' : ''}</option>`).join('')}</select>
 
-        <label for="bk-n">Name</label>
-        <input id="bk-n" autocomplete="name">
+        <div class="fg2">
+          <div><label for="bk-fn">First name</label><input id="bk-fn" autocomplete="given-name"></div>
+          <div><label for="bk-ln">Last name</label><input id="bk-ln" autocomplete="family-name"></div>
+        </div>
         <label for="bk-p">Phone</label>
         <input id="bk-p" placeholder="09XX XXX XXXX" autocomplete="tel">
+
+        <label>Add-on equipment <span class="mut" style="font-weight:400">(optional)</span></label>
+        <div class="adl" id="bk-ad">${addOnRows()}</div>
 
         <label for="bk-m">Payment method</label>
         <select id="bk-m"><option>GCash</option><option>Cash</option></select>
         <div id="bk-gw">
+          <div class="gq">
+            <img id="bk-qr" alt="GCash QR code to scan" hidden>
+            <p class="mut" id="bk-qn">Scan this QR code with GCash and pay <b id="bk-qa"></b>. Then enter the reference number from your GCash receipt below.</p>
+          </div>
           <label for="bk-g">GCash reference number</label>
           <input id="bk-g" placeholder="13-digit reference" inputmode="numeric">
         </div>
 
+        <div class="bkt">
+          <div><span>Studio (<span id="bk-hh"></span>)</span><span id="bk-st"></span></div>
+          <div id="bk-adr" hidden><span>Add-on equipment</span><span id="bk-ao"></span></div>
+        </div>
         <div class="tot"><span>Total</span><span id="bk-t"></span></div>
+
+        <label class="terms" id="bk-terms">
+          <input type="checkbox" id="bk-agree">
+          <span>I understand and agree that there is <b>no refund</b> of the down payment I pay for this booking/reservation if it is cancelled.</span>
+        </label>
         <div class="alert" id="bk-e" hidden></div>
         <p class="hold">Payment starts as Pending until staff verify it.</p>
         <div class="acts">
@@ -189,7 +258,7 @@ async function openBook(startIndex) {
 
   drawSlots();
   idleUntil = Date.now() + LOCK_TTL;
-  if (PROFILE) { $('#bk-n').value = PROFILE.name; $('#bk-p').value = PROFILE.number; }   // signed-in customers: fill in their details
+  if (PROFILE) { $('#bk-fn').value = PROFILE.first; $('#bk-ln').value = PROFILE.last; $('#bk-p').value = PROFILE.number; }   // signed-in customers: fill in their details
 
   $('#bk-slots').onclick = e => {
     const b = e.target.closest('button');
@@ -198,6 +267,19 @@ async function openBook(startIndex) {
   $('#bk-h').onchange = async e => { if (!(await moveDraft(draft.t, +e.target.value))) e.target.value = draft.h; };
   $('#bk-m').onchange = e => { $('#bk-gw').hidden = e.target.value !== 'GCash'; };
   $('#bk-x').onclick = () => bkDlg.close();
+  $('#bk-ad').onchange = updateTotals;
+  $('#bk-agree').onchange = e => { if (e.target.checked) { $('#bk-terms').classList.remove('err'); bkError(''); } };
+
+  // the studio's GCash QR (uploaded by the owner in Settings), shown above the reference number
+  const qr = $('#bk-qr');
+  qr.onload = () => { qr.hidden = false; };
+  qr.onerror = () => {
+    qr.hidden = true;
+    $('#bk-qn').innerHTML = 'Pay <b id="bk-qa"></b> using the studio\'s GCash account, then enter the reference number from your receipt below. Ask staff if you need the account details.';
+    updateTotals();
+  };
+  qr.src = gcashQrUrl();
+  updateTotals();
 
   // any activity keeps the hold alive
   let lastHold = Date.now();
@@ -226,33 +308,50 @@ async function openBook(startIndex) {
 
   $('#bkf').onsubmit = async ev => {
     ev.preventDefault();
-    const name = $('#bk-n').value.trim(), phone = $('#bk-p').value.trim();
+    const first = $('#bk-fn').value.trim(), last = $('#bk-ln').value.trim(), phone = $('#bk-p').value.trim();
     const method = $('#bk-m').value, gcash = $('#bk-g').value.replace(/\s/g, '');
 
-    if (!name) return bkError('Enter your name.');
+    if (!first) return bkError('Enter your first name.');
+    if (!last) return bkError('Enter your last name.');
     if (!/^[\d\s+()-]{7,}$/.test(phone)) return bkError('Enter a valid phone number.');
     if (method === 'GCash' && !/^\d{13}$/.test(gcash)) return bkError('Enter the 13-digit GCash reference.');
+    if (!$('#bk-agree').checked) {
+      $('#bk-terms').classList.add('err');
+      return bkError('Please tick the box to confirm you understand the no-refund policy.');
+    }
 
-    const [first, ...rest] = name.split(/\s+/);
+    const items = addOnSelection();
+    const snap = { s: STUDIOS[draft.si], d: draft.d, t: draft.t, h: draft.h };
     const btn = ev.target.querySelector('.btn.gold');
     btn.disabled = true;
-    const { data, error } = await sb.rpc('create_booking', {
-      p_studio_id: STUDIOS[draft.si].dbId,
-      p_start_at: manilaTS(draft.d, 10 + draft.t),
-      p_end_at: manilaTS(draft.d, 10 + draft.t + draft.h),
-      p_first_name: first, p_last_name: rest.join(' '), p_number: phone,
+    const { data, error } = await sb.rpc('create_booking_with_addons', {
+      p_studio_id: snap.s.dbId,
+      p_start_at: manilaTS(snap.d, 10 + snap.t),
+      p_end_at: manilaTS(snap.d, 10 + snap.t + snap.h),
+      p_first_name: first, p_last_name: last, p_number: phone,
       p_payment_method: method, p_gcash_reference: method === 'GCash' ? gcash : null,
-      p_hold_token: HOLD_TOKEN
+      p_hold_token: HOLD_TOKEN, p_items: items
     });
     btn.disabled = false;
     if (error) return bkError(error.message);
 
     const row = Array.isArray(data) ? data[0] : data;
-    if (!isMember()) rememberGuestBooking({ ref: row.booking_ref, studio: STUDIOS[draft.si].id, date: draft.d, start: SLOTS[draft.t], hours: draft.h });
+    if (!isMember()) rememberGuestBooking({ ref: row.booking_ref, studio: snap.s.id, date: snap.d, start: SLOTS[snap.t], hours: snap.h });
+    const lines = [
+      ['Studio', `Studio ${snap.s.id}`],
+      ['Date', longDate(snap.d)],
+      ['Time', `${SLOTS[snap.t]} to ${endTime(SLOTS[snap.t], snap.h)}`]
+    ];
+    items.forEach(x => { const e = EQUIPMENT.find(y => y.id === x.equipment_id); lines.push(['Add-on', `${e.name} x${x.quantity}`]); });
+    lines.push(['Total', peso(Number(row.total_amount) || 0)]);
+
     draft.why = 'done';
     bkDlg.close();
-    loadMyBookings();
-    toast(`Booking ${row.booking_ref} submitted. Keep this reference to look it up later.`);
+    showSuccess({
+      title: 'Successfully booked!', label: 'Your booking reference code', ref: row.booking_ref, lines,
+      note: 'Keep this code to look up your booking later. Staff will confirm it once your payment is verified.'
+    });
+    loadMyBookings().then(loadMyRentals);
   };
 
   bkDlg.showModal();
@@ -267,7 +366,7 @@ async function loadProfile() {
   const { data: auth } = await sb.auth.getUser();
   if (!auth || !auth.user) return;
   const { data } = await sb.from('customer').select('first_name, last_name, number').eq('auth_user_id', auth.user.id).maybeSingle();
-  if (data) PROFILE = { name: `${data.first_name || ''} ${data.last_name || ''}`.trim(), number: data.number || '' };
+  if (data) PROFILE = { first: data.first_name || '', last: data.last_name || '', number: data.number || '' };
 }
 const profileReady = loadProfile().catch(() => {});
 
@@ -306,17 +405,21 @@ async function loadMyBookings() {
 
 async function loadMyRentals() {
   RENTALS = [];
+  ADDONS = {};
   if (isMember()) {
     const { data, error } = await sb.from('v_rental_lines').select('*').order('created_at', { ascending: false });
     if (error) console.error(error);
     (data || []).forEach(r => {
       const addon = r.rental_type === 'Add-on', bk = addon ? BOOKINGS.find(b => b.ref === r.booking_ref) : null;
+      if (addon && r.booking_ref && !['Rejected', 'Cancelled'].includes(r.status)) {
+        (ADDONS[r.booking_ref] = ADDONS[r.booking_ref] || []).push({ name: r.equipment_name, qty: r.quantity, price: Number(r.unit_price_at_request) || 0 });
+      }
       RENTALS.push({
         ref: addon ? r.booking_ref : r.rental_ref, item: r.equipment_name, qty: r.quantity,
         type: addon ? 'addon' : 'out',
         when: addon ? (bk ? `${shortDate(bk.date)}, ${bk.start}` : fmtD(r.due_at)) : `${fmtD(r.pickup_date)} to ${fmtD(r.return_date)}`,
         ret:  addon ? (bk ? `${shortDate(bk.date)}, ${endTime(bk.start, bk.hours)}` : fmtD(r.due_at)) : fmtD(r.return_date),
-        status: RN_STATUS[r.status] || r.status
+        status: RN_STATUS[r.status] || r.status, reason: r.rejected_reason || ''
       });
     });
   }
@@ -476,12 +579,12 @@ async function requestRental() {
       args = { p_type: 'Add-on', p_items: items, p_booking_ref: ref };
     } else {
       const pd = $('#pd').value, rd = $('#rd').value, contact = $('#oc').value.trim();
-      const name = isMember() ? '' : $('#on').value.trim();
+      const first = isMember() ? '' : $('#on-fn').value.trim(), last = isMember() ? '' : $('#on-ln').value.trim();
       const file = $('#vf').files[0];
       if (!pd || !rd) return toast('Choose a pick-up and return date.');
       if (pd < TODAY) return toast('Pick-up date cannot be in the past.');
       if (rd < pd) return toast('Return date must be on or after the pick-up date.');
-      if (!isMember() && !name) return toast('Enter your name.');
+      if (!isMember() && (!first || !last)) return toast('Enter your first and last name.');
       if (!/^[\d\s+()-]{7,}$/.test(contact)) return toast('Enter a valid contact number.');
       if (!file) return toast('Attach a valid ID.');
 
@@ -497,11 +600,10 @@ async function requestRental() {
       const pickup = new Date(manilaTS(pd, pickHour));
       const days = Math.round((new Date(rd + 'T00:00') - new Date(pd + 'T00:00')) / 864e5);
       const back = new Date(pickup.getTime() + (days > 0 ? days * 24 : 8) * 3600e3);
-      const [first, ...rest] = name.split(/\s+/);
 
       args = {
         p_type: 'Outside', p_items: items,
-        p_first_name: first || null, p_last_name: rest.join(' ') || null, p_number: contact,
+        p_first_name: first || null, p_last_name: last || null, p_number: contact,
         p_pickup_date: pickup.toISOString(), p_return_date: back.toISOString(),
         p_contact_number: contact, p_backup_contact: $('#sm-link').value.trim() || null,
         p_id_type: $('#vt').value, p_id_image_path: path
@@ -516,7 +618,11 @@ async function requestRental() {
     $('#vf').value = '';
     renderCart();
     await loadMyRentals();
-    toast(`Rental request ${rentMode === 'addon' ? args.p_booking_ref : row.rental_ref} submitted. Staff will review it. Keep this reference.`);
+    showSuccess({
+      title: 'Rental request sent!', label: 'Your reference code',
+      ref: rentMode === 'addon' ? args.p_booking_ref : row.rental_ref,
+      note: 'Staff will review your request. Keep this code to look up your rental later.'
+    });
   } finally {
     btn.disabled = false;
     updateRequestButton();
@@ -560,7 +666,8 @@ function showDetails(b) {
       <dt>Studio</dt><dd>Studio ${b.studio}, ${esc(s.desc)}</dd>
       <dt>Date</dt><dd>${longDate(b.date)}</dd>
       <dt>Time</dt><dd>${b.start} to ${endTime(b.start, b.hours)} (${b.hours} hr${b.hours > 1 ? 's' : ''})</dd>
-      <dt>Total</dt><dd>${peso(s.rate * b.hours)}</dd>
+      ${(ADDONS[b.ref] || []).length ? `<dt>Add-ons</dt><dd>${ADDONS[b.ref].map(a => `${esc(a.name)} x${a.qty} (${peso(a.price * a.qty)})`).join('<br>')}</dd>` : ''}
+      <dt>Total</dt><dd>${peso(s.rate * b.hours + (ADDONS[b.ref] || []).reduce((n, a) => n + a.price * a.qty, 0))}</dd>
       <dt>Payment</dt><dd>${badge(b.payment)}</dd>
     </dl>
     <p class="mut">Bookings are confirmed after staff verify your payment.</p>
@@ -656,7 +763,9 @@ function initBookingsTab() {
         <dt>Studio</dt><dd>${esc(data.studio)}${data.studio_description ? ', ' + esc(data.studio_description) : ''}</dd>
         <dt>Date</dt><dd>${longDate(a.date)}</dd>
         <dt>Time</dt><dd>${SLOTS[a.hour - 10]} to ${endTime(SLOTS[a.hour - 10], hrs)} (${hrs} hr${hrs > 1 ? 's' : ''})</dd>
-        <dt>Total</dt><dd>${peso(+data.total)}</dd>
+        <dt>Studio price</dt><dd>${peso(+(data.studio_total ?? data.total))}</dd>
+        ${(data.addons || []).map(a => `<dt>Add-on</dt><dd>${esc(a.equipment)} x${a.quantity} (${peso(+a.price)})</dd>`).join('')}
+        <dt>Total</dt><dd><b>${peso(+(data.grand_total ?? data.total))}</b></dd>
         <dt>Payment</dt><dd>${badge(data.payment_status || 'Pending')}</dd>
       </dl>
       <p class="mut">Bookings are confirmed after staff verify your payment.</p>`;
@@ -682,23 +791,42 @@ function initRentalLookup() {
     if (error || !list || !list.length) { box.innerHTML = notFound(ref, 'rental'); return; }
     const type = list[0].rental_type === 'Add-on' ? '<span class="b addon">Add-on</span>' : '<span class="b out">Outside</span>';
     box.innerHTML = `<div class="row"><h3>${esc(ref)}</h3><span>${type}</span></div>
-      <div class="tw" style="margin-top:8px">${table(['Equipment', 'Qty', 'Return by', 'Status'],
-        list.map(r => [esc(r.equipment), String(r.quantity), r.return_by ? shortDate(manilaParts(r.return_by).date) : '', badge(RN_STATUS[r.status] || r.status)]))}</div>`;
+      <div class="tw" style="margin-top:8px">${tableNotes(['Equipment', 'Qty', 'Return by', 'Status'],
+        list.map(r => ({
+          cells: [esc(r.equipment), String(r.quantity), r.return_by ? shortDate(manilaParts(r.return_by).date) : '', badge(RN_STATUS[r.status] || r.status)],
+          note: whyRejected(r.status, r.rejected_reason)
+        })))}</div>`;
   });
 }
+
+/* The staff's reason for a rejected rental, shown on its own line under the row. */
+const whyRejected = (status, reason) =>
+  status === 'Rejected' ? `<b>Reason for rejection:</b> ${esc(reason || 'No reason was given. Please contact the studio.')}` : '';
+
+/* Like table(), but a row may also carry a note that is shown full width right under it. */
+const tableNotes = (head, rows) =>
+  `<table><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>` +
+  rows.map(r => {
+    const cells = r.cells, note = r.note;
+    return `<tr class="${note ? 'has-why' : ''}">${cells.map(c => `<td>${c}</td>`).join('')}</tr>` +
+           (note ? `<tr class="why-row"><td colspan="${head.length}">${note}</td></tr>` : '');
+  }).join('') + '</tbody></table>';
 
 function renderMyRentals() {
   if (!RENTALS.length) {
     $('#myrent').innerHTML = '<p class="mut" style="padding:8px">No rentals yet.</p>';
     return;
   }
-  $('#myrent').innerHTML = table(
+  $('#myrent').innerHTML = tableNotes(
     ['Reference', 'Equipment', 'Qty', 'Rent type', 'Session or dates', 'Return date', 'Status'],
-    RENTALS.map(r => [
-      r.ref, esc(r.item), String(r.qty),
-      r.type === 'addon' ? '<span class="b addon">Add-on</span>' : '<span class="b out">Outside</span>',
-      r.when, r.ret, badge(r.status)
-    ]));
+    RENTALS.map(r => ({
+      cells: [
+        r.ref, esc(r.item), String(r.qty),
+        r.type === 'addon' ? '<span class="b addon">Add-on</span>' : '<span class="b out">Outside</span>',
+        r.when, r.ret, badge(r.status)
+      ],
+      note: whyRejected(r.status, r.reason)
+    })));
 }
 
 

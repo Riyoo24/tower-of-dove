@@ -42,8 +42,10 @@
         <h1>Create your account</h1>
         <p class="sub">Keep every booking and rental in one place.</p>
 
-        <label for="rg-name">Full name</label>
-        <input id="rg-name" autocomplete="name">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div><label for="rg-fn">First name</label><input id="rg-fn" autocomplete="given-name"></div>
+          <div><label for="rg-ln">Last name</label><input id="rg-ln" autocomplete="family-name"></div>
+        </div>
         <label for="rg-phone">Phone number</label>
         <input id="rg-phone" placeholder="09XX XXX XXXX" autocomplete="tel">
         <label for="rg-user">Username</label>

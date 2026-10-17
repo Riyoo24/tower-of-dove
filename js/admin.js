@@ -198,10 +198,17 @@ $('#abk').addEventListener('click', e => { const t = e.target.closest('[data-bf]
 const afterAction = async msg => { await refresh(); if (dlg.open) dlg.close(); if (msg) toast(msg); };
 const setBooking = (b, status, extra) => run(sb.from('booking').update({ status, ...(extra || {}) }).eq('booking_id', b.booking_id));
 
+/* Verifying a booking payment also approves its add-on equipment (done by the database).
+   These two helpers only choose the message shown afterwards. */
+const pendingAddons = ref => RL.some(l => l.booking_ref === ref && l.rental_type === 'Add-on' && l.status === 'Pending');
+const verifiedMsg = (ref, had) => !had ? `${ref} confirmed. Payment verified.`
+  : pendingAddons(ref) ? `${ref} confirmed. Some add-on equipment is still pending (not enough stock). Check the Rentals tab.`
+  : `${ref} confirmed. Add-on equipment approved too.`;
+
 ACT['bk-ok'] = async ref => {
-  const b = findBk(ref);
+  const b = findBk(ref), had = pendingAddons(ref);
   const r = b.payment_id ? await run(sb.from('payment').update({ status: 'Verified' }).eq('payment_id', b.payment_id)) : await setBooking(b, 'Approved');
-  if (r) afterAction(`${ref} confirmed. Payment verified.`);
+  if (r) { await refresh(); if (dlg.open) dlg.close(); toast(verifiedMsg(ref, had)); }
 };
 ACT['bk-no'] = async ref => {
   const b = findBk(ref);
@@ -216,11 +223,14 @@ ACT['bk-cx'] = async ref => {
 };
 ACT['bk-det'] = ref => {
   const b = findBk(ref);
+  const ad = RL.filter(l => l.booking_ref === ref && l.rental_type === 'Add-on' && !['Rejected', 'Cancelled'].includes(l.status));
+  const pay = PAY.find(p => p.reference === ref);
   showDlg(`<div class="row"><h2 style="margin:0">${esc(b.booking_ref)}</h2>${badge(bkStatus(b.status))}</div>
     <dl class="dl"><dt>Customer</dt><dd>${esc(b.customer_name)}${b.is_guest ? ' (guest)' : ''}</dd><dt>Phone</dt><dd>${esc(b.customer_number || 'Not on file')}</dd>
     <dt>Studio</dt><dd>${esc(b.studio_name)}</dd><dt>Date</dt><dd>${longDate(dOf(b.start_at))}</dd>
     <dt>Time</dt><dd>${tOf(b.start_at)} to ${tOf(b.end_at)} (${pl(Math.round(num(b.hours)), 'hr')})</dd>
-    <dt>Total</dt><dd>${money(b.total_amount)}</dd><dt>Payment</dt><dd>${badge(b.payment_status || 'Pending')} ${esc(b.payment_method || '')}${b.gcash_reference ? ', ref ' + esc(b.gcash_reference) : ''}</dd>
+    ${ad.length ? `<dt>Add-ons</dt><dd>${ad.map(l => esc(l.equipment_name) + ' x' + l.quantity + ' (' + money(num(l.unit_price_at_request) * l.quantity) + ')').join('<br>')}</dd>` : ''}
+    <dt>Studio total</dt><dd>${money(b.total_amount)}</dd>${pay ? `<dt>Amount to pay</dt><dd><b>${money(pay.amount)}</b></dd>` : ''}<dt>Payment</dt><dd>${badge(b.payment_status || 'Pending')} ${esc(b.payment_method || '')}${b.gcash_reference ? ', ref ' + esc(b.gcash_reference) : ''}</dd>
     <dt>Source</dt><dd>${esc(b.source)}</dd></dl><div class="acts"><button class="btn line" data-close>Close</button></div>`);
 };
 
@@ -235,7 +245,13 @@ function renderPayments() {
       p.status === 'Pending' ? btn('pay-ok', p.payment_id, 'Verify') + btn('pay-no', p.payment_id, 'Reject', 1) : '-'])) + '</div>';
 }
 $('#apy').addEventListener('click', e => { const t = e.target.closest('[data-pf]'); if (t) { payF = t.dataset.pf; renderPayments(); } });
-const setPay = async (id, status) => { if (await run(sb.from('payment').update({ status }).eq('payment_id', +id))) afterAction('Payment ' + status.toLowerCase() + '.'); };
+const setPay = async (id, status) => {
+  const p = PAY.find(x => x.payment_id === +id), ref = p && p.kind === 'Booking' ? p.reference : null, had = !!ref && pendingAddons(ref);
+  if (!(await run(sb.from('payment').update({ status }).eq('payment_id', +id)))) return;
+  await refresh();
+  if (dlg.open) dlg.close();
+  toast(status === 'Verified' && ref ? verifiedMsg(ref, had) : 'Payment ' + status.toLowerCase() + '.');
+};
 ACT['pay-ok'] = id => setPay(id, 'Verified');
 ACT['pay-no'] = id => setPay(id, 'Rejected');
 
@@ -420,7 +436,7 @@ function groups() {
 const gMatch = (g, f) => f === 'All' || (f === 'Overdue' ? g.lines.some(l => l.days_overdue > 0) : f === 'Due today' ? g.lines.some(l => l.status === 'Active' && dueToday(l)) : rnStatus(g.status) === f);
 
 function rnActions(g) {
-  if (g.status === 'Pending') return btn('rn-ok', g.ref, 'Approve') + btn('rn-no', g.ref, 'Reject', 1);
+  if (g.status === 'Pending') return btn('rn-det', g.ref, 'Details');   // review the ID and items first; Approve and Reject are inside
   if (g.status === 'Approved') return btn('rn-issue', g.ref, 'Issue') + btn('rn-det', g.ref, 'Details', 1);
   if (g.status === 'Active') return btn('rn-ret', g.ref, 'Process return') + btn('rn-det', g.ref, 'Details', 1);
   return btn('rn-det', g.ref, 'Details', 1);
@@ -460,6 +476,27 @@ ACT['rn-reject-go'] = ref => {
   return setRental(ref, 'Rejected', reason);
 };
 
+/* The customer's ID photo is stored in the private rental-ids bucket; only staff can open it.
+   A temporary link (10 minutes) is made each time the dialog opens. */
+async function loadRentalId(ref) {
+  const box = $('#rn-id');
+  if (!box) return;
+  const { data: o, error } = await sb.from('rental_order')
+    .select('id_type, id_image_path, contact_number, backup_contact, source').eq('rental_ref', ref).maybeSingle();
+  if (error || !o) { box.innerHTML = '<p class="mut">Could not load the ID details.</p>'; return; }
+  const meta = `<dl class="dl"><dt>ID type</dt><dd>${esc(o.id_type || 'Not recorded')}</dd><dt>Contact</dt><dd>${esc(o.contact_number || '-')}</dd>` +
+    (o.backup_contact ? `<dt>Backup contact</dt><dd>${esc(o.backup_contact)}</dd>` : '') + '</dl>';
+  if (!o.id_image_path) {
+    box.innerHTML = meta + `<p class="mut">${o.source === 'Onsite' ? 'The ID was checked in person at the studio.' : 'No ID photo was attached.'}</p>`;
+    return;
+  }
+  const { data: s, error: e2 } = await sb.storage.from('rental-ids').createSignedUrl(o.id_image_path, 600);
+  if (e2 || !s) { box.innerHTML = meta + `<p class="mut">Could not open the ID file${e2 ? ': ' + esc(e2.message) : ''}.</p>`; return; }
+  box.innerHTML = meta + (/\.pdf$/i.test(o.id_image_path)
+    ? `<a class="btn line sm" href="${s.signedUrl}" target="_blank" rel="noopener">Open ID (PDF)</a>`
+    : `<a href="${s.signedUrl}" target="_blank" rel="noopener" title="Open full size"><img class="idimg" src="${s.signedUrl}" alt="Customer ID photo"></a><p class="mut">Click the photo to open it full size.</p>`);
+}
+
 function rentalDialog(ref, focusReject) {
   const g = groups().find(x => x.ref === ref); if (!g) return;
   const st = rnStatus(g.status);
@@ -468,6 +505,7 @@ function rentalDialog(ref, focusReject) {
     <dl class="dl"><dt>Customer</dt><dd>${esc(g.customer)}</dd><dt>Phone</dt><dd>${esc(g.phone || 'Not on file')}</dd>
     <dt>Rent type</dt><dd>${TYB[g.type]}</dd><dt>${g.type === 'Add-on' ? 'Booking' : 'Rental ID'}</dt><dd>${esc(g.type === 'Add-on' ? (g.booking || '-') : g.ref)}</dd>
     ${g.reason ? `<dt>Reason</dt><dd>${esc(g.reason)}</dd>` : ''}</dl>
+    ${g.type === 'Outside' ? `<h3 style="font-size:14px;margin-top:14px">Customer's valid ID</h3><div id="rn-id"><p class="mut">Loading the ID...</p></div>` : ''}
     <div class="tw">${tbl(['Equipment', 'Qty', 'Return by', 'Overdue', ''], g.lines.map(l => [esc(l.equipment_name), String(l.quantity), dueLabel(l), dueB(l),
       g.status === 'Active' && !l.line_returned_at ? btn('rn-retline', g.ref + ':' + l.equipment_id, 'Return', 1) : l.line_returned_at ? 'Returned' : '']))}</div>`;
   if (g.lines.some(l => l.days_overdue > 0)) h += '<div class="alert">This order is overdue. Contact the customer to arrange the return.</div>';
@@ -480,6 +518,7 @@ function rentalDialog(ref, focusReject) {
   else if (g.status === 'Active') h += `<div class="acts"><button class="btn line" data-close>Close</button>${btn('rn-ret', g.ref, 'Return everything').replace('btn sm', 'btn gold')}</div>`;
   else h += '<div class="acts"><button class="btn line" data-close>Close</button></div>';
   showDlg(h);
+  if (g.type === 'Outside') loadRentalId(g.ref);
   const sel = $('#rrs');
   if (sel) { sel.onchange = () => { $('#rrs-other-wrap').hidden = sel.value !== 'Other'; }; if (focusReject) sel.focus(); }
 }
@@ -584,6 +623,32 @@ $('#ap-btn').onclick = async () => {
   if (pw.length < 8) return toast('Use a password of at least 8 characters.');
   if (await run(sb.auth.updateUser({ password: pw }))) { $('#ap').value = ''; toast('Password changed.'); }
 };
+/* ---- GCash QR code shown in the customer booking form ---- */
+function showQrPreview(src) {
+  const box = $('#gq-prev');
+  box.innerHTML = '<img id="gq-img" alt="Current GCash QR code" hidden><p class="mut" id="gq-note">Checking for a QR code...</p>';
+  const img = $('#gq-img');
+  img.onload = () => { img.hidden = false; $('#gq-note').textContent = 'This is the QR code customers see now.'; };
+  img.onerror = () => { img.hidden = true; $('#gq-note').textContent = 'No QR code uploaded yet. Customers are told to ask staff for the GCash details.'; };
+  img.src = src;
+}
+$('#gq-card').hidden = !OWNER;
+if (OWNER) {
+  showQrPreview(gcashQrUrl(Date.now()));
+  $('#gq-btn').onclick = async () => {
+    const f = $('#gq-file').files[0];
+    if (!f) return toast('Choose the QR image first.');
+    if (!/^image\/(png|jpeg|webp)$/.test(f.type)) return toast('Use a PNG, JPG or WebP image.');
+    if (f.size > 5 * 1024 * 1024) return toast('The image must be 5 MB or smaller.');
+    $('#gq-btn').disabled = true;
+    const up = await sb.storage.from('studio-images').upload(GCASH_QR_PATH, f, { upsert: true, contentType: f.type, cacheControl: '60' });
+    $('#gq-btn').disabled = false;
+    if (up.error) return toast('Upload failed: ' + up.error.message);
+    $('#gq-file').value = '';
+    showQrPreview(gcashQrUrl(Date.now()));
+    toast('GCash QR code saved. Customers will see it in the booking form.');
+  };
+}
 const addStaffBtn = $('#st-add');
 if (addStaffBtn) addStaffBtn.onclick = () => { if (OWNER) staffForm(); else toast('Only the owner can add staff accounts.'); };
 

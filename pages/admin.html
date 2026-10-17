@@ -62,7 +62,12 @@
 
       <section id="a-set" class="pg"><h1>Settings</h1><p class="sub">Your profile and staff accounts.</p>
         <div class="grid ge"><div class="card"><h2>Admin profile</h2><label for="an">Name</label><input id="an" value="Studio Owner"><label for="ae">Username</label><input id="ae" value="owner"><label for="ap">New password</label><input id="ap" type="password"><button class="btn full" id="ap-btn" type="button">Change password</button></div>
-          <div class="card"><div class="row"><h2>Staff accounts</h2><button class="btn sm line" id="st-add" type="button">Add staff</button></div><div class="tw" id="stf"></div></div></div></section>
+          <div class="card"><div class="row"><h2>Staff accounts</h2><button class="btn sm line" id="st-add" type="button">Add staff</button></div><div class="tw" id="stf"></div></div></div><div class="card" id="gq-card" style="margin-top:16px;max-width:520px"><h2>GCash payment QR code</h2>
+          <p class="mut">Customers see this QR code above the GCash reference number in the booking form. In the GCash app open Receive Money, then Show my QR, save it as an image, and upload it here.</p>
+          <div class="gq" id="gq-prev"></div>
+          <label for="gq-file">New QR image (PNG, JPG or WebP, up to 5 MB)</label><input id="gq-file" type="file" accept="image/png,image/jpeg,image/webp">
+          <button class="btn full" id="gq-btn" type="button" style="margin-top:12px">Save QR code</button></div>
+        </section>
       </div>
     </div>
   </main>

@@ -21,3 +21,9 @@ function manilaParts(ts) {
   const m = new Date(new Date(ts).getTime() + 8 * 3600e3);
   return { date: m.toISOString().slice(0, 10), hour: m.getUTCHours() };
 }
+
+/* The studio's GCash QR image lives in the public studio-images bucket (the owner uploads it in
+   Settings). It is shown in the booking form above the GCash reference number. */
+const GCASH_QR_PATH = 'payment/gcash-qr';
+const gcashQrUrl = bust =>
+  sb.storage.from('studio-images').getPublicUrl(GCASH_QR_PATH).data.publicUrl + '?v=' + (bust || Math.floor(Date.now() / 300000));

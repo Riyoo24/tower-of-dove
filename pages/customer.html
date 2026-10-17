@@ -69,7 +69,7 @@
               <input id="pd" type="date">
               <label for="rd">Return date</label>
               <input id="rd" type="date">
-              <div id="on-wrap"><label for="on">Your name</label><input id="on" autocomplete="name"></div>
+              <div id="on-wrap"><div class="fg2"><div><label for="on-fn">First name</label><input id="on-fn" autocomplete="given-name"></div><div><label for="on-ln">Last name</label><input id="on-ln" autocomplete="family-name"></div></div></div>
               <label for="oc">Contact number</label>
               <input id="oc" placeholder="09XX XXX XXXX" autocomplete="tel">
               <label for="sm-link">Backup contact (optional)</label>
@@ -134,6 +134,7 @@
 
   <dialog class="dlg" id="bkdlg" aria-label="Booking form"></dialog>
   <dialog class="dlg" id="dlg" aria-label="Details"></dialog>
+  <dialog class="dlg" id="okdlg" aria-label="Success"></dialog>
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
