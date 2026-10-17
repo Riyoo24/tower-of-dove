@@ -53,7 +53,7 @@ function renderEquipment() {
   $('#equipment-grid').innerHTML = EQUIPMENT.map((e, i) => {
     const lines = [];
     if (e.addon)   lines.push(`<div><span class="b addon">Add-on</span> ${peso(e.addonPrice)} ${e.drum ? 'per rental' : 'per session'}</div>`);
-    if (e.outside) lines.push(`<div><span class="b out">Outside</span> ${peso(e.outsidePrice)} ${e.drum ? 'per rental' : 'per day, 8 hrs minimum'}</div>`);
+    if (e.outside) lines.push(`<div><span class="b out">Outside</span> ${peso(e.outsidePrice)} per 8 hours (1/8 per extra hour)</div>`);
 
     const sub = e.drum
       ? `${e.drum.kit}, ${e.drum.vip ? 'VIP' : 'Basic'} set-up. 8 hrs minimum, no service.`

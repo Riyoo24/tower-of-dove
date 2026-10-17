@@ -140,7 +140,7 @@ const bkDlg = $('#bkdlg');
 const bkError = msg => { const x = $('#bk-e'); x.textContent = msg; x.hidden = !msg; };
 
 /* add-on equipment picked in the booking form: [{ equipment_id, quantity }] */
-const addOnSelection = () => $$('#bk-ad select').map(s => ({ equipment_id: +s.dataset.eq, quantity: +s.value })).filter(x => x.quantity > 0);
+const addOnSelection = () => Object.entries(draft ? draft.addons : {}).map(([id, q]) => ({ equipment_id: +id, quantity: +q })).filter(x => x.quantity > 0);
 const addOnPrice = id => { const e = EQUIPMENT.find(x => x.id === id); return e ? e.addonPrice : 0; };
 
 /* studio price + add-ons = total (also the amount to pay by GCash) */
@@ -179,15 +179,80 @@ async function moveDraft(t, h) {
   return true;
 }
 
-function addOnRows() {
-  const list = EQUIPMENT.filter(e => e.addon && e.stock > 0);
-  if (!list.length) return '<p class="mut">No add-on equipment is available right now.</p>';
-  return list.map(e => `
-    <div class="ad">
-      <div><b>${esc(e.name)}</b><div class="mut">${peso(e.addonPrice)} ${e.drum ? 'per rental' : 'per session'}</div></div>
-      <select data-eq="${e.id}" aria-label="Quantity of ${esc(e.name)}">${Array.from({ length: Math.min(e.stock, 10) + 1 }, (_, n) => `<option value="${n}">${n}</option>`).join('')}</select>
-    </div>`).join('');
+/* ---- dedicated add-on equipment window (opened from the booking form) ----
+   Filter by category, see the photo and the full description, pick a quantity. */
+const eqDlg = $('#eqdlg');
+let eqCat = 'All';
+let bumpIdle = null;   // set while the booking form is open, keeps its 2-minute hold alive
+
+function renderAddOnSummary() {
+  const sel = addOnSelection();
+  $('#bk-ad').innerHTML = sel.length
+    ? sel.map(x => {
+        const e = EQUIPMENT.find(y => y.id === x.equipment_id);
+        return `<div class="adrow"><span>${esc(e.name)} x${x.quantity}</span><span>${peso(e.addonPrice * x.quantity)} <button type="button" class="lk" data-rm-ad="${x.equipment_id}">Remove</button></span></div>`;
+      }).join('')
+    : '<p class="mut">No equipment added.</p>';
 }
+
+function addOnCard(e) {
+  const q = draft.addons[e.id] || 0, max = Math.min(e.stock, 10);
+  const info = e.drum
+    ? `<p class="mut">${esc(e.drum.kit)}, ${e.drum.vip ? 'VIP' : 'Basic'} set-up</p>${e.desc ? `<p>${esc(e.desc)}</p>` : ''}
+       <ul class="mut" style="margin:6px 0 0 18px"><li>Cymbals (Trojan B8): ${e.drum.vip ? '2 crash, 1 ride, hi-hat, splash' : '1 crash, 1 ride, hi-hat'}</li><li>Hardware: stands, throne, carpet</li><li>Skins: Remo and Evans</li><li>No service</li></ul>`
+    : (e.desc ? `<p>${esc(e.desc)}</p>` : '<p class="mut">No description yet.</p>');
+  return `<div class="eqcard">
+      ${equipmentImage(e)}
+      <p class="cat">${esc(e.category || '')}</p>
+      <h3>${esc(e.name)}</h3>
+      ${info}
+      <p class="mut" style="margin-top:6px">${e.stock} available</p>
+      <div class="row" style="margin-top:8px">
+        <b>${peso(e.addonPrice)} <span class="mut" style="font-weight:400">${e.drum ? 'per rental' : 'per session'}</span></b>
+        <label class="qtyl">Qty <select data-aq="${e.id}" aria-label="Quantity of ${esc(e.name)}">${Array.from({ length: max + 1 }, (_, n) => `<option value="${n}" ${n === q ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+      </div>
+    </div>`;
+}
+
+function drawAddOnModal() {
+  const list = EQUIPMENT.filter(e => e.addon && e.stock > 0);
+  const cats = ['All', ...new Set(list.map(e => e.category).filter(Boolean))];
+  const shown = list.filter(e => eqCat === 'All' || e.category === eqCat);
+  eqDlg.innerHTML = `<div class="in">
+    <div class="row"><h2 style="margin:0">Add equipment to your booking</h2><button type="button" class="btn sm line" data-close>Close</button></div>
+    <p class="mut" style="margin-top:4px">Used inside the studio during your session. Choose a quantity for each item you want.</p>
+    <div class="tabs" style="margin-top:10px">${cats.map(c => `<button type="button" data-cat="${esc(c)}" class="${c === eqCat ? 'on' : ''}">${esc(c)}</button>`).join('')}</div>
+    <div class="eqgrid">${shown.map(addOnCard).join('') || '<p class="mut">Nothing available in this category.</p>'}</div>
+    <div class="acts"><span class="mut" id="eqd-n" style="margin-right:auto"></span><button type="button" class="btn gold" data-close>Done</button></div>
+  </div>`;
+  eqCount();
+}
+function eqCount() {
+  const n = addOnSelection().length;
+  const el = $('#eqd-n');
+  if (el) el.textContent = n ? `${n} item${n === 1 ? '' : 's'} selected` : 'Nothing selected yet';
+}
+function openAddOnModal() {
+  if (!draft) return;
+  eqCat = 'All';
+  drawAddOnModal();
+  eqDlg.showModal();
+}
+eqDlg.addEventListener('click', e => {
+  const cat = e.target.closest('[data-cat]');
+  if (cat) { eqCat = cat.dataset.cat; drawAddOnModal(); }
+  else if (e.target.closest('[data-close]')) eqDlg.close();
+  if (bumpIdle) bumpIdle();
+});
+eqDlg.addEventListener('change', e => {
+  const s = e.target.closest('[data-aq]');
+  if (!s || !draft) return;
+  draft.addons[s.dataset.aq] = +s.value;
+  renderAddOnSummary();
+  updateTotals();
+  eqCount();
+  if (bumpIdle) bumpIdle();
+});
 
 async function openBook(startIndex) {
   await profileReady;
@@ -201,7 +266,7 @@ async function openBook(startIndex) {
   const h = (t + 1 < SLOTS.length && !taken.has(t + 1)) ? 2 : 1;
   if (!(await holdSlots(si, d, t, h))) return toast('That slot was just taken. Pick another time.');
 
-  draft = { si, d, t, h };
+  draft = { si, d, t, h, addons: {} };
   const s = STUDIOS[si];
 
   bkDlg.innerHTML = `
@@ -224,7 +289,8 @@ async function openBook(startIndex) {
         <input id="bk-p" placeholder="09XX XXX XXXX" autocomplete="tel">
 
         <label>Add-on equipment <span class="mut" style="font-weight:400">(optional)</span></label>
-        <div class="adl" id="bk-ad">${addOnRows()}</div>
+        <div class="adsum" id="bk-ad"></div>
+        <button type="button" class="btn line sm" id="bk-ad-open" style="margin-top:8px">Browse equipment</button>
 
         <label for="bk-m">Payment method</label>
         <select id="bk-m"><option>GCash</option><option>Cash</option></select>
@@ -267,7 +333,12 @@ async function openBook(startIndex) {
   $('#bk-h').onchange = async e => { if (!(await moveDraft(draft.t, +e.target.value))) e.target.value = draft.h; };
   $('#bk-m').onchange = e => { $('#bk-gw').hidden = e.target.value !== 'GCash'; };
   $('#bk-x').onclick = () => bkDlg.close();
-  $('#bk-ad').onchange = updateTotals;
+  $('#bk-ad-open').onclick = openAddOnModal;
+  $('#bk-ad').onclick = e => {
+    const r = e.target.closest('[data-rm-ad]');
+    if (r) { delete draft.addons[r.dataset.rmAd]; renderAddOnSummary(); updateTotals(); }
+  };
+  renderAddOnSummary();
   $('#bk-agree').onchange = e => { if (e.target.checked) { $('#bk-terms').classList.remove('err'); bkError(''); } };
 
   // the studio's GCash QR (uploaded by the owner in Settings), shown above the reference number
@@ -287,6 +358,7 @@ async function openBook(startIndex) {
     idleUntil = Date.now() + LOCK_TTL;
     if (draft && Date.now() - lastHold > 30000) { lastHold = Date.now(); holdSlots(draft.si, draft.d, draft.t, draft.h); }
   };
+  bumpIdle = keepAlive;
   ['pointerdown', 'keydown', 'input', 'touchstart'].forEach(ev => bkDlg.addEventListener(ev, keepAlive));
   bkDlg.addEventListener('scroll', keepAlive, true);
 
@@ -300,6 +372,8 @@ async function openBook(startIndex) {
   bkDlg.onclose = () => {
     clearInterval(idleTimer);
     releaseHold();
+    bumpIdle = null;
+    if (eqDlg.open) eqDlg.close();
     const why = draft && draft.why;
     draft = null;
     refreshBook();
@@ -417,8 +491,10 @@ async function loadMyRentals() {
       RENTALS.push({
         ref: addon ? r.booking_ref : r.rental_ref, item: r.equipment_name, qty: r.quantity,
         type: addon ? 'addon' : 'out',
-        when: addon ? (bk ? `${shortDate(bk.date)}, ${bk.start}` : fmtD(r.due_at)) : `${fmtD(r.pickup_date)} to ${fmtD(r.return_date)}`,
-        ret:  addon ? (bk ? `${shortDate(bk.date)}, ${endTime(bk.start, bk.hours)}` : fmtD(r.due_at)) : fmtD(r.return_date),
+        when: addon ? (bk ? `${shortDate(bk.date)}, ${bk.start}` : fmtD(r.due_at)) : fmtDT(r.pickup_date),
+        ret:  addon ? (bk ? `${shortDate(bk.date)}, ${endTime(bk.start, bk.hours)}` : fmtD(r.due_at)) : fmtDT(r.return_date),
+        rentalRef: r.rental_ref, rawStatus: r.status, unit: Number(r.unit_price_at_request) || 0, hours: Number(r.rental_hours) || 0,
+        pickup: r.pickup_date, due: r.due_at, down: Number(r.down_payment) || 0, late: Number(r.late_fee) || 0, returnedAt: r.line_returned_at,
         status: RN_STATUS[r.status] || r.status, reason: r.rejected_reason || ''
       });
     });
@@ -439,23 +515,71 @@ const equipmentImage = e => e.img
 
 const unitPrice = e => rentMode === 'addon' ? e.addonPrice : e.outsidePrice;
 
-/* Outside rentals are priced per day. Drum sets are per rental. */
-function rentDays() {
-  const p = $('#pd').value, r = $('#rd').value;
-  if (!p || !r) return 1;
-  return Math.max(1, Math.round((new Date(r + 'T00:00') - new Date(p + 'T00:00')) / 864e5));
+const sum = a => a.reduce((x, y) => x + y, 0);
+const hourLabel = h => `${h % 12 || 12}:00 ${h < 12 ? 'AM' : 'PM'}`;
+const fmtDT = ts => { const p = manilaParts(ts); return `${shortDate(p.date)}, ${hourLabel(p.hour)}`; };
+
+/* Guests may add equipment to a studio booking, but outside rentals need an account. */
+const outBlocked = () => rentMode === 'out' && !isMember();
+
+/* Outside rentals: the price covers the first 8 hours; every extra hour adds price / 8. */
+function outsideHours() {
+  const pd = $('#pd').value, rd = $('#rd').value;
+  if (!pd || !rd) return null;
+  const h = (new Date(manilaTS(rd, +$('#rt').value)) - new Date(manilaTS(pd, +$('#pt').value))) / 3600e3;
+  return h > 0 ? h : null;
 }
+const billedHours = () => Math.max(8, Math.ceil(outsideHours() || 8));
+
 function lineTotal(i) {
   const e = EQUIPMENT[i], c = cart[i], unit = unitPrice(e);
-  if (e.drum) return unit * c.q;
-  return rentMode === 'out' ? unit * c.q * rentDays() : unit * c.q;
+  return rentMode === 'out' ? unit * c.q * billedHours() / 8 : unit * c.q;
+}
+
+/* base price, extra hours, total, down payment (50%) and balance for the current outside rental */
+function rentalMoney() {
+  const keys = Object.keys(cart), hrs = billedHours();
+  const base = sum(keys.map(i => unitPrice(EQUIPMENT[i]) * cart[i].q));
+  const extraHrs = hrs - 8, extra = base / 8 * extraHrs, total = base + extra, down = Math.round(total * 50) / 100;
+  return { base, extraHrs, extra, total, down, balance: total - down };
+}
+
+function renderSummary() {
+  const box = $('#rsum'), keys = Object.keys(cart);
+  if (rentMode !== 'out' || !keys.length) { box.hidden = true; return; }
+  const m = rentalMoney();
+  box.hidden = false;
+  box.innerHTML =
+    `<div><span>Rental (first 8 hours)</span><span>${peso(m.base)}</span></div>` +
+    (m.extraHrs ? `<div><span>Extra hours (${m.extraHrs} x ${peso(m.base / 8)})</span><span>${peso(m.extra)}</span></div>` : '') +
+    `<div><b style="color:var(--ink)">Down payment due now (50%)</b><b style="color:var(--ink)">${peso(m.down)}</b></div>` +
+    `<div><span>Balance to pay at pick-up</span><span>${peso(m.balance)}</span></div>`;
+  if ($('#oq-amt')) $('#oq-amt').textContent = peso(m.down);
+}
+
+function renderDuration() {
+  const el = $('#rdur'), h = outsideHours();
+  el.textContent = h === null ? 'The return must be after the pick-up.'
+    : h < 8 ? `That is only ${h} hours. The minimum rent is 8 hours.`
+    : h === 8 ? 'Rental length: 8 hours (included in the price).'
+    : `Rental length: ${h} hours. ${Math.ceil(h) - 8} extra hour${Math.ceil(h) - 8 === 1 ? '' : 's'} added to the price.`;
+}
+
+/* category filter above the equipment cards (same idea as the add-on equipment window) */
+let rentCat = 'All';
+function renderCategories() {
+  const cats = ['All', ...new Set(EQUIPMENT.map(e => e.category).filter(Boolean))];
+  if (!cats.includes(rentCat)) rentCat = 'All';
+  $('#eq-cats').innerHTML = cats.map(c => `<button type="button" data-cat="${esc(c)}" class="${c === rentCat ? 'on' : ''}">${esc(c)}</button>`).join('');
 }
 
 function renderEquipment() {
+  renderCategories();
   $('#eq').innerHTML = EQUIPMENT.map((e, i) => {
+    if (rentCat !== 'All' && e.category !== rentCat) return '';
     const offered = rentMode === 'addon' ? e.addon : e.outside;
-    const ok = offered && e.stock > 0;
-    const unit = e.drum ? 'per rental, 8 hrs minimum' : rentMode === 'addon' ? 'per session' : 'per day, 8 hrs minimum';
+    const ok = offered && e.stock > 0 && !outBlocked();
+    const unit = rentMode === 'addon' ? (e.drum ? 'per rental' : 'per session') : 'per 8 hours, then 1/8 per extra hour';
 
     const info = e.drum
       ? `<p class="mut">${esc(e.drum.kit)}, ${e.drum.vip ? 'VIP' : 'Basic'} set-up</p>
@@ -469,7 +593,7 @@ function renderEquipment() {
       : `${e.desc ? `<p class="mut" style="margin-top:4px">${esc(e.desc)}</p>` : ''}<p class="mut">${e.stock} available</p>`;
 
     const control = e.drum
-      ? '<span class="mut" style="white-space:nowrap">8 hrs</span>'
+      ? '<span class="mut" style="white-space:nowrap">1 set</span>'
       : `<input class="qty" type="number" min="1" max="${e.stock}" value="1" aria-label="Quantity" data-q="${i}" ${ok ? '' : 'disabled'}>`;
 
     return `
@@ -496,29 +620,32 @@ function renderCart() {
   $('#cart').innerHTML = keys.length
     ? keys.map(i => {
         const e = EQUIPMENT[i], c = cart[i];
-        const label = e.drum ? `${esc(e.name)} (8 hrs)`
-          : rentMode === 'out' ? `${esc(e.name)} x ${c.q} (${rentDays()} day${rentDays() > 1 ? 's' : ''})`
-          : `${esc(e.name)} x ${c.q}`;
+        const label = rentMode === 'out' ? `${esc(e.name)} x ${c.q} (${billedHours()} hrs)` : `${esc(e.name)} x ${c.q}`;
         return `<li><span>${label} <button class="lk" data-rm="${i}" aria-label="Remove ${esc(e.name)}">Remove</button></span><span>${peso(lineTotal(i))}</span></li>`;
       }).join('')
     : '<li><span class="mut">Nothing added yet</span><span></span></li>';
 
-  $('#ctt').textContent = peso(keys.reduce((sum, i) => sum + lineTotal(i), 0));
+  $('#ctt').textContent = peso(keys.reduce((n, i) => n + lineTotal(i), 0));
+  renderSummary();
+  renderDuration();
 }
 
 function renderRentMode() {
   $('#fa').hidden = rentMode !== 'addon';
   $('#fo').hidden = rentMode === 'addon';
+  $('#fo-guest').hidden = !outBlocked();
+  $('#fo-form').hidden = outBlocked();
   $('#rmh').textContent = rentMode === 'addon'
     ? 'Used inside the studio you booked. Tied to your booking reference. Priced per session; drum sets are priced per rental.'
-    : 'Taken out of the studio. Minimum rent is 8 hours. Priced per day; drum sets are priced per rental (8 hours, no service). You get an OUT reference instead of a booking reference.';
+    : 'Taken out of the studio, for registered customers. The price covers 8 hours and every extra hour adds one-eighth of the price. Pay a 50% down payment now and the rest at pick-up. You get an OUT reference instead of a booking reference.';
   $$('#rm button').forEach(b => b.classList.toggle('on', b.dataset.m === rentMode));
+  renderEquipment();
   updateRequestButton();
 }
 
-/* Outside rentals need an ID file before the request button unlocks. */
+/* Outside rentals need a member account and an ID file before the request button unlocks. */
 function updateRequestButton() {
-  $('#rq').disabled = rentMode === 'out' && !$('#vf').files.length;
+  $('#rq').disabled = rentMode === 'out' && (outBlocked() || !$('#vf').files.length);
 }
 
 /* Bookings an add-on can be attached to: upcoming and not cancelled. */
@@ -529,21 +656,41 @@ function renderAttachOptions() {
     : '<option value="">No upcoming booking. Book a studio first.</option>';
 }
 
+function loadRentalQr() {
+  const img = $('#oq-img');
+  img.onload = () => { img.hidden = false; };
+  img.onerror = () => {
+    img.hidden = true;
+    $('#oq-note').innerHTML = 'Pay the down payment of <b id="oq-amt"></b> using the studio\'s GCash account, then enter the reference number from your receipt below. Ask staff if you need the account details.';
+    renderSummary();
+  };
+  img.src = gcashQrUrl();
+}
+
 function initRentTab() {
-  const today = TODAY;
-  $('#pd').min = $('#rd').min = today;
-  $('#on-wrap').hidden = isMember();
-  $('#pd').value = dayOffset(1);
-  $('#rd').value = dayOffset(2);
+  // pick-up times: studio hours; return times also allow 10:00 PM closing
+  $('#pt').innerHTML = SLOTS.map((t, i) => `<option value="${10 + i}">${t}</option>`).join('');
+  $('#rt').innerHTML = SLOTS.map((t, i) => `<option value="${10 + i}">${t}</option>`).join('') + '<option value="22">10:00 PM</option>';
+  $('#pd').min = $('#rd').min = TODAY;
+  $('#pd').value = $('#rd').value = dayOffset(1);
+  $('#pt').value = '10';
+  $('#rt').value = '18';
+  loadRentalQr();
 
   $('#rm').addEventListener('click', e => {
     const m = e.target.dataset.m;
     if (!m) return;
     rentMode = m;
     cart = {};
-    renderEquipment();
     renderCart();
     renderRentMode();
+  });
+
+  $('#eq-cats').addEventListener('click', e => {
+    const c = e.target.closest('[data-cat]');
+    if (!c) return;
+    rentCat = c.dataset.cat;
+    renderEquipment();
   });
 
   $('#eq').addEventListener('click', e => {
@@ -559,7 +706,13 @@ function initRentTab() {
     if (rm) { delete cart[rm.dataset.rm]; renderCart(); }
   });
 
-  ['#pd', '#rd'].forEach(sel => $(sel).addEventListener('change', renderCart));
+  $('#pd').addEventListener('change', () => {
+    $('#rd').min = $('#pd').value || TODAY;
+    if ($('#rd').value < $('#pd').value) $('#rd').value = $('#pd').value;
+    renderCart();
+  });
+  ['#rd', '#pt', '#rt'].forEach(sel => $(sel).addEventListener('change', renderCart));
+  $('#or-agree').addEventListener('change', e => { if (e.target.checked) $('#or-terms').classList.remove('err'); });
   $('#vf').addEventListener('change', updateRequestButton);
   $('#rq').addEventListener('click', requestRental);
 }
@@ -572,56 +725,71 @@ async function requestRental() {
   btn.disabled = true;
 
   try {
-    let args;
     if (rentMode === 'addon') {
       const ref = $('#lb').value;
       if (!ref) return toast('Attach the rental to a studio booking first.');
-      args = { p_type: 'Add-on', p_items: items, p_booking_ref: ref };
-    } else {
-      const pd = $('#pd').value, rd = $('#rd').value, contact = $('#oc').value.trim();
-      const first = isMember() ? '' : $('#on-fn').value.trim(), last = isMember() ? '' : $('#on-ln').value.trim();
-      const file = $('#vf').files[0];
-      if (!pd || !rd) return toast('Choose a pick-up and return date.');
-      if (pd < TODAY) return toast('Pick-up date cannot be in the past.');
-      if (rd < pd) return toast('Return date must be on or after the pick-up date.');
-      if (!isMember() && (!first || !last)) return toast('Enter your first and last name.');
-      if (!/^[\d\s+()-]{7,}$/.test(contact)) return toast('Enter a valid contact number.');
-      if (!file) return toast('Attach a valid ID.');
-
-      // upload the ID photo first; the request stores only its path
-      const ext = ((file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '')) || 'jpg';
-      const path = `${crypto.randomUUID()}/${Date.now()}.${ext}`;
-      const up = await sb.storage.from('rental-ids').upload(path, file, { contentType: file.type });
-      if (up.error) return toast('Could not upload your ID: ' + up.error.message);
-
-      // pick-up 10:00 AM (or the next hour if today); same-day rentals run 8 hours, otherwise whole days
-      const nowHour = manilaParts(new Date()).hour;
-      const pickHour = pd === TODAY ? Math.min(21, Math.max(10, nowHour + 1)) : 10;
-      const pickup = new Date(manilaTS(pd, pickHour));
-      const days = Math.round((new Date(rd + 'T00:00') - new Date(pd + 'T00:00')) / 864e5);
-      const back = new Date(pickup.getTime() + (days > 0 ? days * 24 : 8) * 3600e3);
-
-      args = {
-        p_type: 'Outside', p_items: items,
-        p_first_name: first || null, p_last_name: last || null, p_number: contact,
-        p_pickup_date: pickup.toISOString(), p_return_date: back.toISOString(),
-        p_contact_number: contact, p_backup_contact: $('#sm-link').value.trim() || null,
-        p_id_type: $('#vt').value, p_id_image_path: path
-      };
+      const { data, error } = await sb.rpc('request_rental', { p_type: 'Add-on', p_items: items, p_booking_ref: ref });
+      if (error) return toast(error.message);
+      cart = {};
+      renderCart();
+      await loadMyRentals();
+      showSuccess({ title: 'Rental request sent!', label: 'Your reference code', ref,
+        note: 'Staff will review your request. Keep this code to look up your rental later.' });
+      return;
     }
 
-    const { data, error } = await sb.rpc('request_rental', args);
+    /* ---- outside rental (members only, with a 50% down payment) ---- */
+    if (!isMember()) return toast('Please log in to rent equipment outside the studio.');
+    const pd = $('#pd').value, rd = $('#rd').value, ph = +$('#pt').value, rh = +$('#rt').value;
+    const first = $('#on-fn').value.trim(), last = $('#on-ln').value.trim();
+    const contact = $('#oc').value.trim(), backup = $('#sm-link').value.trim();
+    const gref = $('#og').value.replace(/\s/g, ''), file = $('#vf').files[0], hours = outsideHours();
+
+    if (!first || !last) return toast('Enter your first and last name.');
+    if (!pd || !rd) return toast('Choose the pick-up and return dates.');
+    if (pd < TODAY || (pd === TODAY && ph <= manilaParts(new Date()).hour)) return toast('The pick-up time must be later than now.');
+    if (hours === null || hours < 8) return toast('The minimum rent is 8 hours. Choose a later return.');
+    if (!/^[\d\s+()-]{7,}$/.test(contact)) return toast('Enter a valid contact number.');
+    if (backup && !/^[\d\s+()-]{7,}$/.test(backup)) return toast('The backup contact must be a phone number.');
+    if (!file) return toast('Attach a valid ID.');
+    if (!/^\d{13}$/.test(gref)) return toast('Enter the 13-digit GCash reference number of your down payment.');
+    if (!$('#or-agree').checked) {
+      $('#or-terms').classList.add('err');
+      return toast('Please tick the box to confirm you agree to the rental terms.');
+    }
+
+    // upload the ID photo first; the request stores only its path
+    const ext = ((file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '')) || 'jpg';
+    const path = `${crypto.randomUUID()}/${Date.now()}.${ext}`;
+    const up = await sb.storage.from('rental-ids').upload(path, file, { contentType: file.type });
+    if (up.error) return toast('Could not upload your ID: ' + up.error.message);
+
+    const money = rentalMoney();
+    const { data, error } = await sb.rpc('request_outside_rental', {
+      p_items: items, p_first_name: first, p_last_name: last, p_number: contact,
+      p_pickup_date: manilaTS(pd, ph), p_return_date: manilaTS(rd, rh),
+      p_contact_number: contact, p_backup_contact: backup || null,
+      p_id_type: $('#vt').value, p_id_image_path: path, p_gcash_reference: gref
+    });
     if (error) return toast(error.message);
     const row = Array.isArray(data) ? data[0] : data;
 
     cart = {};
     $('#vf').value = '';
+    $('#og').value = '';
+    $('#or-agree').checked = false;
     renderCart();
     await loadMyRentals();
     showSuccess({
-      title: 'Rental request sent!', label: 'Your reference code',
-      ref: rentMode === 'addon' ? args.p_booking_ref : row.rental_ref,
-      note: 'Staff will review your request. Keep this code to look up your rental later.'
+      title: 'Rental request sent!', label: 'Your rental reference code', ref: row.rental_ref,
+      lines: [
+        ['Pick-up', `${shortDate(pd)}, ${hourLabel(ph)}`],
+        ['Return', `${shortDate(rd)}, ${hourLabel(rh)}`],
+        ['Total', peso(Number(row.total_amount) || money.total)],
+        ['Down payment sent', peso(Number(row.down_payment) || money.down)],
+        ['Balance at pick-up', peso((Number(row.total_amount) || money.total) - (Number(row.down_payment) || money.down))]
+      ],
+      note: 'Staff will check your ID and verify your down payment. Bring the same ID when you pick up the equipment.'
     });
   } finally {
     btn.disabled = false;
@@ -812,21 +980,105 @@ const tableNotes = (head, rows) =>
            (note ? `<tr class="why-row"><td colspan="${head.length}">${note}</td></tr>` : '');
   }).join('') + '</tbody></table>';
 
+/* A rental can be cancelled until 24 hours before pick-up (outside) or before the booked session (add-on). */
+const rentalStart = r => {
+  if (r.type === 'out') return r.pickup ? new Date(r.pickup) : null;
+  const b = BOOKINGS.find(x => x.ref === r.ref);
+  return b ? startsAt(b) : null;
+};
+const rentalLocked = r => { const d = rentalStart(r); return !!d && d - Date.now() < 24 * 60 * 60 * 1000; };
+const rentalCutoffMsg = r => `Changes and cancellations close 24 hours before ${r.type === 'out' ? 'pick-up' : 'your session'}.`;
+
 function renderMyRentals() {
   if (!RENTALS.length) {
     $('#myrent').innerHTML = '<p class="mut" style="padding:8px">No rentals yet.</p>';
     return;
   }
+  const seen = new Set();
   $('#myrent').innerHTML = tableNotes(
-    ['Reference', 'Equipment', 'Qty', 'Rent type', 'Session or dates', 'Return date', 'Status'],
-    RENTALS.map(r => ({
-      cells: [
-        r.ref, esc(r.item), String(r.qty),
-        r.type === 'addon' ? '<span class="b addon">Add-on</span>' : '<span class="b out">Outside</span>',
-        r.when, r.ret, badge(r.status)
-      ],
-      note: whyRejected(r.status, r.reason)
-    })));
+    ['Reference', 'Equipment', 'Qty', 'Rent type', 'Session or pick-up', 'Return', 'Status', ''],
+    RENTALS.map(r => {
+      const first = !seen.has(r.rentalRef);
+      seen.add(r.rentalRef);
+      const canCancel = ['Pending', 'Approved'].includes(r.rawStatus);
+      const actions = !first ? '' :
+        `<button class="btn sm line" data-rn="details" data-ref="${esc(r.rentalRef)}">Details</button>` +
+        (canCancel ? `<button class="btn sm line" data-rn="cancel" data-ref="${esc(r.rentalRef)}">Cancel</button>` : '');
+      return {
+        cells: [
+          r.ref, esc(r.item), String(r.qty),
+          r.type === 'addon' ? '<span class="b addon">Add-on</span>' : '<span class="b out">Outside</span>',
+          r.when, r.ret, badge(r.status), actions
+        ],
+        note: whyRejected(r.status, r.reason)
+      };
+    }));
+}
+
+function showRentalDetails(ref) {
+  const lines = RENTALS.filter(r => r.rentalRef === ref), r0 = lines[0];
+  if (!r0) return;
+  const out = r0.type === 'out';
+  let rows = '';
+  if (out) {
+    const hrs = Math.max(8, Math.ceil(r0.hours || 8));
+    const total = sum(lines.map(r => r.unit * r.qty * hrs / 8));
+    const due = r0.due ? new Date(r0.due) : null, now = Date.now();
+    const accruing = due ? lines.filter(r => r.rawStatus === 'Active' && !r.returnedAt && now > due) : [];
+    const fee = sum(lines.map(r => r.late)) + sum(accruing.map(r => r.qty * r.unit / 8 * Math.ceil((now - due) / 3600e3)));
+    rows = `<dt>Rental length</dt><dd>${hrs} hours billed</dd>
+      <dt>Total</dt><dd>${peso(total)}</dd>
+      <dt>Down payment</dt><dd>${peso(r0.down)} <span class="mut">(non-refundable if cancelled)</span></dd>
+      <dt>Balance at pick-up</dt><dd>${peso(Math.max(0, total - r0.down))}</dd>
+      ${fee > 0 ? `<dt>Late fee</dt><dd><b>${peso(fee)}</b> <span class="mut">${accruing.length ? 'so far, ' : ''}paid at the studio</span></dd>` : ''}`;
+  }
+  showDialog(`
+    <div class="row"><h2 style="margin:0">${esc(r0.ref)}</h2>${badge(r0.status)}</div>
+    <dl class="dl">
+      <dt>Rent type</dt><dd>${out ? 'Outside rent' : 'Add-on to a studio booking'}</dd>
+      <dt>Equipment</dt><dd>${lines.map(r => `${esc(r.item)} x${r.qty}`).join('<br>')}</dd>
+      <dt>${out ? 'Pick-up' : 'Session'}</dt><dd>${r0.when}</dd>
+      <dt>${out ? 'Return by' : 'Ends'}</dt><dd>${r0.ret}</dd>
+      ${rows}
+    </dl>
+    ${r0.status === 'Rejected' ? `<div class="alert">${whyRejected(r0.status, r0.reason)}</div>` : ''}
+    ${out ? '<p class="mut">Each hour beyond 8 hours adds one-eighth of the item price. Returning late adds the same charge for every hour late.</p>' : ''}
+    <div class="acts"><button class="btn line" data-close>Close</button></div>`);
+}
+
+function confirmCancelRental(ref) {
+  const lines = RENTALS.filter(r => r.rentalRef === ref), r0 = lines[0];
+  if (!r0) return;
+  const out = r0.type === 'out';
+  showDialog(`
+    <h2>Cancel ${esc(r0.ref)}?</h2>
+    <p class="mut">${lines.map(r => `${esc(r.item)} x${r.qty}`).join(', ')}.</p>
+    <p class="mut" style="margin-top:8px">${out
+      ? `Your 50% down payment of <b>${peso(r0.down)}</b> is <b>non-refundable</b> once the rental is cancelled.`
+      : 'The add-on equipment is removed from your booking. Your studio booking stays as it is.'}</p>
+    <div class="acts">
+      <button class="btn line" data-close>Keep rental</button>
+      <button class="btn bad" id="do-cancel-r">Cancel rental</button>
+    </div>`);
+  $('#do-cancel-r').onclick = async () => {
+    const { error } = await sb.rpc('cancel_rental', { p_rental_ref: ref });
+    if (error) return toast(error.message);
+    dlg.close();
+    await loadMyRentals();
+    toast(`${r0.ref} cancelled.`);
+  };
+}
+
+function initMyRentals() {
+  $('#myrent').addEventListener('click', e => {
+    const b = e.target.closest('[data-rn]');
+    if (!b) return;
+    const r = RENTALS.find(x => x.rentalRef === b.dataset.ref);
+    if (!r) return;
+    if (b.dataset.rn === 'details') return showRentalDetails(b.dataset.ref);
+    if (rentalLocked(r)) return toast(rentalCutoffMsg(r));
+    confirmCancelRental(b.dataset.ref);
+  });
 }
 
 
@@ -864,6 +1116,7 @@ initBookTab();
 initRentTab();
 initBookingsTab();
 initRentalLookup();
+initMyRentals();
 applyAccessMode();
 window.addEventListener('hashchange', showTab);
 
@@ -873,7 +1126,12 @@ dataReady.then(async () => {
   renderEquipment();
   renderCart();
   renderRentMode();
-  profileReady.then(() => { if (PROFILE && !$('#oc').value) $('#oc').value = PROFILE.number; });
+  profileReady.then(() => {
+    if (!PROFILE) return;
+    if (!$('#on-fn').value) $('#on-fn').value = PROFILE.first;
+    if (!$('#on-ln').value) $('#on-ln').value = PROFILE.last;
+    if (!$('#oc').value) $('#oc').value = PROFILE.number;
+  });
   showTab();
   await loadMyBookings();
   await loadMyRentals();

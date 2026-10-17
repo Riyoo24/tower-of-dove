@@ -56,4 +56,5 @@
 **Or with the CLI:** `supabase functions deploy create-staff --project-ref xwdpduwgswyxqhbrvpay`
 
 Supabase gives the function `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` itself, so there are no secrets to set.
-Only an active Owner can call it. It also resets staff passwords and nothing else.
+Only an active Owner can call it. It creates staff accounts, resets staff passwords and removes customer accounts.
+**If you deployed it earlier, open the function in the dashboard, paste the new code over the old and press Deploy again** (the customer removal needs it).

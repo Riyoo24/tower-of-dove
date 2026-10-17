@@ -39,6 +39,7 @@ const tbl = (head, rows) =>
   (rows.length ? rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')
                : `<tr><td colspan="${head.length}" class="mut">Nothing to show.</td></tr>`) + '</tbody></table>';
 const tb = (id, head, rows) => { $('#' + id).innerHTML = tbl(head, rows); };
+const dbtn = (act, id, text) => `<button class="btn sm bad" data-act="${act}" data-id="${esc(id)}">${text}</button>`;
 const btn = (act, id, text, line) => `<button class="btn sm ${line ? 'line' : ''}" data-act="${act}" data-id="${esc(id)}">${text}</button>`;
 const tabsHtml = (list, cur, key) => `<div class="tabs">${list.map(x => `<button data-${key}="${x}" class="${x === cur ? 'on' : ''}">${x}</button>`).join('')}</div>`;
 const KPI = (l, v, color, sub) => `<div class="card kpi"><span class="mut">${l}</span><div class="num" ${color ? `style="color:${color}"` : ''}>${v}</div>${sub ? `<span class="mut">${sub}</span>` : ''}</div>`;
@@ -285,7 +286,7 @@ function renderStudios() {
     const ph = s.image ? `<div class="ph has"><img src="${esc(s.image)}" alt="${esc(s.name)}"></div>`
                        : `<div class="ph" style="background:linear-gradient(135deg,${c[0]},${c[1]})">${esc(letter)}</div>`;
     return `<div class="card">${ph}<div class="row"><h3>${esc(s.name)}</h3>${badge(s.status)}</div><p class="mut">${esc(s.description || '')}</p>
-      <div class="row" style="margin-top:8px"><b>${money(s.hourly_rate)}/hr</b><span>${btn('st-edit', s.studio_id, 'Edit')}${btn('st-tog', s.studio_id, s.status === 'Available' ? 'Disable' : 'Enable', 1)}</span></div></div>`;
+      <div class="row" style="margin-top:8px"><b>${money(s.hourly_rate)}/hr</b><span>${btn('st-edit', s.studio_id, 'Edit')}${btn('st-tog', s.studio_id, s.status === 'Available' ? 'Disable' : 'Enable', 1)}${dbtn('st-del', s.studio_id, 'Delete')}</span></div></div>`;
   }).join('');
 }
 const afterStudio = async msg => { await loadCatalog(); await refresh(); if (dlg.open) dlg.close(); toast(msg); };
@@ -293,6 +294,24 @@ const afterStudio = async msg => { await loadCatalog(); await refresh(); if (dlg
 ACT['st-tog'] = async id => {
   const s = STU.find(x => x.studio_id === +id);
   if (await run(sb.from('studio').update({ status: s.status === 'Available' ? 'Unavailable' : 'Available' }).eq('studio_id', s.studio_id))) afterStudio(`${s.name} updated.`);
+};
+ACT['st-del'] = id => {
+  const s = STU.find(x => x.studio_id === +id), n = BK.filter(b => b.studio_id === s.studio_id).length;
+  if (n > 0) {
+    showDlg(`<h2 style="margin:0 0 8px">${esc(s.name)} can't be deleted</h2>
+      <p class="mut">It has ${pl(n, 'booking')} on record, and deleting the studio would erase that history. Disable it instead: customers can no longer book it, and your records stay intact.</p>
+      <div class="acts"><button class="btn line" data-close>Close</button>${s.status === 'Available' ? btn('st-tog', s.studio_id, 'Disable ' + esc(s.name)) : ''}</div>`);
+    return;
+  }
+  showDlg(`<h2 style="margin:0 0 8px">Delete ${esc(s.name)}?</h2>
+    <p class="mut">The studio is removed from the system. It has no bookings. This can't be undone.</p>
+    <div class="acts"><button class="btn line" data-close>Cancel</button>${dbtn('st-del-go', s.studio_id, 'Delete studio')}</div>`);
+};
+ACT['st-del-go'] = async id => {
+  const s = STU.find(x => x.studio_id === +id);
+  const r = await sb.from('studio').delete().eq('studio_id', s.studio_id);
+  if (r.error) return toast(r.error.code === '23503' ? `${s.name} has bookings on record, so it can't be deleted. Disable it instead.` : r.error.message);
+  afterStudio(`${s.name} deleted.`);
 };
 ACT['st-edit'] = id => {
   const s = STU.find(x => x.studio_id === +id);
@@ -330,7 +349,7 @@ $('#sbtn').addEventListener('click', async () => {
 
 let eqLow = false;
 const eqThumb = c => c.image ? `<div class="eqthumb has"><img src="${esc(c.image)}" alt="${esc(c.name)}"></div>` : `<div class="eqthumb" role="img" aria-label="No image yet">${PHICON}</div>`;
-const priceTxt = (c, m) => (m === 'a' ? !c.allow_addon : !c.allow_outside) ? 'Not offered' : money(m === 'a' ? c.add_on_rate : c.outside_rate) + (c.is_drum_set ? '/rental' : m === 'a' ? '/session' : '/day');
+const priceTxt = (c, m) => (m === 'a' ? !c.allow_addon : !c.allow_outside) ? 'Not offered' : money(m === 'a' ? c.add_on_rate : c.outside_rate) + (m === 'a' ? (c.is_drum_set ? '/rental' : '/session') : '/8 hrs');
 
 function renderEquipmentTab() {
   const list = STK.filter(c => !eqLow || c.stock_status === 'Low' || c.stock_status === 'In Use');
@@ -342,7 +361,7 @@ function renderEquipmentTab() {
         : `${c.allow_addon ? '<span class="b addon">Add-on</span> ' : ''}${c.allow_outside ? '<span class="b out">Outside</span>' : ''}`;
       return ['<div class="eqc">' + eqThumb(c) + '<div>' + (c.is_drum_set ? '<b>' + esc(c.name) + '</b>' : esc(c.name)) + (sub ? '<div class="mut eqd">' + sub + '</div>' : '') + '</div></div>',
         esc(c.category_name), String(c.total_quantity), String(c.available), String(c.in_use), priceTxt(c, 'a'), priceTxt(c, 'o'), chips,
-        badge(c.stock_status), OWNER ? btn('eq-edit', c.equipment_id, 'Edit') : ''];
+        badge(c.stock_status), OWNER ? btn('eq-edit', c.equipment_id, 'Edit') + btn('eq-vis', c.equipment_id, c.stock_status === 'Unavailable' ? 'Show' : 'Hide', 1) + dbtn('eq-del', c.equipment_id, 'Delete') : ''];
     }));
 }
 $('#a-eqp .tabs').addEventListener('click', e => {
@@ -356,6 +375,29 @@ ACT['eq-chip'] = async id => {
   if (await run(sb.from('equipment').update({ [field]: !c[field] }).eq('equipment_id', c.equipment_id))) { await loadCatalog(); afterAction(`${c.name}: ${field === 'allow_addon' ? 'Add-on' : 'Outside'} rentals turned ${!c[field] ? 'on' : 'off'}.`); }
 };
 ACT['eq-edit'] = id => eqForm(+id);
+const afterEquip = async msg => { await loadCatalog(); await refresh(); if (dlg.open) dlg.close(); toast(msg); };
+ACT['eq-vis'] = async id => {
+  const c = STK.find(x => x.equipment_id === +id), hide = c.stock_status !== 'Unavailable';
+  if (await run(sb.from('equipment').update({ status: hide ? 'Unavailable' : 'Available' }).eq('equipment_id', c.equipment_id))) afterEquip(hide ? `${c.name} is now hidden from customers.` : `${c.name} is visible to customers again.`);
+};
+ACT['eq-del'] = id => {
+  const c = STK.find(x => x.equipment_id === +id), n = new Set(RL.filter(l => l.equipment_id === c.equipment_id).map(l => l.rental_ref)).size;
+  if (n > 0) {
+    showDlg(`<h2 style="margin:0 0 8px">${esc(c.name)} can't be deleted</h2>
+      <p class="mut">It appears in ${pl(n, 'rental')} on record, and deleting it would erase that history. Hide it instead: customers no longer see it, and your records stay intact.</p>
+      <div class="acts"><button class="btn line" data-close>Close</button>${c.stock_status !== 'Unavailable' ? btn('eq-vis', c.equipment_id, 'Hide ' + esc(c.name)) : ''}</div>`);
+    return;
+  }
+  showDlg(`<h2 style="margin:0 0 8px">Delete ${esc(c.name)}?</h2>
+    <p class="mut">The equipment is removed from the system. It has never been rented. This can't be undone.</p>
+    <div class="acts"><button class="btn line" data-close>Cancel</button>${dbtn('eq-del-go', c.equipment_id, 'Delete equipment')}</div>`);
+};
+ACT['eq-del-go'] = async id => {
+  const c = STK.find(x => x.equipment_id === +id);
+  const r = await sb.from('equipment').delete().eq('equipment_id', c.equipment_id);
+  if (r.error) return toast(r.error.code === '23503' ? `${c.name} has rentals on record, so it can't be deleted. Hide it instead.` : r.error.message);
+  afterEquip(`${c.name} deleted.`);
+};
 $('#eq-add').onclick = () => { if (OWNER) eqForm(null); else toast('Only the owner can add equipment.'); };
 
 function eqForm(id) {
@@ -374,7 +416,7 @@ function eqForm(id) {
       ${drum ? `<div><label for="eqa">Price per rental (₱)</label><input id="eqa" type="number" min="0" value="${num(c.add_on_rate)}"></div>`
              : `<div><label for="eqa">Add-on price (₱)</label><input id="eqa" type="number" min="0" value="${num(c.add_on_rate)}"></div><div><label for="eqo">Outside price (₱)</label><input id="eqo" type="number" min="0" value="${num(c.outside_rate)}"></div>`}
     </div>
-    <p class="mut" style="margin-top:6px">${drum ? 'Priced per rental.' : 'Add-on is per session. Outside is per day.'} The 8-hour minimum applies to outside rentals and drum sets.</p>
+    <p class="mut" style="margin-top:6px">Add-on is per session (drum sets per rental). Outside is per 8 hours: each extra hour adds one-eighth, and late returns add the same one-eighth per hour late.</p>
     <label>Rent options</label><div><button type="button" class="chip ${ad ? 'on' : ''}" id="eqx-ad">Add-on</button><button type="button" class="chip ${ou ? 'on' : ''}" id="eqx-ou">Outside</button></div>
     <label>Equipment image</label><div class="eqimg prev" id="eq-prev"></div>
     <input id="eq-file" type="file" accept="image/*" aria-label="Attach an image">
@@ -423,7 +465,7 @@ function dueB(l) {
   if (l.status === 'Active' && dueToday(l)) return '<span class="b duetoday">Due today</span>';
   return '<span class="mut">-</span>';
 }
-const dueLabel = l => !l.due_at ? '-' : l.rental_type === 'Outside' ? shortDate(dOf(l.due_at)) : shortDate(dOf(l.due_at)) + ', ' + tOf(l.due_at);
+const dueLabel = l => !l.due_at ? '-' : shortDate(dOf(l.due_at)) + ', ' + tOf(l.due_at);
 
 function groups() {
   const map = new Map();
@@ -465,10 +507,19 @@ ACT['rn-ok'] = ref => setRental(ref, 'Approved');
 ACT['rn-issue'] = ref => setRental(ref, 'Active');
 ACT['rn-no'] = ref => rentalDialog(ref, true);
 ACT['rn-det'] = ref => rentalDialog(ref);
-ACT['rn-ret'] = async ref => { if (await run(sb.rpc('staff_return_rental', { p_rental_ref: ref, p_equipment_id: null }))) { await loadCatalog(); afterAction(`${ref} returned. Stock updated.`); } };
+const lateFeeOf = (ref, eid) => sum(RL.filter(l => l.rental_ref === ref && (!eid || l.equipment_id === eid)).map(l => num(l.late_fee)));
+const returnedMsg = (ref, eid, what) => lateFeeOf(ref, eid) > 0
+  ? `${what} returned late. Collect the late fee of ${money(lateFeeOf(ref, eid))} from the customer.` : `${what} returned. Stock updated.`;
+ACT['rn-ret'] = async ref => {
+  if (!(await run(sb.rpc('staff_return_rental', { p_rental_ref: ref, p_equipment_id: null })))) return;
+  await loadCatalog(); await refresh(); if (dlg.open) dlg.close();
+  toast(returnedMsg(ref, null, ref));
+};
 ACT['rn-retline'] = async id => {
   const [ref, eid] = id.split(':');
-  if (await run(sb.rpc('staff_return_rental', { p_rental_ref: ref, p_equipment_id: +eid }))) { await loadCatalog(); afterAction('Item returned. Stock updated.'); }
+  if (!(await run(sb.rpc('staff_return_rental', { p_rental_ref: ref, p_equipment_id: +eid })))) return;
+  await loadCatalog(); await refresh(); if (dlg.open) dlg.close();
+  toast(returnedMsg(ref, +eid, 'Item'));
 };
 ACT['rn-reject-go'] = ref => {
   let reason = $('#rrs').value;
@@ -500,15 +551,36 @@ async function loadRentalId(ref) {
 function rentalDialog(ref, focusReject) {
   const g = groups().find(x => x.ref === ref); if (!g) return;
   const st = rnStatus(g.status);
+
+  /* outside rentals: times, price (8 hours + price/8 per extra hour), 50% down payment, late fee */
+  const out = g.type === 'Outside', l0 = g.lines[0], pay = PAY.find(p => p.reference === g.ref);
+  let outRows = '', outWarn = '';
+  if (out) {
+    const hrs = Math.max(8, Math.ceil(num(l0.rental_hours) || 8));
+    const total = sum(g.lines.map(l => num(l.unit_price_at_request) * l.quantity * hrs / 8)), down = num(l0.down_payment);
+    const due = l0.due_at ? new Date(l0.due_at) : null, now = Date.now();
+    const accr = due && g.status === 'Active' ? g.lines.filter(l => !l.line_returned_at && now > due) : [];
+    const fee = sum(g.lines.map(l => num(l.late_fee))) + sum(accr.map(l => l.quantity * num(l.unit_price_at_request) / 8 * Math.ceil((now - due) / 36e5)));
+    outRows = `<dt>Pick-up</dt><dd>${l0.pickup_date ? shortDate(dOf(l0.pickup_date)) + ', ' + tOf(l0.pickup_date) : '-'}</dd>
+      <dt>Return by</dt><dd>${dueLabel(l0)}</dd><dt>Billed length</dt><dd>${hrs} hours</dd>
+      <dt>Total</dt><dd>${money(total)}</dd>
+      <dt>Down payment</dt><dd>${money(down)}${pay ? ' ' + badge(pay.status) + (pay.gcash_reference ? ' GCash ref ' + esc(pay.gcash_reference) : '') : ''}</dd>
+      ${down > 0 ? `<dt>Balance at pick-up</dt><dd><b>${money(Math.max(0, total - down))}</b></dd>` : ''}
+      ${fee > 0 ? `<dt>Late fee</dt><dd><b style="color:var(--bad)">${money(fee)}</b> <span class="mut">${accr.length ? 'so far' : 'charged'}</span></dd>` : ''}`;
+    if (g.status === 'Pending' && pay && pay.status !== 'Verified') outWarn = `<div class="alert">The down payment (${money(down)}) is not verified yet. Check the GCash reference in the Payments tab before approving.</div>`;
+    if (g.status === 'Approved' && down > 0) outWarn = `<div class="alert">Collect the balance of ${money(Math.max(0, total - down))} before handing over the equipment.</div>`;
+    if (g.status === 'Active' && fee > 0) outWarn = `<div class="alert">The equipment is late. A late fee of ${money(fee)} (price / 8 per hour, per item) is charged when you process the return. Collect it then.</div>`;
+  }
   const short = g.lines.filter(l => { const s = STK.find(x => x.equipment_id === l.equipment_id); return !s || s.available < l.quantity; });
   let h = `<div class="row"><h2 style="margin:0">Rental ${esc(g.ref)}</h2>${badge(st)}</div>
     <dl class="dl"><dt>Customer</dt><dd>${esc(g.customer)}</dd><dt>Phone</dt><dd>${esc(g.phone || 'Not on file')}</dd>
     <dt>Rent type</dt><dd>${TYB[g.type]}</dd><dt>${g.type === 'Add-on' ? 'Booking' : 'Rental ID'}</dt><dd>${esc(g.type === 'Add-on' ? (g.booking || '-') : g.ref)}</dd>
-    ${g.reason ? `<dt>Reason</dt><dd>${esc(g.reason)}</dd>` : ''}</dl>
+    ${g.reason ? `<dt>Reason</dt><dd>${esc(g.reason)}</dd>` : ''}${outRows}</dl>
     ${g.type === 'Outside' ? `<h3 style="font-size:14px;margin-top:14px">Customer's valid ID</h3><div id="rn-id"><p class="mut">Loading the ID...</p></div>` : ''}
     <div class="tw">${tbl(['Equipment', 'Qty', 'Return by', 'Overdue', ''], g.lines.map(l => [esc(l.equipment_name), String(l.quantity), dueLabel(l), dueB(l),
       g.status === 'Active' && !l.line_returned_at ? btn('rn-retline', g.ref + ':' + l.equipment_id, 'Return', 1) : l.line_returned_at ? 'Returned' : '']))}</div>`;
-  if (g.lines.some(l => l.days_overdue > 0)) h += '<div class="alert">This order is overdue. Contact the customer to arrange the return.</div>';
+  if (g.lines.some(l => l.days_overdue > 0) && !outWarn) h += '<div class="alert">This order is overdue. Contact the customer to arrange the return.</div>';
+  h += outWarn;
   if (g.status === 'Pending') {
     if (short.length) h += `<div class="alert">Not enough stock for: ${short.map(l => esc(l.equipment_name)).join(', ')}. It can't be approved until stock comes back.</div>`;
     h += `<label for="rrs">Reason if rejecting (the customer sees this)</label><select id="rrs"><option>Equipment not available</option><option>Studio booking not confirmed</option><option>Incomplete or unclear request</option><option>Other</option></select>
@@ -529,10 +601,37 @@ function rentalDialog(ref, focusReject) {
 function renderCustomers() {
   const q = ($('#cu-q').value || '').toLowerCase();
   tb('acu', ['Name', 'Phone', 'Account', 'Bookings', 'Rentals', 'Total spent', 'Status', ''],
-    CUS.filter(c => !q || `${c.customer_name} ${c.number}`.toLowerCase().includes(q))
-       .map(c => [esc(c.customer_name), esc(c.number || ''), c.account_type, String(c.bookings), String(c.rentals), money(c.total_spent), esc(c.status || 'Active'), btn('cu-hist', c.customer_id, 'History', 1)]));
+    CUS.filter(c => c.status !== 'Inactive')   // removed accounts are not listed (their past records stay on bookings and reports)
+       .filter(c => !q || `${c.customer_name} ${c.number}`.toLowerCase().includes(q))
+       .map(c => [esc(c.customer_name), esc(c.number || ''), c.account_type, String(c.bookings), String(c.rentals), money(c.total_spent), esc(c.status || 'Active'),
+         btn('cu-hist', c.customer_id, 'History', 1) + (OWNER ? dbtn('cu-del', c.customer_id, 'Remove') : '')]));
 }
 $('#cu-q').addEventListener('input', renderCustomers);
+ACT['cu-del'] = id => {
+  const c = CUS.find(x => x.customer_id === +id), hist = num(c.bookings) + num(c.rentals);
+  if (c.account_type === 'Guest' && hist > 0) {
+    showDlg(`<h2 style="margin:0 0 8px">${esc(c.customer_name)} can't be removed</h2>
+      <p class="mut">This guest has ${pl(hist, 'booking/rental record')} on record, so the record is kept for your reports. Guests have no account to remove.</p>
+      <div class="acts"><button class="btn line" data-close>Close</button></div>`);
+    return;
+  }
+  showDlg(`<h2 style="margin:0 0 8px">Remove ${esc(c.customer_name)}?</h2>
+    <p class="mut">${hist === 0
+      ? 'This customer has no bookings or rentals, so the account and the record are deleted completely.'
+      : `They have ${pl(hist, 'booking/rental record')} on record. Their login is deleted so they can no longer sign in, and they disappear from this list. Their name stays on past bookings so your reports and revenue remain correct.`}</p>
+    <p class="mut" style="margin-top:8px">This can't be undone.</p>
+    <div class="alert" id="cu-e" hidden></div>
+    <div class="acts"><button class="btn line" data-close>Cancel</button>${dbtn('cu-del-go', c.customer_id, 'Remove account')}</div>`);
+};
+ACT['cu-del-go'] = async id => {
+  const c = CUS.find(x => x.customer_id === +id);
+  try {
+    const r = await fnCall({ action: 'delete_customer', customer_id: +id });
+    await afterAction(r && r.kept ? `${c.customer_name}'s account was removed. Past records are kept.` : `${c.customer_name} was deleted.`);
+  } catch (err) {
+    if ($('#cu-e')) { $('#cu-e').textContent = err.message; $('#cu-e').hidden = false; } else toast(err.message);
+  }
+};
 ACT['cu-hist'] = id => {
   const c = CUS.find(x => x.customer_id === +id);
   const bks = BK.filter(b => b.customer_id === c.customer_id), lines = RL.filter(l => l.customer_id === c.customer_id);
@@ -730,8 +829,9 @@ function orTot() {
   const id = $('#or-eq').value, m = $('#or-m').value, e = STK.find(x => x.equipment_id === +id);
   if (!e) { $('#or-tot').textContent = money(0); return 0; }
   const q = +$('#or-q').value || 1;
-  const days = m === 'o' && !e.is_drum_set ? Math.max(1, dayDiff($('#or-r').value || TODAY, TODAY)) : 1;
-  const total = num(m === 'a' ? e.add_on_rate : e.outside_rate) * q * days;
+  // outside: the price covers 8 hours, each extra hour adds price / 8 (counted until 10 PM on the return date)
+  const hrs = m === 'o' ? Math.max(8, Math.ceil((new Date(manilaTS($('#or-r').value || TODAY, 22)) - Date.now()) / 36e5)) : 8;
+  const total = num(m === 'a' ? e.add_on_rate : e.outside_rate) * q * (m === 'o' ? hrs / 8 : 1);
   $('#or-tot').textContent = money(total);
   return total;
 }
@@ -787,11 +887,10 @@ function rangeOf() {
   if (rp === 'Month') { const y = +TODAY.slice(0, 4), m = +TODAY.slice(5, 7); return [`${y}-${pad(m)}-01`, `${y}-${pad(m)}-${pad(new Date(y, m, 0).getDate())}`]; }
   return [cFrom <= cTo ? cFrom : cTo, cFrom <= cTo ? cTo : cFrom];
 }
-/* estimated income of one rental line: outside rentals are per day (drum sets per rental) */
+/* estimated income of one rental line: outside rentals = price x hours / 8 (8 hours minimum) */
 function lineIncome(l) {
-  const e = STK.find(x => x.equipment_id === l.equipment_id);
-  const days = l.rental_type === 'Outside' && !(e && e.is_drum_set) ? Math.max(1, Math.ceil(num(l.rental_hours) / 24)) : 1;
-  return num(l.unit_price_at_request) * l.quantity * days;
+  const f = l.rental_type === 'Outside' ? Math.max(8, Math.ceil(num(l.rental_hours) || 8)) / 8 : 1;
+  return num(l.unit_price_at_request) * l.quantity * f + num(l.late_fee);
 }
 
 function renderReports() {

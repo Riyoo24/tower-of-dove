@@ -154,7 +154,7 @@ input, select, textarea { width: 100%; padding: 8px 10px; border: 1px solid var(
 /* ===== Carousel ===== */
 .slider-container { width: calc(100% - 40px); max-width: 1120px; margin: 0 auto; }
 .slider-wrapper { position: relative; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); }
-.slider { display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior: contain; }
+.slider { display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; overscroll-behavior-y: auto; }
 .slider::-webkit-scrollbar { display: none; }
 .slide {
   flex: none; width: 100%; height: clamp(240px, 42vw, 420px); scroll-snap-align: start;
@@ -388,4 +388,15 @@ td { padding: 10px; border-bottom: 1px solid var(--dove); white-space: nowrap; }
 tr.has-why td { border-bottom: 0; }
 .why-row td { padding: 0 10px 12px; white-space: normal; font-size: 13px; line-height: 1.45; color: var(--mut); border-bottom: 1px solid var(--dove); }
 .why-row b { color: var(--bad); font-weight: 600; }
+
+/* ===== Add-on equipment window and booking-form summary ===== */
+.dlg.wide { max-width: 940px; }
+.adsum { display: grid; gap: 6px; }
+.adrow { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 14px; }
+.eqgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; margin: 14px 0; }
+.eqcard { display: flex; flex-direction: column; gap: 4px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+.eqcard h3 { margin: 0; }
+.eqcard p { margin: 0; font-size: 13.5px; line-height: 1.45; }
+.qtyl { display: flex; align-items: center; gap: 8px; margin: 0; font-weight: 600; }
+.qtyl select { width: 76px; }
 

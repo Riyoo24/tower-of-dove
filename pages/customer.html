@@ -45,7 +45,10 @@
         <p class="sub">Add gear to a studio you booked, or rent it to take outside the studio.</p>
 
         <div class="grid g2">
-          <div class="grid ge" id="eq" style="align-items:start"></div>
+          <div>
+            <div class="tabs" id="eq-cats" style="margin-bottom:14px"></div>
+            <div class="grid ge" id="eq" style="align-items:start"></div>
+          </div>
 
           <aside class="card">
             <h2>Rental summary</h2>
@@ -58,6 +61,7 @@
             <div id="bundle-tag-wrap"></div>
             <ul class="list" id="cart" style="margin-top:8px"></ul>
             <div class="tot"><span>Total</span><span id="ctt">₱0</span></div>
+            <div class="bkt" id="rsum" hidden></div>
 
             <div id="fa">
               <label for="lb">Attach to booking</label>
@@ -65,27 +69,55 @@
             </div>
 
             <div id="fo" hidden>
-              <label for="pd">Pick-up date (at the studio)</label>
-              <input id="pd" type="date">
-              <label for="rd">Return date</label>
-              <input id="rd" type="date">
-              <div id="on-wrap"><div class="fg2"><div><label for="on-fn">First name</label><input id="on-fn" autocomplete="given-name"></div><div><label for="on-ln">Last name</label><input id="on-ln" autocomplete="family-name"></div></div></div>
-              <label for="oc">Contact number</label>
-              <input id="oc" placeholder="09XX XXX XXXX" autocomplete="tel">
-              <label for="sm-link">Backup contact (optional)</label>
-              <input id="sm-link" placeholder="Facebook/Messenger/Instagram link or handle">
-              <label for="vt">ID type</label>
-              <select id="vt">
-                <option>Driver's license</option>
-                <option>Passport</option>
-                <option>UMID</option>
-                <option>National ID (PhilSys)</option>
-                <option>Postal ID</option>
-                <option>School ID</option>
-              </select>
-              <label for="vf">Attach valid ID</label>
-              <input id="vf" type="file" accept="image/*,.pdf">
-              <p class="mut" style="margin-top:4px">Required for outside rentals. Upload a clear photo or PDF of the front of your ID (JPG, PNG or PDF).</p>
+              <div class="alert" id="fo-guest" hidden>Renting equipment to take outside the studio is for registered customers only. <a href="login.html#login" data-route="login">Log in</a> or <a href="login.html#register">create an account</a> to continue. Guests can still add equipment to a studio booking.</div>
+
+              <div id="fo-form">
+                <div class="fg2">
+                  <div><label for="on-fn">First name</label><input id="on-fn" autocomplete="given-name"></div>
+                  <div><label for="on-ln">Last name</label><input id="on-ln" autocomplete="family-name"></div>
+                </div>
+                <label for="oc">Contact number</label>
+                <input id="oc" type="tel" placeholder="09XX XXX XXXX" autocomplete="tel">
+                <label for="sm-link">Backup contact number (optional)</label>
+                <input id="sm-link" type="tel" placeholder="09XX XXX XXXX">
+
+                <div class="fg2">
+                  <div><label for="pd">Pick-up date</label><input id="pd" type="date"></div>
+                  <div><label for="pt">Pick-up time</label><select id="pt"></select></div>
+                </div>
+                <div class="fg2">
+                  <div><label for="rd">Return date</label><input id="rd" type="date"></div>
+                  <div><label for="rt">Return time</label><select id="rt"></select></div>
+                </div>
+                <p class="mut" id="rdur" style="margin-top:6px"></p>
+
+                <label for="vt">ID type</label>
+                <select id="vt">
+                  <option>Driver's license</option>
+                  <option>Passport</option>
+                  <option>UMID</option>
+                  <option>National ID (PhilSys)</option>
+                  <option>Postal ID</option>
+                  <option>School ID</option>
+                </select>
+                <label for="vf">Attach valid ID</label>
+                <input id="vf" type="file" accept="image/*,.pdf">
+                <p class="mut" style="margin-top:4px">Required for outside rentals. Upload a clear photo or PDF of the front of your ID (JPG, PNG or PDF).</p>
+
+                <div id="opay">
+                  <div class="gq">
+                    <img id="oq-img" alt="GCash QR code to scan" hidden>
+                    <p class="mut" id="oq-note">Scan this QR code with GCash and pay the down payment of <b id="oq-amt"></b>. Then enter the reference number from your GCash receipt below.</p>
+                  </div>
+                  <label for="og">GCash reference number (down payment)</label>
+                  <input id="og" placeholder="13-digit reference" inputmode="numeric" autocomplete="off">
+                </div>
+
+                <label class="terms" id="or-terms">
+                  <input type="checkbox" id="or-agree">
+                  <span>I understand and agree that: the <b>50% down payment is non-refundable</b> if I cancel this rental; renting for <b>more than 8 hours</b> adds one-eighth of the item's price for every extra hour; and returning the equipment <b>late</b> adds the same one-eighth charge for every hour it is late, which I pay at the studio when I return it.</span>
+                </label>
+              </div>
             </div>
 
             <button class="btn gold full" id="rq">Request rental</button>
@@ -135,6 +167,7 @@
   <dialog class="dlg" id="bkdlg" aria-label="Booking form"></dialog>
   <dialog class="dlg" id="dlg" aria-label="Details"></dialog>
   <dialog class="dlg" id="okdlg" aria-label="Success"></dialog>
+  <dialog class="dlg wide" id="eqdlg" aria-label="Add equipment"></dialog>
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>

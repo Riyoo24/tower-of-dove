@@ -58,7 +58,7 @@ async function loadCatalog() {
       rate: +s.hourly_rate, status: s.status, img: s.image, c1: c[0], c2: c[1]
     });
   });
-  eq.data.forEach(e => EQUIPMENT.push({
+  eq.data.filter(e => e.stock_status !== 'Unavailable').forEach(e => EQUIPMENT.push({   // hidden items are not shown to customers
     id: e.equipment_id, name: e.name, category: e.category_name, desc: e.description, img: e.image,
     addonPrice: +e.add_on_rate || 0, outsidePrice: +e.outside_rate || 0,
     stock: e.stock_status === 'Unavailable' ? 0 : e.available, total: e.total_quantity,

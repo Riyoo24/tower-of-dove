@@ -6,6 +6,7 @@
 // POST body:
 //   { "action": "create", "first_name": "...", "last_name": "...", "username": "...", "number": "...", "password": "..." }
 //   { "action": "reset_password", "user_id": 12, "password": "..." }
+//   { "action": "delete_customer", "customer_id": 34 }
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
@@ -85,6 +86,43 @@ Deno.serve(async (req) => {
       const { error } = await admin.auth.admin.updateUserById(target.auth_user_id, { password });
       if (error) return json({ error: error.message }, 400);
       return json({ ok: true });
+    }
+
+    // ---- remove a customer account ----
+    // No bookings or rentals: the record and the login are deleted completely.
+    // With history: the login is deleted and the record is kept (inactive) so past bookings,
+    // payments and reports stay correct.
+    if (body.action === 'delete_customer') {
+      const id = Number(body.customer_id);
+      const { data: c } = await admin.from('customer').select('customer_id, auth_user_id').eq('customer_id', id).maybeSingle();
+      if (!c) return json({ error: 'Customer not found.' }, 404);
+
+      if (c.auth_user_id) {
+        const { data: isStaff } = await admin.from('app_user').select('user_id').eq('auth_user_id', c.auth_user_id).maybeSingle();
+        if (isStaff) return json({ error: 'That login belongs to a staff account. Deactivate it in Settings instead.' }, 400);
+      }
+
+      const { count: nb } = await admin.from('booking').select('booking_id', { count: 'exact', head: true }).eq('customer_id', id);
+      const { count: nr } = await admin.from('rental_order').select('rental_order_id', { count: 'exact', head: true }).eq('customer_id', id);
+
+      if ((nb ?? 0) + (nr ?? 0) === 0) {
+        const { error: e1 } = await admin.from('customer').delete().eq('customer_id', id);
+        if (e1) return json({ error: e1.message }, 400);
+        if (c.auth_user_id) {
+          const { error: e2 } = await admin.auth.admin.deleteUser(c.auth_user_id);
+          if (e2) return json({ error: 'The record was deleted, but the login could not be removed: ' + e2.message }, 400);
+        }
+        return json({ ok: true, kept: false });
+      }
+
+      if (!c.auth_user_id) {
+        return json({ error: 'This guest has bookings or rentals on record, so the record is kept for your reports.' }, 400);
+      }
+      const { error: e3 } = await admin.from('customer').update({ username: null, email: null, status: 'Inactive' }).eq('customer_id', id);
+      if (e3) return json({ error: e3.message }, 400);
+      const { error: e4 } = await admin.auth.admin.deleteUser(c.auth_user_id);
+      if (e4) return json({ error: e4.message }, 400);
+      return json({ ok: true, kept: true });
     }
 
     return json({ error: 'Unknown action.' }, 400);
