@@ -42,4 +42,18 @@
   guessable, so pass `p_phone` too once the lookup form asks for it. The result never includes names.
 - `hold_slot` is open to anyone, so add a rate limit (Edge Function or Supabase rate limits) if abuse is a concern.
 - Reference numbers can skip values when a booking attempt fails (the sequence still advances).
-- Creating staff accounts needs the `service_role` key, so do it in an Edge Function, never in the browser.
+- Creating staff accounts needs the `service_role` key, so it lives in an Edge Function, never in the browser.
+  The function is `functions/create-staff/index.ts`. Deploy it once (below) and **Settings > Add staff** works.
+
+## Deploy the create-staff function
+
+**Dashboard (no tools needed):**
+1. Supabase > **Edge Functions** > **Deploy a new function** > **Via Editor**.
+2. Name it exactly `create-staff`.
+3. Replace the sample code with the contents of `functions/create-staff/index.ts`.
+4. Leave **Verify JWT** on, then click **Deploy**.
+
+**Or with the CLI:** `supabase functions deploy create-staff --project-ref xwdpduwgswyxqhbrvpay`
+
+Supabase gives the function `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` itself, so there are no secrets to set.
+Only an active Owner can call it. It also resets staff passwords and nothing else.

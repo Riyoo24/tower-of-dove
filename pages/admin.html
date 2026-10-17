@@ -18,7 +18,7 @@
       <div class="wrap" style="max-width:none;width:100%">
       <section id="a-over" class="pg on">
         <h1>Overview</h1><p class="sub">Friday, October 9, 2026. Here is what is happening right now.</p>
-        <div class="grid g4">
+        <div class="grid g4" id="ovk">
           <div class="card kpi"><span class="mut">Total bookings</span><div class="num">148</div></div>
           <div class="card kpi"><span class="mut">Today's bookings</span><div class="num">6</div></div>
           <div class="card kpi"><span class="mut">Confirmed</span><div class="num">3</div></div>
@@ -29,43 +29,40 @@
         <div class="grid g4" id="rkpi"></div>
         <h2 style="margin-top:24px">Studios right now</h2>
         <div class="grid g4" id="ost"></div>
-        <div class="card" style="margin-top:16px"><h3>Needs attention</h3><ul class="list"><li><span>Pending payments</span><b>2</b></li><li><span>Rental requests to review</span><b id="npr">0</b></li><li><span>Active sessions</span><b>1</b></li><li><span>Equipment currently rented</span><b id="nrent">5 items</b></li><li><span>Overdue rentals</span><b id="novd" style="color:var(--bad)">3</b></li><li><span>Low-stock equipment</span><b id="nlow">Keyboard</b></li></ul></div>
+        <div class="card" style="margin-top:16px"><h3>Needs attention</h3><ul class="list" id="ovl"></ul></div>
       </section>
 
       <section id="a-onb" class="pg"><h1>Onsite booking</h1><p class="sub">Record a walk-in studio booking paid at the counter. It is confirmed and verified right away.</p>
 <div class="grid g2"><form class="card" id="onb" novalidate><div class="fg" style="grid-template-columns:1fr 1fr"><div><label for="ob-n">Customer name</label><input id="ob-n"></div><div><label for="ob-p">Phone</label><input id="ob-p"></div><div><label for="ob-s">Studio</label><select id="ob-s"></select></div><div><label for="ob-d">Date</label><input id="ob-d" type="date"></div><div><label for="ob-h">Duration</label><select id="ob-h"><option value="1">1 hour</option><option value="2" selected>2 hours</option><option value="3">3 hours</option><option value="4">4 hours</option></select></div><div><label for="ob-t">Start time (free only)</label><select id="ob-t"></select></div><div><label for="ob-m">Payment</label><select id="ob-m"><option>Cash</option><option>GCash</option></select></div><div id="ob-gw" hidden><label for="ob-g">GCash reference</label><input id="ob-g"></div></div><div class="tot"><span>Total received</span><span id="ob-tot"></span></div><div class="alert" id="ob-e" hidden></div><button class="btn gold full">Record booking</button></form><div class="card"><h3>Onsite transactions</h3><div class="tw" id="ob-log"></div></div></div></section>
 <section id="a-onr" class="pg"><h1>Onsite rental</h1><p class="sub">Record equipment rented in person. Items are issued immediately and stock updates.</p>
-<div class="grid g2"><form class="card" id="onr" novalidate><div class="fg" style="grid-template-columns:1fr 1fr"><div><label for="or-m">Rent type</label><select id="or-m"><option value="a">Add-on to a studio booking</option><option value="o">Outside rent</option></select></div><div><label for="or-eq">Equipment</label><select id="or-eq"></select></div><div><label for="or-q">Quantity</label><input id="or-q" type="number" min="1" value="1"></div><div><label for="or-pm">Payment</label><select id="or-pm"><option>Cash</option><option>GCash</option></select></div><div id="or-aw"><label for="or-b">Booking</label><select id="or-b"></select></div><div id="or-ow" hidden><label for="or-n">Customer name</label><input id="or-n"></div><div id="or-rw" hidden><label for="or-r">Return date</label><input id="or-r" type="date"></div><div id="or-tw" hidden><label for="or-t">ID type</label><select id="or-t"><option>Driver's license</option><option>Passport</option><option>UMID</option><option>National ID (PhilSys)</option><option>Postal ID</option><option>School ID</option></select></div></div><label id="or-cw" hidden><input type="checkbox" id="or-id" style="width:auto"> I checked a valid ID in person</label><div class="tot"><span>Total received</span><span id="or-tot"></span></div><div class="alert" id="or-e" hidden></div><button class="btn gold full">Record rental</button></form><div class="card"><h3>Onsite transactions</h3><div class="tw" id="or-log"></div></div></div></section>
+<div class="grid g2"><form class="card" id="onr" novalidate><div class="fg" style="grid-template-columns:1fr 1fr"><div><label for="or-m">Rent type</label><select id="or-m"><option value="a">Add-on to a studio booking</option><option value="o">Outside rent</option></select></div><div><label for="or-eq">Equipment</label><select id="or-eq"></select></div><div><label for="or-q">Quantity</label><input id="or-q" type="number" min="1" value="1"></div><div><label for="or-pm">Payment</label><select id="or-pm"><option>Cash</option><option>GCash</option></select></div><div id="or-gw" hidden><label for="or-g">GCash reference</label><input id="or-g"></div><div id="or-aw"><label for="or-b">Booking</label><select id="or-b"></select></div><div id="or-ow" hidden><label for="or-n">Customer name</label><input id="or-n"></div><div id="or-rw" hidden><label for="or-r">Return date</label><input id="or-r" type="date"></div><div id="or-tw" hidden><label for="or-t">ID type</label><select id="or-t"><option>Driver's license</option><option>Passport</option><option>UMID</option><option>National ID (PhilSys)</option><option>Postal ID</option><option>School ID</option></select></div></div><label id="or-cw" hidden><input type="checkbox" id="or-id" style="width:auto"> I checked a valid ID in person</label><div class="tot"><span>Total received</span><span id="or-tot"></span></div><div class="alert" id="or-e" hidden></div><button class="btn gold full">Record rental</button></form><div class="card"><h3>Onsite transactions</h3><div class="tw" id="or-log"></div></div></div></section>
 <section id="a-book" class="pg"><h1>Bookings</h1><p class="sub">Search, filter, and confirm bookings.</p>
-        <div class="row" style="margin-bottom:12px;flex-wrap:wrap"><input placeholder="Search by name or reference" style="max-width:280px"><select style="max-width:160px"><option>All studios</option><option>Studio A</option></select><input type="date" style="max-width:170px"></div>
+        <div class="row" style="margin-bottom:12px;flex-wrap:wrap"><input id="bk-q" placeholder="Search by name or reference" style="max-width:280px"><select id="bk-s" style="max-width:160px"><option value="">All studios</option></select><input id="bk-d" type="date" style="max-width:170px"></div>
         <div class="card" id="abk"></div></section>
 
       <section id="a-sess" class="pg"><h1>Studio sessions</h1><p class="sub">Sessions in progress. Remaining time refreshes every minute.</p>
-        <div class="grid ge"><div class="card"><div class="row"><h3><i class="lamp live"></i>Studio B</h3><span class="b active">Active</span></div>
-          <p style="margin:8px 0">Paolo Reyes</p><p class="mut">1:00 PM to 4:00 PM</p>
-          <div class="hb"><b>1h 12m left</b><div><i style="width:60%"></i></div></div>
-          <button class="btn line">Mark completed</button></div></div></section>
+        <div id="asess"></div></section>
 
       <section id="a-stud" class="pg"><h1>Studio management</h1><p class="sub">Studios marked Available show up on the customer booking page.</p>
         <div class="grid g2"><div class="grid ge" id="ast"></div>
-          <aside class="card"><h2>Add new studio</h2><label for="sn">Name or code</label><input id="sn" placeholder="Studio E"><label for="sd">Description</label><input id="sd"><label for="sr">Hourly rate (₱)</label><input id="sr" type="number"><label for="sf">Photo</label><input id="sf" type="file"><label for="ss">Status</label><select id="ss"><option>Available</option><option>Unavailable</option><option>Maintenance</option></select><button class="btn gold full">Save studio</button></aside></div></section>
+          <aside class="card"><h2>Add new studio</h2><label for="sn">Name or code</label><input id="sn" placeholder="Studio E"><label for="sd">Description</label><input id="sd"><label for="sr">Hourly rate (₱)</label><input id="sr" type="number"><label for="sf">Photo</label><input id="sf" type="file"><label for="ss">Status</label><select id="ss"><option>Available</option><option>Unavailable</option><option>Maintenance</option></select><button class="btn gold full" id="sbtn" type="button">Save studio</button></aside></div></section>
 
       <section id="a-eqp" class="pg"><h1>Equipment</h1><p class="sub">Total stock the studio owns. Stock drops when a rental is approved and returns when it comes back.</p>
-        <div class="row" style="margin-bottom:12px"><div class="tabs" style="margin:0"><button class="on">Equipment list</button><button>Low stock</button></div><button class="btn gold" id="eq-add">Add equipment</button></div>
+        <div class="row" style="margin-bottom:12px"><div class="tabs" style="margin:0"><button class="on" data-eqt="all">Equipment list</button><button data-eqt="low">Low stock</button></div><button class="btn gold" id="eq-add">Add equipment</button></div>
         <div class="card tw" id="aeq"></div></section>
 
       <section id="a-rent" class="pg"><h1>Rentals</h1><p class="sub">Customer rental requests grouped by order. Outside rentals use an OUT- number. Use the Overdue filter to see equipment not returned by its return date.</p><div id="arn"></div></section>
 
 
       <section id="a-pay" class="pg"><h1>Payments</h1><p class="sub">Check each GCash reference or cash receipt, then verify or reject.</p><div class="card" id="apy"></div></section>
-      <section id="a-cust" class="pg"><h1>Customers</h1><p class="sub">Contact details and history.</p><input placeholder="Search customers" style="max-width:280px;margin-bottom:12px"><div class="card tw" id="acu"></div></section>
+      <section id="a-cust" class="pg"><h1>Customers</h1><p class="sub">Contact details and history.</p><input id="cu-q" placeholder="Search customers" style="max-width:280px;margin-bottom:12px"><div class="card tw" id="acu"></div></section>
 
       <section id="a-rep" class="pg"><h1>Reports</h1><p class="sub">What happened during a selected period.</p>
         <div class="tabs" id="rp-p"></div><div class="tabs" id="rp-t"></div><div id="rp"></div></section>
 
       <section id="a-set" class="pg"><h1>Settings</h1><p class="sub">Your profile and staff accounts.</p>
-        <div class="grid ge"><div class="card"><h2>Admin profile</h2><label for="an">Name</label><input id="an" value="Studio Owner"><label for="ae">Username</label><input id="ae" value="owner"><label for="ap">New password</label><input id="ap" type="password"><button class="btn full">Change password</button></div>
-          <div class="card"><div class="row"><h2>Staff accounts</h2><button class="btn sm line">Add staff</button></div><div class="tw" id="stf"></div></div></div></section>
+        <div class="grid ge"><div class="card"><h2>Admin profile</h2><label for="an">Name</label><input id="an" value="Studio Owner"><label for="ae">Username</label><input id="ae" value="owner"><label for="ap">New password</label><input id="ap" type="password"><button class="btn full" id="ap-btn" type="button">Change password</button></div>
+          <div class="card"><div class="row"><h2>Staff accounts</h2><button class="btn sm line" id="st-add" type="button">Add staff</button></div><div class="tw" id="stf"></div></div></div></section>
       </div>
     </div>
   </main>

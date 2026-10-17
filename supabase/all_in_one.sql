@@ -1385,6 +1385,8 @@ grant execute on function
   public.booking_total(bigint)
   to authenticated;
 -- (reschedule/cancel check ownership or staff inside the function)
+-- the public equipment list (v_equipment_stock) calls this, so guests need it too
+grant execute on function public.equipment_in_use(bigint, bigint) to anon;
 
 -- ---------------------------------------------------------------------
 -- Row Level Security

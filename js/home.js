@@ -19,8 +19,9 @@ const IMAGE_ICON =
   'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/>' +
   '<circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8 8"/></svg>';
 
-const studioThumb = s =>
-  `<div class="ph" style="background:linear-gradient(135deg,${s.c1},${s.c2})">${s.id}</div>`;
+const studioThumb = s => s.img
+  ? `<div class="ph has"><img src="${esc(s.img)}" alt="Studio ${esc(s.id)}" loading="lazy"></div>`
+  : `<div class="ph" style="background:linear-gradient(135deg,${s.c1},${s.c2})">${s.id}</div>`;
 
 const equipmentImage = e => e.img
   ? `<div class="eqimg has"><img src="${esc(e.img)}" alt="${esc(e.name)}"></div>`
@@ -196,6 +197,8 @@ function initCardButtons() {
 /* ============================ START ============================ */
 
 dataReady.then(() => {
+  // studio photos uploaded in the dashboard replace the colored slides
+  SLIDES.forEach(sl => { const st = STUDIOS.find(x => 'Studio ' + x.id === sl.label); if (st && st.img) sl.img = st.img; });
 
 renderStudioOptions();
 renderStudios();

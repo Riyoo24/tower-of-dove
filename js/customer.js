@@ -55,8 +55,9 @@ dlg.addEventListener('click', e => {
 
 /* ============================ 2. BOOK A STUDIO ============================ */
 
-const studioThumb = s =>
-  `<div class="ph" style="background:linear-gradient(135deg,${s.c1},${s.c2})">${s.id}</div>`;
+const studioThumb = s => s.img
+  ? `<div class="ph has"><img src="${esc(s.img)}" alt="Studio ${esc(s.id)}" loading="lazy"></div>`
+  : `<div class="ph" style="background:linear-gradient(135deg,${s.c1},${s.c2})">${s.id}</div>`;
 
 function renderBook() {
   $('#cs').innerHTML = STUDIOS.map((s, i) => `
@@ -138,6 +139,7 @@ async function moveDraft(t, h) {
 }
 
 async function openBook(startIndex) {
+  await profileReady;
   const si = selStudio, d = selDate;
   await loadBusy(si, d, d);
   const taken = takenSlots(si, d);
@@ -187,6 +189,7 @@ async function openBook(startIndex) {
 
   drawSlots();
   idleUntil = Date.now() + LOCK_TTL;
+  if (PROFILE) { $('#bk-n').value = PROFILE.name; $('#bk-p').value = PROFILE.number; }   // signed-in customers: fill in their details
 
   $('#bk-slots').onclick = e => {
     const b = e.target.closest('button');
@@ -256,6 +259,17 @@ async function openBook(startIndex) {
 }
 
 /* ---- data from the database ---- */
+
+/* The signed-in customer's own details, used to pre-fill the booking and rental forms. */
+let PROFILE = null;
+async function loadProfile() {
+  if (!isMember()) return;
+  const { data: auth } = await sb.auth.getUser();
+  if (!auth || !auth.user) return;
+  const { data } = await sb.from('customer').select('first_name, last_name, number').eq('auth_user_id', auth.user.id).maybeSingle();
+  if (data) PROFILE = { name: `${data.first_name || ''} ${data.last_name || ''}`.trim(), number: data.number || '' };
+}
+const profileReady = loadProfile().catch(() => {});
 
 const BK_STATUS = { 'Approved': 'Confirmed', 'In Progress': 'Active' };   // database -> labels used on this page
 const RN_STATUS = { 'Active': 'In Use' };
@@ -731,6 +745,7 @@ dataReady.then(async () => {
   renderEquipment();
   renderCart();
   renderRentMode();
+  profileReady.then(() => { if (PROFILE && !$('#oc').value) $('#oc').value = PROFILE.number; });
   showTab();
   await loadMyBookings();
   await loadMyRentals();
