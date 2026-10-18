@@ -114,17 +114,25 @@ function initBookTab() {
 
 /* ---- success pop-up: stays open until the customer presses Done (no timer) ---- */
 const okDlg = $('#okdlg');
-function showSuccess({ title, label, ref, lines, note }) {
+const stampLabel = ts => new Date(ts).toLocaleString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+const ICON_OK = '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+const ICON_RECEIPT = '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2z"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>';
+
+/* Success pop-up and booking receipt. Stays open until the customer presses the button (no timer).
+   shot = the sentence shown after "Take a screenshot of this page." (it is the official receipt). */
+function showSuccess({ title, label, ref, lines, note, shot, icon, status, doneLabel }) {
   okDlg.innerHTML = `
     <div class="in ok">
-      <div class="okic" aria-hidden="true"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>
+      <div class="okic" aria-hidden="true">${icon === 'receipt' ? ICON_RECEIPT : ICON_OK}</div>
       <h2>${esc(title)}</h2>
+      ${status ? `<div style="margin:4px 0">${status}</div>` : ''}
       <p class="mut">${esc(label)}</p>
       <div class="okref" id="ok-ref">${esc(ref)}</div>
       <button type="button" class="btn line sm" id="ok-copy">Copy code</button>
       ${(lines && lines.length) ? `<dl class="dl" style="text-align:left;margin-top:14px">${lines.map(l => `<dt>${esc(l[0])}</dt><dd>${esc(l[1])}</dd>`).join('')}</dl>` : ''}
-      <p class="mut" style="margin-top:12px">${esc(note)}</p>
-      <div class="acts" style="justify-content:center"><button type="button" class="btn gold" id="ok-done">Done</button></div>
+      ${shot ? `<div class="shot"><b>Take a screenshot of this page.</b> ${esc(shot)}</div>` : ''}
+      ${note ? `<p class="mut" style="margin-top:12px">${esc(note)}</p>` : ''}
+      <div class="acts" style="justify-content:center"><button type="button" class="btn gold" id="ok-done">${esc(doneLabel || 'Done')}</button></div>
     </div>`;
   $('#ok-done').onclick = () => okDlg.close();
   $('#ok-copy').onclick = async e => {
@@ -156,10 +164,18 @@ function updateTotals() {
 }
 const pl = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
 
+/* Wording for a time that someone else holds or has booked */
+const MSG_HELD = 'Someone is already trying to book this schedule. Please try again in a moment or choose another time.';
+const MSG_BOOKED = 'That time was just booked by someone else. Please choose another time.';
+const slotError = msg => /just taken by another customer/i.test(msg) ? MSG_HELD : /no longer available/i.test(msg) ? MSG_BOOKED : msg;
+
 function drawSlots() {
-  const taken = takenSlots(draft.si, draft.d);
-  $('#bk-slots').innerHTML = SLOTS.map((t, i) =>
-    `<button type="button" data-i="${i}" class="${i === draft.t ? 'sel' : ''}" ${taken.has(i) ? 'disabled' : ''}>${t}</button>`).join('');
+  const taken = takenSlots(draft.si, draft.d), held = heldSlots(draft.si, draft.d);
+  $('#bk-slots').innerHTML = SLOTS.map((t, i) => {
+    const isHeld = taken.has(i) && held.has(i), past = isPastSlot(draft.d, i);
+    return `<button type="button" data-i="${i}" class="${i === draft.t ? 'sel' : ''}${isHeld ? ' held' : ''}" ${taken.has(i) || past ? 'disabled' : ''}${isHeld ? ' title="Someone is already trying to book this schedule"' : ''}>${t}</button>`;
+  }).join('');
+  if ($('#bk-hint')) $('#bk-hint').hidden = !SLOTS.some((_, i) => taken.has(i) && held.has(i));
   updateTotals();
 }
 
@@ -169,7 +185,7 @@ async function moveDraft(t, h) {
   if (!(await holdSlots(draft.si, draft.d, t, h))) {
     await holdSlots(draft.si, draft.d, draft.t, draft.h);   // a failed move drops the old hold, so take it back
     await loadBusy(draft.si, draft.d, draft.d);
-    bkError('Those hours were just taken by another customer.');
+    bkError(conflictKind(draft.si, draft.d, t, h) === 'held' ? MSG_HELD : MSG_BOOKED);
     drawSlots();
     return false;
   }
@@ -260,11 +276,16 @@ async function openBook(startIndex) {
   await loadBusy(si, d, d);
   const taken = takenSlots(si, d);
   let t = startIndex;
-  if (t == null || t < 0) t = SLOTS.findIndex((_, i) => !taken.has(i));
-  if (t < 0 || taken.has(t)) return toast('No free times for that day.');
+  // never start in the past: on today's date the default is the next upcoming free hour (e.g. 11:31 AM -> 12:00 PM)
+  if (t == null || t < 0 || isPastSlot(d, t)) t = SLOTS.findIndex((_, i) => !taken.has(i) && !isPastSlot(d, i));
+  if (t < 0) return toast(d === TODAY ? 'No more times are available today. Choose another date.' : 'No free times for that day.');
+  if (taken.has(t)) return toast('No free times for that day.');
 
   const h = (t + 1 < SLOTS.length && !taken.has(t + 1)) ? 2 : 1;
-  if (!(await holdSlots(si, d, t, h))) return toast('That slot was just taken. Pick another time.');
+  if (!(await holdSlots(si, d, t, h))) {
+    await loadBusy(si, d, d);
+    return toast(conflictKind(si, d, t, h) === 'held' ? MSG_HELD : MSG_BOOKED);
+  }
 
   draft = { si, d, t, h, addons: {} };
   const s = STUDIOS[si];
@@ -277,6 +298,7 @@ async function openBook(startIndex) {
 
         <label>Start time</label>
         <div class="slots" id="bk-slots"></div>
+        <p class="mut" id="bk-hint" style="margin-top:6px" hidden>Times with a dashed outline are being booked by someone else right now. They may open up again in about 2 minutes.</p>
 
         <label for="bk-h">Duration</label>
         <select id="bk-h">${[1, 2, 3, 4].map(x => `<option value="${x}" ${x === h ? 'selected' : ''}>${x} hour${x > 1 ? 's' : ''}</option>`).join('')}</select>
@@ -359,6 +381,12 @@ async function openBook(startIndex) {
     if (draft && Date.now() - lastHold > 30000) { lastHold = Date.now(); holdSlots(draft.si, draft.d, draft.t, draft.h); }
   };
   bumpIdle = keepAlive;
+  // refresh the day every 15 seconds so times someone else was holding open up again
+  const slotPoll = setInterval(async () => {
+    if (!draft || !bkDlg.open) return;
+    await loadBusy(draft.si, draft.d, draft.d);
+    drawSlots();
+  }, 15000);
   ['pointerdown', 'keydown', 'input', 'touchstart'].forEach(ev => bkDlg.addEventListener(ev, keepAlive));
   bkDlg.addEventListener('scroll', keepAlive, true);
 
@@ -371,6 +399,7 @@ async function openBook(startIndex) {
 
   bkDlg.onclose = () => {
     clearInterval(idleTimer);
+    clearInterval(slotPoll);
     releaseHold();
     bumpIdle = null;
     if (eqDlg.open) eqDlg.close();
@@ -407,23 +436,27 @@ async function openBook(startIndex) {
       p_hold_token: HOLD_TOKEN, p_items: items
     });
     btn.disabled = false;
-    if (error) return bkError(error.message);
+    if (error) return bkError(slotError(error.message));
 
     const row = Array.isArray(data) ? data[0] : data;
     if (!isMember()) rememberGuestBooking({ ref: row.booking_ref, studio: snap.s.id, date: snap.d, start: SLOTS[snap.t], hours: snap.h });
     const lines = [
+      ['Name', `${first} ${last}`],
       ['Studio', `Studio ${snap.s.id}`],
       ['Date', longDate(snap.d)],
       ['Time', `${SLOTS[snap.t]} to ${endTime(SLOTS[snap.t], snap.h)}`]
     ];
     items.forEach(x => { const e = EQUIPMENT.find(y => y.id === x.equipment_id); lines.push(['Add-on', `${e.name} x${x.quantity}`]); });
     lines.push(['Total', peso(Number(row.total_amount) || 0)]);
+    lines.push(['Payment', method === 'GCash' ? 'GCash, waiting for staff to verify' : 'Cash, pay at the studio']);
+    lines.push(['Booked on', stampLabel(new Date())]);
 
     draft.why = 'done';
     bkDlg.close();
     showSuccess({
       title: 'Successfully booked!', label: 'Your booking reference code', ref: row.booking_ref, lines,
-      note: 'Keep this code to look up your booking later. Staff will confirm it once your payment is verified.'
+      shot: 'It is your official receipt. Show it to our staff when you arrive so we can verify your reservation.',
+      note: 'You can also use this code to look up your booking later. Staff confirm it once your payment is verified.'
     });
     loadMyBookings().then(loadMyRentals);
   };
@@ -467,7 +500,8 @@ async function loadMyBookings() {
       BOOKINGS.push({
         ref: r.booking_ref, studio: studioLetter(r.studio_id), date: p.date, start: SLOTS[p.hour - 10],
         hours: Math.round(+r.hours), status: BK_STATUS[r.status] || r.status,
-        payment: r.payment_status || 'Pending', mine: true
+        payment: r.payment_status || 'Pending', mine: true,
+        name: r.customer_name, method: r.payment_method, created: r.created_at
       });
     });
   } else {
@@ -734,7 +768,8 @@ async function requestRental() {
       renderCart();
       await loadMyRentals();
       showSuccess({ title: 'Rental request sent!', label: 'Your reference code', ref,
-        note: 'Staff will review your request. Keep this code to look up your rental later.' });
+        shot: 'It is your official receipt. Show it to our staff when you arrive so we can verify your rental.',
+        note: 'Staff will review your request. You can also use this code to look up your rental later.' });
       return;
     }
 
@@ -789,6 +824,7 @@ async function requestRental() {
         ['Down payment sent', peso(Number(row.down_payment) || money.down)],
         ['Balance at pick-up', peso((Number(row.total_amount) || money.total) - (Number(row.down_payment) || money.down))]
       ],
+      shot: 'It is your official receipt. Show it to our staff when you pick up the equipment so we can verify your rental.',
       note: 'Staff will check your ID and verify your down payment. Bring the same ID when you pick up the equipment.'
     });
   } finally {
@@ -818,28 +854,34 @@ function renderMyBookings() {
     ['Reference', 'Studio', 'Date', 'Time', 'Duration', 'Status', 'Payment', ''],
     mine.map(b => {
       const editable = b.status === 'Confirmed' || b.status === 'Pending';
+      const details = `<button class="btn sm line" data-act="details" data-ref="${b.ref}">Details</button>`;
       const actions = editable
-        ? `<button class="btn sm" data-act="resched" data-ref="${b.ref}">Reschedule</button><button class="btn sm line" data-act="cancel" data-ref="${b.ref}">Cancel</button>`
-        : `<button class="btn sm line" data-act="details" data-ref="${b.ref}">Details</button>`;
+        ? details + `<button class="btn sm" data-act="resched" data-ref="${b.ref}">Reschedule</button><button class="btn sm line" data-act="cancel" data-ref="${b.ref}">Cancel</button>`
+        : details;
       return [b.ref, 'Studio ' + b.studio, shortDate(b.date), b.start, b.hours + (b.hours > 1 ? ' hrs' : ' hr'),
               badge(b.status), badge(b.payment), actions];
     }));
 }
 
+/* The booking receipt: the same layout as the success pop-up, so a customer can screenshot it. */
 function showDetails(b) {
-  const s = STUDIOS[studioIndex(b.studio)];
-  showDialog(`
-    <div class="row"><h2 style="margin:0">${b.ref}</h2>${badge(b.status)}</div>
-    <dl class="dl">
-      <dt>Studio</dt><dd>Studio ${b.studio}, ${esc(s.desc)}</dd>
-      <dt>Date</dt><dd>${longDate(b.date)}</dd>
-      <dt>Time</dt><dd>${b.start} to ${endTime(b.start, b.hours)} (${b.hours} hr${b.hours > 1 ? 's' : ''})</dd>
-      ${(ADDONS[b.ref] || []).length ? `<dt>Add-ons</dt><dd>${ADDONS[b.ref].map(a => `${esc(a.name)} x${a.qty} (${peso(a.price * a.qty)})`).join('<br>')}</dd>` : ''}
-      <dt>Total</dt><dd>${peso(s.rate * b.hours + (ADDONS[b.ref] || []).reduce((n, a) => n + a.price * a.qty, 0))}</dd>
-      <dt>Payment</dt><dd>${badge(b.payment)}</dd>
-    </dl>
-    <p class="mut">Bookings are confirmed after staff verify your payment.</p>
-    <div class="acts"><button class="btn line" data-close>Close</button></div>`);
+  const s = STUDIOS[studioIndex(b.studio)], ad = ADDONS[b.ref] || [];
+  const total = s.rate * b.hours + ad.reduce((n, a) => n + a.price * a.qty, 0);
+  const lines = [
+    ['Name', b.name || (PROFILE ? `${PROFILE.first} ${PROFILE.last}`.trim() : '')],
+    ['Studio', `Studio ${b.studio}`],
+    ['Date', longDate(b.date)],
+    ['Time', `${b.start} to ${endTime(b.start, b.hours)} (${b.hours} hr${b.hours > 1 ? 's' : ''})`],
+    ...ad.map(a => ['Add-on', `${a.name} x${a.qty} (${peso(a.price * a.qty)})`]),
+    ['Total', peso(total)],
+    ['Payment', `${b.method || 'Payment'}, ${b.payment}`]
+  ].filter(l => l[1]);
+  if (b.created) lines.push(['Booked on', stampLabel(b.created)]);
+  showSuccess({
+    title: 'Booking receipt', label: 'Reference code', ref: b.ref, lines, icon: 'receipt', status: badge(b.status), doneLabel: 'Close',
+    shot: 'It is your official receipt. Show it to our staff when you arrive so we can verify your reservation.',
+    note: 'Bookings are confirmed after staff verify your payment.'
+  });
 }
 
 function confirmCancel(b) {

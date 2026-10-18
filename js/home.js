@@ -128,10 +128,19 @@ async function checkAvailability() {
     box.innerHTML = '<div class="card"><h3>Pick a date</h3><p class="mut">Choose a date, then check availability again.</p></div>';
     return;
   }
+  if (date < TODAY) {
+    box.innerHTML = '<div class="card"><h3>That date has passed</h3><p class="mut">Pick today or a later date.</p></div>';
+    return;
+  }
+  const nowIdx = SLOTS.map((_, k) => k).filter(k => !isPastSlot(date, k));
+  if (!nowIdx.length) {
+    box.innerHTML = '<div class="card"><h3>No more times today</h3><p class="mut">The studio has no start times left today. Pick another date.</p></div>';
+    return;
+  }
 
   await loadBusy(i, date, date);
   const taken = takenSlots(i, date);
-  const openTimes = SLOTS.filter((_, k) => !taken.has(k));
+  const openTimes = SLOTS.filter((_, k) => !taken.has(k) && !isPastSlot(date, k));   // past times are never offered
   let html;
 
   if (isClosed(studio)) {
@@ -156,10 +165,26 @@ async function checkAvailability() {
 }
 
 
+/* Start-time choices: every hour, but never one that has already started on today's date. */
+let qtTouched = false;   // true once the visitor picks a time themselves
+function fillStartTimes() {
+  const date = $('#qd').value || TODAY, sel = $('#qt'), keep = sel.value;
+  const free = SLOTS.filter((_, k) => !isPastSlot(date, k));
+  sel.innerHTML = free.length ? free.map(t => `<option>${t}</option>`).join('') : '<option value="">No more times today</option>';
+  // their own choice stays; otherwise today starts at the next upcoming hour and other days at 3:00 PM
+  sel.value = qtTouched && free.includes(keep) ? keep : (date !== TODAY && free.includes('3:00 PM') ? '3:00 PM' : (free[0] || ''));
+}
+
 function initAvailability() {
   const today = TODAY;
   $('#qd').value = today;
   $('#qd').min = today;
+  fillStartTimes();
+  $('#qt').addEventListener('change', () => { qtTouched = true; });
+  $('#qd').addEventListener('change', () => {
+    if ($('#qd').value && $('#qd').value < TODAY) $('#qd').value = TODAY;   // no past dates
+    fillStartTimes();
+  });
 
   $('#qb-check').addEventListener('click', checkAvailability);
 

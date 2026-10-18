@@ -257,6 +257,8 @@ td { padding: 10px; border-bottom: 1px solid var(--dove); white-space: nowrap; }
 .slots button { padding: 7px 0; border: 1px solid var(--field-bd); background: var(--surface); border-radius: 8px; cursor: pointer; font-size: 13px; }
 .slots button.sel { background: var(--sel); color: var(--sel-fg); border-color: var(--sel); }
 .slots button:disabled { background: var(--dove); color: var(--mut); opacity: .6; text-decoration: line-through; cursor: not-allowed; }
+/* a time someone else is in the middle of booking: not struck through, it may free up soon */
+.slots button.held:disabled { text-decoration: none; opacity: 1; border: 1px dashed var(--warn); color: var(--warn); background: transparent; }
 .hold { background: var(--warn-bg); color: #F2C36B; border-radius: 8px; padding: 8px 12px; font-size: 13px; margin-top: 12px; }
 .alert { background: var(--bad-bg); color: #FFB4BB; border-radius: 8px; padding: 8px 12px; font-size: 13.5px; margin: 10px 0; }
 .acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; margin-top: 16px; }
@@ -399,4 +401,9 @@ tr.has-why td { border-bottom: 0; }
 .eqcard p { margin: 0; font-size: 13.5px; line-height: 1.45; }
 .qtyl { display: flex; align-items: center; gap: 8px; margin: 0; font-weight: 600; }
 .qtyl select { width: 76px; }
+
+/* ===== Screenshot notice on the success pop-up and the booking receipt ===== */
+.shot { margin-top: 14px; padding: 10px 12px; border: 1px solid var(--warn); border-radius: 10px; background: var(--warn-bg); text-align: left; font-size: 13.5px; line-height: 1.45; }
+.shot b { color: var(--warn); }
+.slots button.past:disabled { opacity: .45; }
 

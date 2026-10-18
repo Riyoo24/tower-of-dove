@@ -115,13 +115,15 @@ const BOOKINGS = [];
 /* Taken hours per studio and day, loaded from the database (get_busy_slots).
    Key: 'studioDbId|YYYY-MM-DD'  ->  Set of slot indexes (0 = 10:00 AM). */
 const BUSY = {};
+const HELD = {};     // same key -> slots that are only being held by someone filling in the booking form (2 minutes)
+const BOOKED = {};   // same key -> slots that are really booked
 
 async function loadBusy(studioIdx, fromDate, toDate) {
   const s = STUDIOS[studioIdx];
   if (!s) return;
   for (const k of Object.keys(BUSY)) {
     const [id, d] = k.split('|');
-    if (+id === s.dbId && d >= fromDate && d <= toDate) delete BUSY[k];
+    if (+id === s.dbId && d >= fromDate && d <= toDate) { delete BUSY[k]; delete HELD[k]; delete BOOKED[k]; }
   }
   const { data, error } = await sb.rpc('get_busy_slots', {
     p_studio_id: s.dbId,
@@ -137,8 +139,27 @@ async function loadBusy(studioIdx, fromDate, toDate) {
       if (idx < 0 || idx >= SLOTS.length) continue;
       const key = s.dbId + '|' + p.date;
       (BUSY[key] = BUSY[key] || new Set()).add(idx);
+      const bucket = r.kind === 'held' ? HELD : BOOKED;
+      (bucket[key] = bucket[key] || new Set()).add(idx);
     }
   });
+}
+
+/* Has this hour already started or passed (Manila time)? Index 0 = 10:00 AM.
+   Bookings must start at a later hour, so the current hour counts as past too. */
+function isPastSlot(dateISO, i) {
+  const now = manilaParts(new Date());
+  return dateISO < now.date || (dateISO === now.date && 10 + i <= now.hour);
+}
+
+/* Slots held (not booked) by someone else right now. */
+const heldSlots = (studioIdx, dateISO) => new Set(HELD[STUDIOS[studioIdx].dbId + '|' + dateISO] || []);
+
+/* Why can't these hours be used? 'booked' = already booked, 'held' = someone is filling in a booking for them */
+function conflictKind(studioIdx, dateISO, first, hours) {
+  const booked = BOOKED[STUDIOS[studioIdx].dbId + '|' + dateISO] || new Set();
+  for (let i = first; i < first + hours; i++) if (booked.has(i)) return 'booked';
+  return 'held';
 }
 
 /* Slot indexes already taken for a studio on a date (call loadBusy first).
