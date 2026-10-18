@@ -176,7 +176,7 @@ const findBk = ref => BK.find(b => b.booking_ref === ref);
 
 function bkActions(b) {
   const id = b.booking_ref;
-  if (b.status === 'Pending') return btn('bk-ok', id, 'Confirm') + btn('bk-no', id, 'Reject', 1);
+  if (b.status === 'Pending') return btn('bk-verify', id, 'Verify');   // opens the Verify drawer in the Payments tab
   if (b.status === 'Approved') return btn('bk-go', id, 'Start session') + btn('bk-det', id, 'Details', 1) + btn('bk-cx', id, 'Cancel', 1);
   if (b.status === 'In Progress') return btn('bk-done', id, 'Mark completed') + btn('bk-det', id, 'Details', 1);
   return btn('bk-det', id, 'Details', 1);
@@ -196,7 +196,9 @@ function renderBookings() {
 $('#abk').addEventListener('click', e => { const t = e.target.closest('[data-bf]'); if (t) { bkF = t.dataset.bf; renderBookings(); } });
 ['#bk-q', '#bk-s', '#bk-d'].forEach(s => $(s).addEventListener('input', renderBookings));
 
-const afterAction = async msg => { await refresh(); if (dlg.open) dlg.close(); if (msg) toast(msg); };
+/* the small dialog and the Verify drawer both close after an action */
+const closeOverlays = () => { if (dlg.open) dlg.close(); if (vdr.open) vdr.close(); };
+const afterAction = async msg => { await refresh(); closeOverlays(); if (msg) toast(msg); };
 const setBooking = (b, status, extra) => run(sb.from('booking').update({ status, ...(extra || {}) }).eq('booking_id', b.booking_id));
 
 /* Verifying a booking payment also approves its add-on equipment (done by the database).
@@ -209,7 +211,7 @@ const verifiedMsg = (ref, had) => !had ? `${ref} confirmed. Payment verified.`
 ACT['bk-ok'] = async ref => {
   const b = findBk(ref), had = pendingAddons(ref);
   const r = b.payment_id ? await run(sb.from('payment').update({ status: 'Verified' }).eq('payment_id', b.payment_id)) : await setBooking(b, 'Approved');
-  if (r) { await refresh(); if (dlg.open) dlg.close(); toast(verifiedMsg(ref, had)); }
+  if (r) { await refresh(); closeOverlays(); toast(verifiedMsg(ref, had)); }
 };
 ACT['bk-no'] = async ref => {
   const b = findBk(ref);
@@ -243,14 +245,14 @@ function renderPayments() {
     ['Reference', 'Customer', 'Amount', 'Method', 'Payment reference', 'Status', 'Actions'],
     rows.map(p => [esc(p.reference) + ` <span class="mut">${p.kind}</span>`, esc(p.customer_name), money(p.amount), esc(p.method),
       p.method === 'GCash' ? esc(p.gcash_reference || '') : 'Pay at studio', badge(p.status),
-      p.status === 'Pending' ? btn('pay-ok', p.payment_id, 'Verify') + btn('pay-no', p.payment_id, 'Reject', 1) : '-'])) + '</div>';
+      p.status === 'Pending' ? btn('pay-verify', p.payment_id, 'Verify') : btn('pay-verify', p.payment_id, 'Details', 1)])) + '</div>';
 }
 $('#apy').addEventListener('click', e => { const t = e.target.closest('[data-pf]'); if (t) { payF = t.dataset.pf; renderPayments(); } });
 const setPay = async (id, status) => {
   const p = PAY.find(x => x.payment_id === +id), ref = p && p.kind === 'Booking' ? p.reference : null, had = !!ref && pendingAddons(ref);
   if (!(await run(sb.from('payment').update({ status }).eq('payment_id', +id)))) return;
   await refresh();
-  if (dlg.open) dlg.close();
+  closeOverlays();
   toast(status === 'Verified' && ref ? verifiedMsg(ref, had) : 'Payment ' + status.toLowerCase() + '.');
 };
 ACT['pay-ok'] = id => setPay(id, 'Verified');
@@ -289,7 +291,7 @@ function renderStudios() {
       <div class="row" style="margin-top:8px"><b>${money(s.hourly_rate)}/hr</b><span>${btn('st-edit', s.studio_id, 'Edit')}${btn('st-tog', s.studio_id, s.status === 'Available' ? 'Disable' : 'Enable', 1)}${dbtn('st-del', s.studio_id, 'Delete')}</span></div></div>`;
   }).join('');
 }
-const afterStudio = async msg => { await loadCatalog(); await refresh(); if (dlg.open) dlg.close(); toast(msg); };
+const afterStudio = async msg => { await loadCatalog(); await refresh(); closeOverlays(); toast(msg); };
 
 ACT['st-tog'] = async id => {
   const s = STU.find(x => x.studio_id === +id);
@@ -375,7 +377,7 @@ ACT['eq-chip'] = async id => {
   if (await run(sb.from('equipment').update({ [field]: !c[field] }).eq('equipment_id', c.equipment_id))) { await loadCatalog(); afterAction(`${c.name}: ${field === 'allow_addon' ? 'Add-on' : 'Outside'} rentals turned ${!c[field] ? 'on' : 'off'}.`); }
 };
 ACT['eq-edit'] = id => eqForm(+id);
-const afterEquip = async msg => { await loadCatalog(); await refresh(); if (dlg.open) dlg.close(); toast(msg); };
+const afterEquip = async msg => { await loadCatalog(); await refresh(); closeOverlays(); toast(msg); };
 ACT['eq-vis'] = async id => {
   const c = STK.find(x => x.equipment_id === +id), hide = c.stock_status !== 'Unavailable';
   if (await run(sb.from('equipment').update({ status: hide ? 'Unavailable' : 'Available' }).eq('equipment_id', c.equipment_id))) afterEquip(hide ? `${c.name} is now hidden from customers.` : `${c.name} is visible to customers again.`);
@@ -478,10 +480,11 @@ function groups() {
 const gMatch = (g, f) => f === 'All' || (f === 'Overdue' ? g.lines.some(l => l.days_overdue > 0) : f === 'Due today' ? g.lines.some(l => l.status === 'Active' && dueToday(l)) : rnStatus(g.status) === f);
 
 function rnActions(g) {
-  if (g.status === 'Pending') return btn('rn-det', g.ref, 'Details');   // review the ID and items first; Approve and Reject are inside
-  if (g.status === 'Approved') return btn('rn-issue', g.ref, 'Issue') + btn('rn-det', g.ref, 'Details', 1);
-  if (g.status === 'Active') return btn('rn-ret', g.ref, 'Process return') + btn('rn-det', g.ref, 'Details', 1);
-  return btn('rn-det', g.ref, 'Details', 1);
+  // Verify opens the transaction in the Payments tab (ID, down payment, items, approve or reject)
+  if (g.status === 'Pending') return btn('rn-verify', g.ref, 'Verify');
+  if (g.status === 'Approved') return btn('rn-issue', g.ref, 'Issue') + btn('rn-verify', g.ref, 'Verify', 1);
+  if (g.status === 'Active') return btn('rn-ret', g.ref, 'Process return') + btn('rn-verify', g.ref, 'Verify', 1);
+  return btn('rn-verify', g.ref, 'Verify', 1);
 }
 function renderRentals() {
   const gs = groups();
@@ -490,7 +493,7 @@ function renderRentals() {
   const cnt = f => f === 'Overdue' ? ' (' + gs.filter(g => gMatch(g, 'Overdue')).length + ')' : f === 'Pending' ? ' (' + gs.filter(g => g.status === 'Pending').length + ')' : '';
   $('#arn').innerHTML = `<div class="tabs">${RF.map(x => `<button data-rf="${x}" class="${x === rf ? 'on' : ''}">${x}${cnt(x)}</button>`).join('')}</div>` +
     '<div class="card"><div class="tw">' + tbl(['Order', 'Customer', 'Items', 'Rent type', 'Status', 'Actions'],
-      list.map(g => [`<button class="lk" data-act="rn-det" data-id="${esc(g.ref)}">${esc(g.type === 'Add-on' ? (g.booking || g.ref) : g.ref)}</button>`,
+      list.map(g => [`<button class="lk" data-act="rn-verify" data-id="${esc(g.ref)}">${esc(g.type === 'Add-on' ? (g.booking || g.ref) : g.ref)}</button>`,
         esc(g.customer), g.lines.length === 1 ? esc(g.lines[0].equipment_name) + ' x' + g.lines[0].quantity : g.lines.length + ' items',
         TYB[g.type], badge(rnStatus(g.status)), rnActions(g)])) + '</div></div>';
 }
@@ -505,20 +508,18 @@ const setRental = async (ref, status, reason) => {
 };
 ACT['rn-ok'] = ref => setRental(ref, 'Approved');
 ACT['rn-issue'] = ref => setRental(ref, 'Active');
-ACT['rn-no'] = ref => rentalDialog(ref, true);
-ACT['rn-det'] = ref => rentalDialog(ref);
 const lateFeeOf = (ref, eid) => sum(RL.filter(l => l.rental_ref === ref && (!eid || l.equipment_id === eid)).map(l => num(l.late_fee)));
 const returnedMsg = (ref, eid, what) => lateFeeOf(ref, eid) > 0
   ? `${what} returned late. Collect the late fee of ${money(lateFeeOf(ref, eid))} from the customer.` : `${what} returned. Stock updated.`;
 ACT['rn-ret'] = async ref => {
   if (!(await run(sb.rpc('staff_return_rental', { p_rental_ref: ref, p_equipment_id: null })))) return;
-  await loadCatalog(); await refresh(); if (dlg.open) dlg.close();
+  await loadCatalog(); await refresh(); closeOverlays();
   toast(returnedMsg(ref, null, ref));
 };
 ACT['rn-retline'] = async id => {
   const [ref, eid] = id.split(':');
   if (!(await run(sb.rpc('staff_return_rental', { p_rental_ref: ref, p_equipment_id: +eid })))) return;
-  await loadCatalog(); await refresh(); if (dlg.open) dlg.close();
+  await loadCatalog(); await refresh(); closeOverlays();
   toast(returnedMsg(ref, +eid, 'Item'));
 };
 ACT['rn-reject-go'] = ref => {
@@ -529,8 +530,8 @@ ACT['rn-reject-go'] = ref => {
 
 /* The customer's ID photo is stored in the private rental-ids bucket; only staff can open it.
    A temporary link (10 minutes) is made each time the dialog opens. */
-async function loadRentalId(ref) {
-  const box = $('#rn-id');
+async function loadRentalId(ref, boxId = 'rn-id') {
+  const box = $('#' + boxId);
   if (!box) return;
   const { data: o, error } = await sb.from('rental_order')
     .select('id_type, id_image_path, contact_number, backup_contact, source').eq('rental_ref', ref).maybeSingle();
@@ -548,52 +549,184 @@ async function loadRentalId(ref) {
     : `<a href="${s.signedUrl}" target="_blank" rel="noopener" title="Open full size"><img class="idimg" src="${s.signedUrl}" alt="Customer ID photo"></a><p class="mut">Click the photo to open it full size.</p>`);
 }
 
-function rentalDialog(ref, focusReject) {
-  const g = groups().find(x => x.ref === ref); if (!g) return;
-  const st = rnStatus(g.status);
+/* ============================ 7b. VERIFY DRAWER (Payments tab) ============================
+   One place to check a transaction: who, what, how much, the GCash reference and (for outside
+   rentals) the customer's ID. The Verify buttons in Bookings and Rentals open it here. */
 
-  /* outside rentals: times, price (8 hours + price/8 per extra hour), 50% down payment, late fee */
-  const out = g.type === 'Outside', l0 = g.lines[0], pay = PAY.find(p => p.reference === g.ref);
-  let outRows = '', outWarn = '';
-  if (out) {
-    const hrs = Math.max(8, Math.ceil(num(l0.rental_hours) || 8));
-    const total = sum(g.lines.map(l => num(l.unit_price_at_request) * l.quantity * hrs / 8)), down = num(l0.down_payment);
-    const due = l0.due_at ? new Date(l0.due_at) : null, now = Date.now();
-    const accr = due && g.status === 'Active' ? g.lines.filter(l => !l.line_returned_at && now > due) : [];
-    const fee = sum(g.lines.map(l => num(l.late_fee))) + sum(accr.map(l => l.quantity * num(l.unit_price_at_request) / 8 * Math.ceil((now - due) / 36e5)));
-    outRows = `<dt>Pick-up</dt><dd>${l0.pickup_date ? shortDate(dOf(l0.pickup_date)) + ', ' + tOf(l0.pickup_date) : '-'}</dd>
-      <dt>Return by</dt><dd>${dueLabel(l0)}</dd><dt>Billed length</dt><dd>${hrs} hours</dd>
-      <dt>Total</dt><dd>${money(total)}</dd>
-      <dt>Down payment</dt><dd>${money(down)}${pay ? ' ' + badge(pay.status) + (pay.gcash_reference ? ' GCash ref ' + esc(pay.gcash_reference) : '') : ''}</dd>
-      ${down > 0 ? `<dt>Balance at pick-up</dt><dd><b>${money(Math.max(0, total - down))}</b></dd>` : ''}
-      ${fee > 0 ? `<dt>Late fee</dt><dd><b style="color:var(--bad)">${money(fee)}</b> <span class="mut">${accr.length ? 'so far' : 'charged'}</span></dd>` : ''}`;
-    if (g.status === 'Pending' && pay && pay.status !== 'Verified') outWarn = `<div class="alert">The down payment (${money(down)}) is not verified yet. Check the GCash reference in the Payments tab before approving.</div>`;
-    if (g.status === 'Approved' && down > 0) outWarn = `<div class="alert">Collect the balance of ${money(Math.max(0, total - down))} before handing over the equipment.</div>`;
-    if (g.status === 'Active' && fee > 0) outWarn = `<div class="alert">The equipment is late. A late fee of ${money(fee)} (price / 8 per hour, per item) is charged when you process the return. Collect it then.</div>`;
+const vdr = $('#vdr');
+let vKey = null;                                   // which transaction is open, so it can be redrawn
+vdr.addEventListener('click', e => { if (e.target === vdr || e.target.closest('[data-close]')) vdr.close(); });
+
+const REASONS_RENTAL = ['Down payment not received', 'Invalid or unclear ID', 'Equipment not available', 'Incomplete or unclear request', 'Other'];
+const reasonPicker = () => `<label for="v-reason">Reason if rejecting (the customer sees this)</label>
+  <select id="v-reason">${REASONS_RENTAL.map(r => `<option>${r}</option>`).join('')}</select>
+  <div id="v-other-wrap" hidden><label for="v-other">Message to customer</label><input id="v-other" maxlength="300" placeholder="Describe the reason"></div>`;
+const pickedReason = () => { const r = $('#v-reason').value; return r === 'Other' ? ($('#v-other').value.trim() || 'Other') : r; };
+const drawerShell = (title, ref, badges, body) => `<div class="dr">
+  <div class="row"><div><p class="mut" style="margin:0">${title}</p><h2 style="margin:0">${esc(ref)}</h2></div><button type="button" class="btn sm line" data-close aria-label="Close">Close</button></div>
+  <div>${badges}</div>${body}</div>`;
+
+/* work out which booking or rental a Verify button means */
+function resolveTx(key) {
+  let pay = null, bookingRef = null, rentalRef = null;
+  if (key.paymentId) {
+    pay = PAY.find(p => p.payment_id === +key.paymentId);
+    if (!pay) return null;
+    if (pay.kind === 'Booking') bookingRef = pay.reference; else rentalRef = pay.reference;
+  } else if (key.bookingRef) bookingRef = key.bookingRef;
+  else if (key.rentalRef) {
+    rentalRef = key.rentalRef;
+    const g = groups().find(x => x.ref === rentalRef);
+    if (g && g.type === 'Add-on' && g.booking) { bookingRef = g.booking; rentalRef = null; }   // add-ons are paid with their booking
   }
-  const short = g.lines.filter(l => { const s = STK.find(x => x.equipment_id === l.equipment_id); return !s || s.available < l.quantity; });
-  let h = `<div class="row"><h2 style="margin:0">Rental ${esc(g.ref)}</h2>${badge(st)}</div>
-    <dl class="dl"><dt>Customer</dt><dd>${esc(g.customer)}</dd><dt>Phone</dt><dd>${esc(g.phone || 'Not on file')}</dd>
-    <dt>Rent type</dt><dd>${TYB[g.type]}</dd><dt>${g.type === 'Add-on' ? 'Booking' : 'Rental ID'}</dt><dd>${esc(g.type === 'Add-on' ? (g.booking || '-') : g.ref)}</dd>
-    ${g.reason ? `<dt>Reason</dt><dd>${esc(g.reason)}</dd>` : ''}${outRows}</dl>
-    ${g.type === 'Outside' ? `<h3 style="font-size:14px;margin-top:14px">Customer's valid ID</h3><div id="rn-id"><p class="mut">Loading the ID...</p></div>` : ''}
-    <div class="tw">${tbl(['Equipment', 'Qty', 'Return by', 'Overdue', ''], g.lines.map(l => [esc(l.equipment_name), String(l.quantity), dueLabel(l), dueB(l),
-      g.status === 'Active' && !l.line_returned_at ? btn('rn-retline', g.ref + ':' + l.equipment_id, 'Return', 1) : l.line_returned_at ? 'Returned' : '']))}</div>`;
-  if (g.lines.some(l => l.days_overdue > 0) && !outWarn) h += '<div class="alert">This order is overdue. Contact the customer to arrange the return.</div>';
-  h += outWarn;
-  if (g.status === 'Pending') {
-    if (short.length) h += `<div class="alert">Not enough stock for: ${short.map(l => esc(l.equipment_name)).join(', ')}. It can't be approved until stock comes back.</div>`;
-    h += `<label for="rrs">Reason if rejecting (the customer sees this)</label><select id="rrs"><option>Equipment not available</option><option>Studio booking not confirmed</option><option>Incomplete or unclear request</option><option>Other</option></select>
-      <div id="rrs-other-wrap" hidden><label for="rrs-other">Message to customer</label><input id="rrs-other" maxlength="300" placeholder="Describe the reason"></div>
-      <div class="acts"><button class="btn line" data-close>Close</button>${btn('rn-reject-go', g.ref, 'Reject rental').replace('btn sm', 'btn bad')}${btn('rn-ok', g.ref, 'Approve rental').replace('btn sm', 'btn gold')}</div>`;
-  } else if (g.status === 'Approved') h += `<div class="acts"><button class="btn line" data-close>Close</button>${btn('rn-issue', g.ref, 'Issue equipment').replace('btn sm', 'btn gold')}</div>`;
-  else if (g.status === 'Active') h += `<div class="acts"><button class="btn line" data-close>Close</button>${btn('rn-ret', g.ref, 'Return everything').replace('btn sm', 'btn gold')}</div>`;
-  else h += '<div class="acts"><button class="btn line" data-close>Close</button></div>';
-  showDlg(h);
-  if (g.type === 'Outside') loadRentalId(g.ref);
-  const sel = $('#rrs');
-  if (sel) { sel.onchange = () => { $('#rrs-other-wrap').hidden = sel.value !== 'Other'; }; if (focusReject) sel.focus(); }
+  if (bookingRef) return { type: 'booking', ref: bookingRef, pay: PAY.find(p => p.reference === bookingRef && p.kind === 'Booking') || null };
+  return { type: 'rental', ref: rentalRef, pay: pay || PAY.find(p => p.reference === rentalRef) || null };
 }
+
+function openVerify(key) {
+  const tx = resolveTx(key);
+  if (!tx) return toast('That transaction could not be found.');
+  vKey = key;
+  if (tx.type === 'booking') drawBookingTx(tx); else drawRentalTx(tx);
+  if (!vdr.open) vdr.showModal();
+}
+/* Used by the Verify buttons in Bookings and Rentals: switch to Payments, then open the drawer */
+function verifyFromTab(key) {
+  if (location.hash.slice(1) !== 'a-pay') location.hash = 'a-pay';
+  openVerify(key);
+}
+
+/* the checkboxes the staff member must tick before the main button works */
+function wireChecks() {
+  const checks = $$('#vdr .vchk'), go = $('#v-go');
+  if (go) { go.disabled = checks.some(c => !c.checked); checks.forEach(c => c.addEventListener('change', () => { go.disabled = checks.some(x => !x.checked); })); }
+  const sel = $('#v-reason');
+  if (sel) sel.onchange = () => { $('#v-other-wrap').hidden = sel.value !== 'Other'; };
+}
+const checkRow = text => `<label class="terms" style="margin:0"><input type="checkbox" class="vchk"><span>${text}</span></label>`;
+const payBlock = (p, fallbackAmount) => p
+  ? `<dl class="dl"><dt>Method</dt><dd>${esc(p.method)}</dd><dt>Amount</dt><dd><b>${money(p.amount)}</b></dd>
+      ${p.method === 'GCash' ? `<dt>GCash reference</dt><dd><b style="letter-spacing:.04em">${esc(p.gcash_reference || '')}</b></dd>` : '<dt>Paid</dt><dd>Cash at the studio</dd>'}
+      <dt>Status</dt><dd>${badge(p.status)}</dd><dt>Sent</dt><dd>${p.created_at ? stampLabel(p.created_at) : '-'}</dd></dl>`
+  : `<p class="mut">No payment record for this transaction. Amount: <b>${money(fallbackAmount)}</b>.</p>`;
+
+/* ---- a studio booking (with any add-on equipment paid together) ---- */
+function drawBookingTx(tx) {
+  const b = findBk(tx.ref), pay = tx.pay;
+  if (!b) { vdr.innerHTML = drawerShell('Booking', tx.ref, '', '<p class="mut">This booking could not be found.</p>'); return; }
+  const ad = RL.filter(l => l.booking_ref === b.booking_ref && l.rental_type === 'Add-on');
+  const counted = ad.filter(l => !['Rejected', 'Cancelled'].includes(l.status));
+  const adTotal = sum(counted.map(l => num(l.unit_price_at_request) * l.quantity)), studio = num(b.total_amount);
+  const payPending = !!pay && pay.status === 'Pending', needsCheck = payPending || (!pay && b.status === 'Pending');
+  const pendingOrders = !payPending ? [...new Set(ad.filter(l => l.status === 'Pending').map(l => l.rental_ref))] : [];
+
+  let body = `<h3>Customer</h3><dl class="dl"><dt>Name</dt><dd>${esc(b.customer_name)}${b.is_guest ? ' <span class="mut">(guest)</span>' : ''}</dd><dt>Phone</dt><dd>${esc(b.customer_number || 'Not on file')}</dd></dl>
+    <h3>Booking</h3><dl class="dl"><dt>Studio</dt><dd>${esc(b.studio_name)}</dd><dt>Date</dt><dd>${longDate(dOf(b.start_at))}</dd>
+      <dt>Time</dt><dd>${tOf(b.start_at)} to ${tOf(b.end_at)} (${pl(Math.round(num(b.hours)), 'hr')})</dd><dt>Source</dt><dd>${esc(b.source)}</dd></dl>`;
+  if (ad.length) {
+    body += `<h3>Add-on equipment</h3><div class="dr-items">${ad.map(l => `<div class="dr-item"><div><b>${esc(l.equipment_name)}</b><div class="mut">${l.quantity} x ${money(l.unit_price_at_request)} ${badge(rnStatus(l.status))}</div></div><b>${money(num(l.unit_price_at_request) * l.quantity)}</b></div>`).join('')}</div>`;
+  }
+  body += `<h3>Amount</h3><div class="dr-sum"><div><span>Studio</span><span>${money(studio)}</span></div>${adTotal ? `<div><span>Add-on equipment</span><span>${money(adTotal)}</span></div>` : ''}<div class="tot-line"><b>To pay</b><b>${money(pay ? pay.amount : studio + adTotal)}</b></div></div>
+    <h3>Payment</h3>${payBlock(pay, studio + adTotal)}`;
+
+  if (needsCheck) {
+    body += pay
+      ? checkRow(pay.method === 'GCash' ? `I checked GCash reference <b>${esc(pay.gcash_reference || '')}</b> and the amount of <b>${money(pay.amount)}</b> was received.` : `The cash payment of <b>${money(pay.amount)}</b> was received at the studio.`)
+      : checkRow('I checked this booking and it can be confirmed.');
+    body += `<div class="acts"><button class="btn line" data-close>Close</button>${btn('bk-no', b.booking_ref, pay ? 'Reject payment' : 'Reject booking').replace('btn sm', 'btn bad')}
+      <button class="btn gold" id="v-go" data-act="bk-ok" data-id="${esc(b.booking_ref)}" disabled>${pay ? 'Verify payment' : 'Confirm booking'}</button></div>
+      <p class="mut">Verifying also confirms the booking and approves its add-on equipment.</p>`;
+  } else {
+    if (pendingOrders.length) {
+      body += `<h3>Add-on equipment waiting for approval</h3><div class="alert">Some add-on equipment is still pending (it may be out of stock). Approve or reject it here.</div>${reasonPicker()}` +
+        pendingOrders.map(r => `<div class="row" style="margin-top:8px"><span>${esc(r)}</span><span>${btn('rn-ok', r, 'Approve add-on')}${btn('v-rn-reject', r, 'Reject add-on', 1)}</span></div>`).join('');
+    }
+    const acts = [];
+    if (b.status === 'Approved') acts.push(btn('bk-go', b.booking_ref, 'Start session'), btn('bk-cx', b.booking_ref, 'Cancel booking', 1));
+    if (b.status === 'In Progress') acts.push(btn('bk-done', b.booking_ref, 'Mark completed'));
+    body += `<div class="acts"><button class="btn line" data-close>Close</button>${acts.join('')}</div>`;
+  }
+  vdr.innerHTML = drawerShell('Verify booking', b.booking_ref, `<span class="mut">Booking</span> ${badge(bkStatus(b.status))} ` + (pay ? `<span class="mut">Payment</span> ${badge(pay.status)}` : ''), body);
+  wireChecks();
+}
+
+/* ---- a rental (outside rentals with down payment and ID, or any other rental order) ---- */
+function drawRentalTx(tx) {
+  const g = groups().find(x => x.ref === tx.ref), pay = tx.pay;
+  if (!g) { vdr.innerHTML = drawerShell('Rental', tx.ref, '', '<p class="mut">This rental could not be found.</p>'); return; }
+  const out = g.type === 'Outside', l0 = g.lines[0];
+  const hrs = Math.max(8, Math.ceil(num(l0.rental_hours) || 8)), factor = out ? hrs / 8 : 1;
+  const lineTotal = l => num(l.unit_price_at_request) * l.quantity * factor, total = sum(g.lines.map(lineTotal)), down = num(l0.down_payment);
+  const due = l0.due_at ? new Date(l0.due_at) : null, now = Date.now();
+  const accr = out && due && g.status === 'Active' ? g.lines.filter(l => !l.line_returned_at && now > due) : [];
+  const fee = sum(g.lines.map(l => num(l.late_fee))) + sum(accr.map(l => l.quantity * num(l.unit_price_at_request) / 8 * Math.ceil((now - due) / 36e5)));
+  const short = g.lines.filter(l => { const s = STK.find(x => x.equipment_id === l.equipment_id); return !s || s.available < l.quantity; });
+  const payPending = !!pay && pay.status === 'Pending', needApprove = g.status === 'Pending';
+
+  let body = `<h3>Customer</h3><dl class="dl"><dt>Name</dt><dd>${esc(g.customer)}</dd><dt>Phone</dt><dd>${esc(g.phone || 'Not on file')}</dd></dl>
+    <h3>${out ? 'Pick-up and return' : 'Rental'}</h3><dl class="dl"><dt>Rent type</dt><dd>${TYB[g.type]}</dd>
+      ${out ? `<dt>Pick-up</dt><dd>${l0.pickup_date ? shortDate(dOf(l0.pickup_date)) + ', ' + tOf(l0.pickup_date) : '-'}</dd><dt>Return by</dt><dd>${dueLabel(l0)}</dd><dt>Billed length</dt><dd>${hrs} hours</dd>`
+            : `<dt>Booking</dt><dd>${esc(g.booking || '-')}</dd>`}
+      ${g.reason ? `<dt>Reason</dt><dd>${esc(g.reason)}</dd>` : ''}</dl>
+    <h3>Items (${sum(g.lines.map(l => l.quantity))})</h3>
+    <div class="dr-items">${g.lines.map(l => `<div class="dr-item"><div><b>${esc(l.equipment_name)}</b><div class="mut">${l.quantity} x ${money(l.unit_price_at_request)}${out ? ' per 8 hours' : ''} ${dueB(l).includes('>-<') ? '' : dueB(l)}</div>
+      ${g.status === 'Active' && !l.line_returned_at ? `<div style="margin-top:6px">${btn('rn-retline', g.ref + ':' + l.equipment_id, 'Return this item', 1)}</div>` : l.line_returned_at ? '<div class="mut">Returned</div>' : ''}</div>
+      <b>${money(lineTotal(l))}</b></div>`).join('')}</div>`;
+  if (needApprove && short.length) body += `<div class="alert">Not enough stock for: ${short.map(l => esc(l.equipment_name)).join(', ')}. It can't be approved until stock comes back.</div>`;
+
+  body += `<h3>Amount</h3><div class="dr-sum"><div class="tot-line"><b>Total</b><b>${money(total)}</b></div>
+    ${out && down > 0 ? `<div><span>Down payment (50%)</span><span>${money(down)}</span></div><div><span>Balance to collect at pick-up</span><span>${money(Math.max(0, total - down))}</span></div>` : ''}
+    ${fee > 0 ? `<div><span>Late fee ${accr.length ? 'so far' : 'charged'}</span><b style="color:var(--bad)">${money(fee)}</b></div>` : ''}</div>`;
+  if (pay) body += `<h3>${out ? 'Down payment' : 'Payment'}</h3>${payBlock(pay, down)}`;
+  if (out) body += `<h3>Customer's valid ID</h3><div id="v-id"><p class="mut">Loading the ID...</p></div>`;
+
+  if (needApprove || payPending) {
+    const checks = [];
+    if (payPending) checks.push(pay.method === 'GCash' ? `I checked GCash reference <b>${esc(pay.gcash_reference || '')}</b> and the down payment of <b>${money(pay.amount)}</b> was received.` : `The payment of <b>${money(pay.amount)}</b> was received.`);
+    if (out && needApprove) checks.push('I checked the valid ID. The photo is clear and matches the customer.');
+    body += checks.map(checkRow).join('') + reasonPicker();
+    const label = needApprove ? (payPending ? 'Verify and approve rental' : 'Approve rental') : 'Verify down payment';
+    body += `<div class="acts"><button class="btn line" data-close>Close</button>
+      <button class="btn bad" data-act="v-rn-no" data-id="${esc(g.ref)}">Reject</button>
+      <button class="btn gold" id="v-go" data-act="v-rn-ok" data-id="${esc(g.ref)}" ${checks.length ? 'disabled' : ''}>${label}</button></div>`;
+  } else {
+    if (g.status === 'Approved' && down > 0) body += `<div class="alert">Collect the balance of ${money(Math.max(0, total - down))} before handing over the equipment.</div>`;
+    if (g.status === 'Active' && fee > 0) body += `<div class="alert">The equipment is late. A late fee of ${money(fee)} (price / 8 per hour, per item) is charged when you process the return. Collect it then.</div>`;
+    else if (g.lines.some(l => l.days_overdue > 0)) body += '<div class="alert">This order is overdue. Contact the customer to arrange the return.</div>';
+    const acts = g.status === 'Approved' ? btn('rn-issue', g.ref, 'Issue equipment') : g.status === 'Active' ? btn('rn-ret', g.ref, 'Return everything') : '';
+    body += `<div class="acts"><button class="btn line" data-close>Close</button>${acts}</div>`;
+  }
+  vdr.innerHTML = drawerShell('Verify rental', g.type === 'Add-on' ? (g.booking || g.ref) : g.ref, `<span class="mut">Rental</span> ${badge(rnStatus(g.status))} ` + (pay ? `<span class="mut">Payment</span> ${badge(pay.status)}` : ''), body);
+  wireChecks();
+  if (out) loadRentalId(g.ref, 'v-id');
+}
+
+/* the two buttons that need more than one database change */
+ACT['v-rn-ok'] = async ref => {
+  const g = groups().find(x => x.ref === ref), pay = PAY.find(p => p.reference === ref);
+  if (pay && pay.status === 'Pending' && !(await run(sb.from('payment').update({ status: 'Verified' }).eq('payment_id', pay.payment_id)))) return;
+  if (g && g.status === 'Pending' && !(await run(sb.from('rental_order').update({ status: 'Approved' }).eq('rental_ref', ref)))) {
+    await refresh();                       // the payment was verified, the approval failed (for example no stock)
+    if (vKey) openVerify(vKey);
+    return;
+  }
+  await loadCatalog();
+  await refresh(); closeOverlays();
+  toast(g && g.status === 'Pending' ? `${ref} verified and approved.` : `${ref} down payment verified.`);
+};
+ACT['v-rn-no'] = async ref => {
+  const g = groups().find(x => x.ref === ref), pay = PAY.find(p => p.reference === ref), reason = pickedReason();
+  if (pay && pay.status === 'Pending' && !(await run(sb.from('payment').update({ status: 'Rejected' }).eq('payment_id', pay.payment_id)))) return;
+  if (g && g.status === 'Pending') return setRental(ref, 'Rejected', reason);
+  await refresh(); closeOverlays(); toast('Payment rejected.');
+};
+ACT['v-rn-reject'] = ref => setRental(ref, 'Rejected', pickedReason());
+
+/* the buttons in the tables */
+ACT['pay-verify'] = id => openVerify({ paymentId: id });
+ACT['bk-verify'] = ref => verifyFromTab({ bookingRef: ref });
+ACT['rn-verify'] = ref => verifyFromTab({ rentalRef: ref });
+ACT['rn-det'] = ACT['rn-verify'];
 
 
 /* ============================ 8. CUSTOMERS ============================ */

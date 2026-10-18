@@ -182,9 +182,13 @@ function drawSlots() {
 /* Try to hold hours t..t+h for this customer (held on the server for 2 minutes). */
 async function moveDraft(t, h) {
   if (t + h > SLOTS.length) { bkError('That runs past closing time. Choose a shorter duration.'); return false; }
-  if (!(await holdSlots(draft.si, draft.d, t, h))) {
+  const ok = await holdSlots(draft.si, draft.d, t, h);
+  if (!draft) return false;                    // the form was closed while this request was running (the release is queued behind it)
+  if (!ok) {
     await holdSlots(draft.si, draft.d, draft.t, draft.h);   // a failed move drops the old hold, so take it back
+    if (!draft) return false;
     await loadBusy(draft.si, draft.d, draft.d);
+    if (!draft) return false;
     bkError(conflictKind(draft.si, draft.d, t, h) === 'held' ? MSG_HELD : MSG_BOOKED);
     drawSlots();
     return false;
@@ -841,7 +845,7 @@ const insideCutoff = b => startsAt(b) - Date.now() < 24 * 60 * 60 * 1000;
 const findBooking = ref => BOOKINGS.find(b => b.ref === ref);
 const normRef = v => v.trim().toUpperCase().replace(/\s+/g, '');
 const notFound = (ref, what) =>
-  `<div class="alert">No ${what} found for <b>${esc(ref)}</b>. Check the code and try again, or email us.</div>`;
+  `<div class="alert">No ${what} found for <b>${esc(ref)}</b>. Check the code and try again. If you booked with an account, log in to see it. Or email us.</div>`;
 const CUTOFF_MSG = 'Changes and cancellations close 24 hours before your session.';
 
 function renderMyBookings() {
@@ -999,13 +1003,20 @@ function initRentalLookup() {
     box.hidden = false;
     const { data: list, error } = await sb.rpc('lookup_rental', { p_ref: ref });
     if (error || !list || !list.length) { box.innerHTML = notFound(ref, 'rental'); return; }
-    const type = list[0].rental_type === 'Add-on' ? '<span class="b addon">Add-on</span>' : '<span class="b out">Outside</span>';
-    box.innerHTML = `<div class="row"><h3>${esc(ref)}</h3><span>${type}</span></div>
-      <div class="tw" style="margin-top:8px">${tableNotes(['Equipment', 'Qty', 'Return by', 'Status'],
-        list.map(r => ({
-          cells: [esc(r.equipment), String(r.quantity), r.return_by ? shortDate(manilaParts(r.return_by).date) : '', badge(RN_STATUS[r.status] || r.status)],
-          note: whyRejected(r.status, r.rejected_reason)
-        })))}</div>`;
+    // one row per rental order, with all of its items listed in that row
+    const orders = [];
+    list.forEach(r => {
+      let o = orders.find(x => x.rental_ref === r.rental_ref);
+      if (!o) { o = { rental_ref: r.rental_ref, rental_type: r.rental_type, status: r.status, return_by: r.return_by, rejected_reason: r.rejected_reason, items: [] }; orders.push(o); }
+      o.items.push(`${esc(r.equipment)} x${r.quantity}`);
+    });
+    box.innerHTML = `<div class="tw" style="margin-top:8px">${tableNotes(['Reference', 'Items', 'Rent type', 'Return by', 'Status'],
+      orders.map(o => ({
+        cells: [esc(o.rental_ref), `<span class="itm">${o.items.join('<br>')}</span>`,
+          o.rental_type === 'Add-on' ? '<span class="b addon">Add-on</span>' : '<span class="b out">Outside</span>',
+          o.return_by ? shortDate(manilaParts(o.return_by).date) : '', badge(RN_STATUS[o.status] || o.status)],
+        note: whyRejected(o.status, o.rejected_reason)
+      })))}</div>`;
   });
 }
 
@@ -1031,72 +1042,134 @@ const rentalStart = r => {
 const rentalLocked = r => { const d = rentalStart(r); return !!d && d - Date.now() < 24 * 60 * 60 * 1000; };
 const rentalCutoffMsg = r => `Changes and cancellations close 24 hours before ${r.type === 'out' ? 'pick-up' : 'your session'}.`;
 
+/* One rental order = every item that shares the same rental reference. */
+function rentalOrders() {
+  const map = new Map();
+  RENTALS.forEach(r => {
+    if (!map.has(r.rentalRef)) {
+      map.set(r.rentalRef, { rentalRef: r.rentalRef, ref: r.ref, type: r.type, status: r.status, rawStatus: r.rawStatus,
+        when: r.when, ret: r.ret, reason: r.reason, lines: [] });
+    }
+    map.get(r.rentalRef).lines.push(r);
+  });
+  return [...map.values()];
+}
+
+/* "3 items: Electric guitar x2, Guitar amplifier x1" (long orders end with "+2 more") */
+function itemSummary(lines, all) {
+  const count = sum(lines.map(l => l.qty));
+  const names = lines.map(l => `${esc(l.item)} x${l.qty}`);
+  const shown = all ? names.join(', ') : names.slice(0, 2).join(', ') + (names.length > 2 ? `, +${names.length - 2} more` : '');
+  return `<b>${count} item${count === 1 ? '' : 's'}</b>: ${shown}`;
+}
+
 function renderMyRentals() {
-  if (!RENTALS.length) {
+  const orders = rentalOrders();
+  if (!orders.length) {
     $('#myrent').innerHTML = '<p class="mut" style="padding:8px">No rentals yet.</p>';
     return;
   }
-  const seen = new Set();
   $('#myrent').innerHTML = tableNotes(
-    ['Reference', 'Equipment', 'Qty', 'Rent type', 'Session or pick-up', 'Return', 'Status', ''],
-    RENTALS.map(r => {
-      const first = !seen.has(r.rentalRef);
-      seen.add(r.rentalRef);
-      const canCancel = ['Pending', 'Approved'].includes(r.rawStatus);
-      const actions = !first ? '' :
-        `<button class="btn sm line" data-rn="details" data-ref="${esc(r.rentalRef)}">Details</button>` +
-        (canCancel ? `<button class="btn sm line" data-rn="cancel" data-ref="${esc(r.rentalRef)}">Cancel</button>` : '');
+    ['Reference', 'Items', 'Rent type', 'Session or pick-up', 'Return', 'Status', ''],
+    orders.map(o => {
+      const canCancel = ['Pending', 'Approved'].includes(o.rawStatus);
+      const actions = `<button class="btn sm line" data-rn="details" data-ref="${esc(o.rentalRef)}">Details</button>` +
+        (canCancel ? `<button class="btn sm line" data-rn="cancel" data-ref="${esc(o.rentalRef)}">Cancel</button>` : '');
       return {
         cells: [
-          r.ref, esc(r.item), String(r.qty),
-          r.type === 'addon' ? '<span class="b addon">Add-on</span>' : '<span class="b out">Outside</span>',
-          r.when, r.ret, badge(r.status), actions
+          `<button type="button" class="lk" data-rn="details" data-ref="${esc(o.rentalRef)}">${esc(o.ref)}</button>`,
+          `<span class="itm">${itemSummary(o.lines)}</span>`,
+          o.type === 'addon' ? '<span class="b addon">Add-on</span>' : '<span class="b out">Outside</span>',
+          o.when, o.ret, badge(o.status), actions
         ],
-        note: whyRejected(r.status, r.reason)
+        note: whyRejected(o.status, o.reason)
       };
     }));
 }
 
+/* Side drawer: every item of the order, prices, totals, status. */
+const rnDrawer = $('#rndrawer');
+rnDrawer.addEventListener('click', e => {
+  if (e.target === rnDrawer || e.target.closest('[data-close]')) return rnDrawer.close();
+  const c = e.target.closest('[data-rn="cancel"]');
+  if (c) startCancelRental(c.dataset.ref);
+});
+
 function showRentalDetails(ref) {
-  const lines = RENTALS.filter(r => r.rentalRef === ref), r0 = lines[0];
-  if (!r0) return;
-  const out = r0.type === 'out';
-  let rows = '';
+  const o = rentalOrders().find(x => x.rentalRef === ref);
+  if (!o) return;
+  const out = o.type === 'out', r0 = o.lines[0];
+  const hrs = out ? Math.max(8, Math.ceil(r0.hours || 8)) : 0, factor = out ? hrs / 8 : 1;
+  const lineTotal = l => l.unit * l.qty * factor;
+  const base = sum(o.lines.map(l => l.unit * l.qty)), total = sum(o.lines.map(lineTotal));
+  const canCancel = ['Pending', 'Approved'].includes(o.rawStatus);
+
+  let money = `<div class="dr-sum"><div><span>${out ? 'Rental (first 8 hours)' : 'Add-on equipment'}</span><span>${peso(base)}</span></div>`;
+  if (out && hrs > 8) money += `<div><span>Extra hours (${hrs - 8} x ${peso(base / 8)})</span><span>${peso(total - base)}</span></div>`;
+  money += `<div class="tot-line"><b>Total</b><b>${peso(total)}</b></div>`;
   if (out) {
-    const hrs = Math.max(8, Math.ceil(r0.hours || 8));
-    const total = sum(lines.map(r => r.unit * r.qty * hrs / 8));
     const due = r0.due ? new Date(r0.due) : null, now = Date.now();
-    const accruing = due ? lines.filter(r => r.rawStatus === 'Active' && !r.returnedAt && now > due) : [];
-    const fee = sum(lines.map(r => r.late)) + sum(accruing.map(r => r.qty * r.unit / 8 * Math.ceil((now - due) / 3600e3)));
-    rows = `<dt>Rental length</dt><dd>${hrs} hours billed</dd>
-      <dt>Total</dt><dd>${peso(total)}</dd>
-      <dt>Down payment</dt><dd>${peso(r0.down)} <span class="mut">(non-refundable if cancelled)</span></dd>
-      <dt>Balance at pick-up</dt><dd>${peso(Math.max(0, total - r0.down))}</dd>
-      ${fee > 0 ? `<dt>Late fee</dt><dd><b>${peso(fee)}</b> <span class="mut">${accruing.length ? 'so far, ' : ''}paid at the studio</span></dd>` : ''}`;
+    const accruing = due ? o.lines.filter(l => l.rawStatus === 'Active' && !l.returnedAt && now > due) : [];
+    const fee = sum(o.lines.map(l => l.late)) + sum(accruing.map(l => l.qty * l.unit / 8 * Math.ceil((now - due) / 3600e3)));
+    money += `<div><span>Down payment (50%, non-refundable if cancelled)</span><span>${peso(r0.down)}</span></div>
+      <div><span>Balance to pay at pick-up</span><span>${peso(Math.max(0, total - r0.down))}</span></div>` +
+      (fee > 0 ? `<div><span>Late fee ${accruing.length ? 'so far' : ''}</span><b style="color:var(--bad)">${peso(fee)}</b></div>` : '');
   }
-  showDialog(`
-    <div class="row"><h2 style="margin:0">${esc(r0.ref)}</h2>${badge(r0.status)}</div>
-    <dl class="dl">
-      <dt>Rent type</dt><dd>${out ? 'Outside rent' : 'Add-on to a studio booking'}</dd>
-      <dt>Equipment</dt><dd>${lines.map(r => `${esc(r.item)} x${r.qty}`).join('<br>')}</dd>
-      <dt>${out ? 'Pick-up' : 'Session'}</dt><dd>${r0.when}</dd>
-      <dt>${out ? 'Return by' : 'Ends'}</dt><dd>${r0.ret}</dd>
-      ${rows}
-    </dl>
-    ${r0.status === 'Rejected' ? `<div class="alert">${whyRejected(r0.status, r0.reason)}</div>` : ''}
-    ${out ? '<p class="mut">Each hour beyond 8 hours adds one-eighth of the item price. Returning late adds the same charge for every hour late.</p>' : ''}
-    <div class="acts"><button class="btn line" data-close>Close</button></div>`);
+  money += '</div>';
+
+  rnDrawer.innerHTML = `
+    <div class="dr">
+      <div class="row">
+        <div><p class="mut" style="margin:0">Rental order</p><h2 style="margin:0">${esc(o.ref)}</h2></div>
+        <button type="button" class="btn sm line" data-close aria-label="Close details">Close</button>
+      </div>
+      <div>${badge(o.status)} ${out ? '<span class="b out">Outside</span>' : '<span class="b addon">Add-on</span>'}</div>
+      ${o.status === 'Rejected' ? `<div class="alert">${whyRejected(o.status, o.reason)}</div>` : ''}
+
+      <h3>${out ? 'Pick-up and return' : 'Studio session'}</h3>
+      <dl class="dl">
+        <dt>${out ? 'Pick-up' : 'Starts'}</dt><dd>${o.when}</dd>
+        <dt>${out ? 'Return by' : 'Ends'}</dt><dd>${o.ret}</dd>
+        ${out ? `<dt>Billed length</dt><dd>${hrs} hours</dd>` : `<dt>Booking</dt><dd>${esc(o.ref)}</dd>`}
+      </dl>
+
+      <h3>Items (${sum(o.lines.map(l => l.qty))})</h3>
+      <div class="dr-items">
+        ${o.lines.map(l => `
+          <div class="dr-item">
+            <div><b>${esc(l.item)}</b><div class="mut">${l.qty} x ${peso(l.unit)} ${out ? 'per 8 hours' : 'each'}${l.returnedAt ? ' &middot; Returned' : ''}</div></div>
+            <b>${peso(lineTotal(l))}</b>
+          </div>`).join('')}
+      </div>
+
+      <h3>Summary</h3>
+      ${money}
+      ${out ? '<p class="mut">Each hour beyond 8 hours adds one-eighth of the item price. Returning late adds the same charge for every hour late.</p>' : ''}
+      <div class="acts">
+        ${canCancel ? `<button type="button" class="btn bad" data-rn="cancel" data-ref="${esc(o.rentalRef)}">Cancel rental</button>` : ''}
+        <button type="button" class="btn line" data-close>Close</button>
+      </div>
+    </div>`;
+  rnDrawer.showModal();
+}
+
+function startCancelRental(ref) {
+  const r = RENTALS.find(x => x.rentalRef === ref);
+  if (!r) return;
+  if (rentalLocked(r)) return toast(rentalCutoffMsg(r));
+  if (rnDrawer.open) rnDrawer.close();
+  confirmCancelRental(ref);
 }
 
 function confirmCancelRental(ref) {
-  const lines = RENTALS.filter(r => r.rentalRef === ref), r0 = lines[0];
-  if (!r0) return;
-  const out = r0.type === 'out';
+  const o = rentalOrders().find(x => x.rentalRef === ref);
+  if (!o) return;
+  const out = o.type === 'out';
   showDialog(`
-    <h2>Cancel ${esc(r0.ref)}?</h2>
-    <p class="mut">${lines.map(r => `${esc(r.item)} x${r.qty}`).join(', ')}.</p>
+    <h2>Cancel ${esc(o.ref)}?</h2>
+    <p class="mut">${itemSummary(o.lines, true)}</p>
     <p class="mut" style="margin-top:8px">${out
-      ? `Your 50% down payment of <b>${peso(r0.down)}</b> is <b>non-refundable</b> once the rental is cancelled.`
+      ? `Your 50% down payment of <b>${peso(o.lines[0].down)}</b> is <b>non-refundable</b> once the rental is cancelled.`
       : 'The add-on equipment is removed from your booking. Your studio booking stays as it is.'}</p>
     <div class="acts">
       <button class="btn line" data-close>Keep rental</button>
@@ -1107,7 +1180,7 @@ function confirmCancelRental(ref) {
     if (error) return toast(error.message);
     dlg.close();
     await loadMyRentals();
-    toast(`${r0.ref} cancelled.`);
+    toast(`${o.ref} cancelled.`);
   };
 }
 
@@ -1115,11 +1188,8 @@ function initMyRentals() {
   $('#myrent').addEventListener('click', e => {
     const b = e.target.closest('[data-rn]');
     if (!b) return;
-    const r = RENTALS.find(x => x.rentalRef === b.dataset.ref);
-    if (!r) return;
     if (b.dataset.rn === 'details') return showRentalDetails(b.dataset.ref);
-    if (rentalLocked(r)) return toast(rentalCutoffMsg(r));
-    confirmCancelRental(b.dataset.ref);
+    startCancelRental(b.dataset.ref);
   });
 }
 

@@ -54,7 +54,7 @@
       <section id="a-rent" class="pg"><h1>Rentals</h1><p class="sub">Customer rental requests grouped by order. Outside rentals use an OUT- number. Use the Overdue filter to see equipment not returned by its return date.</p><div id="arn"></div></section>
 
 
-      <section id="a-pay" class="pg"><h1>Payments</h1><p class="sub">Check each GCash reference or cash receipt, then verify or reject.</p><div class="card" id="apy"></div></section>
+      <section id="a-pay" class="pg"><h1>Payments</h1><p class="sub">Open a payment with Verify to check the GCash reference, the booking or rental details and the customer's ID, then verify or reject.</p><div class="card" id="apy"></div></section>
       <section id="a-cust" class="pg"><h1>Customers</h1><p class="sub">Contact details and history.</p><input id="cu-q" placeholder="Search customers" style="max-width:280px;margin-bottom:12px"><div class="card tw" id="acu"></div></section>
 
       <section id="a-rep" class="pg"><h1>Reports</h1><p class="sub">What happened during a selected period.</p>
@@ -73,6 +73,7 @@
   </main>
 
   <dialog class="dlg" id="rdlg" aria-label="Rental request"></dialog>
+  <dialog class="drawer wide" id="vdr" aria-label="Verify transaction"></dialog>
   <dialog class="dlg" id="eqdlg" aria-label="Equipment form"></dialog>
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 

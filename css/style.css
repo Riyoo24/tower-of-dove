@@ -407,3 +407,21 @@ tr.has-why td { border-bottom: 0; }
 .shot b { color: var(--warn); }
 .slots button.past:disabled { opacity: .45; }
 
+/* ===== My Rental: grouped order rows and the side drawer ===== */
+.itm { display: inline-block; max-width: 280px; white-space: normal; line-height: 1.4; }
+dialog.drawer { position: fixed; inset: 0 0 0 auto; margin: 0; width: min(480px, 100vw); max-width: 100vw; height: 100dvh; max-height: 100dvh; padding: 0; border: 0; border-left: 1px solid var(--line); border-radius: 16px 0 0 16px; background: var(--surface); color: var(--ink); overflow: auto; box-shadow: -20px 0 60px #0B0B0D66; }
+dialog.drawer::backdrop { background: #0B0B0D99; }
+dialog.drawer[open] { animation: drawer-in .22s ease-out; }
+@keyframes drawer-in { from { transform: translateX(100%); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) { dialog.drawer[open] { animation: none; } }
+.dr { display: grid; gap: 14px; padding: 22px; }
+.dr h3 { margin: 6px 0 0; font-size: 14px; }
+.dr-items { display: grid; gap: 8px; }
+.dr-item { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.dr-sum { display: grid; gap: 6px; font-size: 14px; color: var(--mut); }
+.dr-sum > div { display: flex; justify-content: space-between; gap: 12px; }
+.dr-sum .tot-line { padding-top: 8px; border-top: 1px dashed var(--line); color: var(--ink); font-size: 15px; }
+
+/* ===== Verify drawer (dashboard) ===== */
+dialog.drawer.wide { width: min(620px, 100vw); }
+
