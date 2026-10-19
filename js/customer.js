@@ -319,7 +319,8 @@ async function openBook(startIndex) {
         <button type="button" class="btn line sm" id="bk-ad-open" style="margin-top:8px">Browse equipment</button>
 
         <label for="bk-m">Payment method</label>
-        <select id="bk-m"><option>GCash</option><option>Cash</option></select>
+        <div class="payfix"><b>GCash</b> <span class="mut">Online bookings are paid with GCash only.</span></div>
+        <input type="hidden" id="bk-m" value="GCash">
         <div id="bk-gw">
           <div class="gq">
             <img id="bk-qr" alt="GCash QR code to scan" hidden>
@@ -668,7 +669,32 @@ function renderCart() {
   renderDuration();
 }
 
+/* A guest has no account, so they type the booking reference code. The booking must exist, belong to
+   a guest booking (the database hides registered accounts' bookings) and still be open. */
+let attachBooking = null;   // { ref, text } once the guest's code has been found
+
+async function findGuestBooking() {
+  const info = $('#lb-info'), ref = normRef($('#lb-ref').value);
+  attachBooking = null;
+  if (!ref) { info.className = 'mut'; info.textContent = 'Enter the booking reference code first.'; updateRequestButton(); return; }
+  info.className = 'mut'; info.textContent = 'Looking for that booking...';
+  const { data, error } = await sb.rpc('lookup_booking', { p_ref: ref });
+  if (error || !data) {
+    info.className = 'bad-text'; info.textContent = `No booking found for ${ref}. Check the code and try again. If you booked with an account, log in instead.`;
+  } else if (!['Pending', 'Approved', 'In Progress'].includes(data.status)) {
+    info.className = 'bad-text'; info.textContent = `${data.booking_ref} is ${data.status.toLowerCase()}, so equipment can't be added to it.`;
+  } else {
+    const a = manilaParts(data.start_at), z = manilaParts(data.end_at);
+    attachBooking = { ref: data.booking_ref };
+    info.className = 'ok-text';
+    info.textContent = `Found ${data.booking_ref}: ${data.studio}, ${longDate(a.date)}, ${hourLabel(a.hour)} to ${hourLabel(z.hour)}. Current total ${peso(+(data.grand_total ?? data.total))}.`;
+  }
+  updateRequestButton();
+}
+
 function renderRentMode() {
+  $('#fa-member').hidden = !isMember();
+  $('#fa-guest').hidden = isMember();
   $('#fa').hidden = rentMode !== 'addon';
   $('#fo').hidden = rentMode === 'addon';
   $('#fo-guest').hidden = !outBlocked();
@@ -683,7 +709,8 @@ function renderRentMode() {
 
 /* Outside rentals need a member account and an ID file before the request button unlocks. */
 function updateRequestButton() {
-  $('#rq').disabled = rentMode === 'out' && (outBlocked() || !$('#vf').files.length);
+  $('#rq').disabled = rentMode === 'out' ? (outBlocked() || !$('#vf').files.length)
+                                         : (!isMember() && !attachBooking);   // a guest needs a found booking first
 }
 
 /* Bookings an add-on can be attached to: upcoming and not cancelled. */
@@ -753,6 +780,9 @@ function initRentTab() {
   $('#or-agree').addEventListener('change', e => { if (e.target.checked) $('#or-terms').classList.remove('err'); });
   $('#vf').addEventListener('change', updateRequestButton);
   $('#rq').addEventListener('click', requestRental);
+  $('#lb-find').addEventListener('click', findGuestBooking);
+  $('#lb-ref').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); findGuestBooking(); } });
+  $('#lb-ref').addEventListener('input', () => { attachBooking = null; updateRequestButton(); });
 }
 
 async function requestRental() {
@@ -764,16 +794,22 @@ async function requestRental() {
 
   try {
     if (rentMode === 'addon') {
-      const ref = $('#lb').value;
-      if (!ref) return toast('Attach the rental to a studio booking first.');
-      const { data, error } = await sb.rpc('request_rental', { p_type: 'Add-on', p_items: items, p_booking_ref: ref });
+      const ref = isMember() ? $('#lb').value : (attachBooking && attachBooking.ref);
+      if (!ref) return toast(isMember() ? 'Attach the rental to a studio booking first.' : 'Find your booking with its reference code first.');
+      const { error } = await sb.rpc('request_rental', { p_type: 'Add-on', p_items: items, p_booking_ref: ref });
       if (error) return toast(error.message);
+      const added = items.map(x => { const e = EQUIPMENT.find(y => y.id === x.equipment_id); return ['Added', `${e.name} x${x.quantity}`]; });
       cart = {};
       renderCart();
+      await loadMyBookings();
       await loadMyRentals();
-      showSuccess({ title: 'Rental request sent!', label: 'Your reference code', ref,
-        shot: 'It is your official receipt. Show it to our staff when you arrive so we can verify your rental.',
-        note: 'Staff will review your request. You can also use this code to look up your rental later.' });
+      // the booking's total now includes the new equipment
+      const { data: bk } = await sb.rpc('lookup_booking', { p_ref: ref });
+      if (!isMember()) { $('#lb-ref').value = ''; attachBooking = null; $('#lb-info').className = 'mut'; $('#lb-info').textContent = 'Enter the reference code from your booking confirmation. The equipment is added to that booking and its total is updated.'; }
+      showSuccess({ title: 'Equipment added to your booking!', label: 'Booking reference code', ref,
+        lines: [...added, ...(bk ? [['Booking total now', peso(+(bk.grand_total ?? bk.total))]] : [])],
+        shot: 'It is your official receipt. Show it to our staff when you arrive so we can verify your booking and equipment.',
+        note: 'Staff review the equipment request. The new total is shown when you look up this booking.' });
       return;
     }
 

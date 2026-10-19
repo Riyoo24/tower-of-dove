@@ -425,3 +425,12 @@ dialog.drawer[open] { animation: drawer-in .22s ease-out; }
 /* ===== Verify drawer (dashboard) ===== */
 dialog.drawer.wide { width: min(620px, 100vw); }
 
+/* ===== Toggle chips, payment note, find-booking messages, centered Verify window ===== */
+.chip.on { background: var(--sel); color: var(--sel-fg); border-color: var(--sel); font-weight: 600; }
+.chip.on::before { content: "\2713  "; }
+.chip:focus-visible { outline: 2px solid var(--brand-hi); outline-offset: 2px; }
+.payfix { padding: 10px 12px; border: 1px solid var(--field-bd); border-radius: 8px; background: var(--field); }
+.ok-text { color: var(--ok); font-size: 13.5px; }
+.bad-text { color: var(--bad); font-size: 13.5px; }
+.dlg.verify { max-width: 640px; }
+

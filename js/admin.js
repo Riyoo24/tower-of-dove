@@ -113,6 +113,7 @@ async function refresh(poll) {
   if (polling) return;
   polling = true;
   try {
+    try { await sb.rpc('start_due_sessions'); } catch (e) { /* needs 11_cash_autostart_addons.sql */ }   // sessions whose time has come start by themselves
     if (!(await loadAll())) return;
     renderAll(poll);
     if (!poll) renderForms();
@@ -182,11 +183,11 @@ function bkActions(b) {
   return btn('bk-det', id, 'Details', 1);
 }
 function renderBookings() {
-  const q = ($('#bk-q').value || '').toLowerCase(), sid = $('#bk-s').value, d = $('#bk-d').value;
+  const q = ($('#bk-q').value || '').toLowerCase(), sid = $('#bk-s').value, d = $('#bk-d').value, src = $('#bk-src').value;
   const rows = BK.filter(b =>
     (bkF === 'All' || bkStatus(b.status) === bkF) &&
     (!q || `${b.booking_ref} ${b.customer_name} ${b.customer_number || ''}`.toLowerCase().includes(q)) &&
-    (!sid || String(b.studio_id) === sid) && (!d || dOf(b.start_at) === d));
+    (!sid || String(b.studio_id) === sid) && (!d || dOf(b.start_at) === d) && (!src || b.source === src));
   $('#abk').innerHTML = tabsHtml(BK_TABS, bkF, 'bf') + '<div class="tw">' + tbl(
     ['Reference', 'Customer', 'Studio', 'Date', 'Time', 'Duration', 'Status', 'Payment', 'Actions'],
     rows.map(b => [b.booking_ref, esc(b.customer_name) + (b.is_guest ? ' <span class="mut">(guest)</span>' : ''), esc(b.studio_name),
@@ -194,7 +195,7 @@ function renderBookings() {
       badge(bkStatus(b.status)), badge(b.payment_status || 'Pending'), bkActions(b)])) + '</div>';
 }
 $('#abk').addEventListener('click', e => { const t = e.target.closest('[data-bf]'); if (t) { bkF = t.dataset.bf; renderBookings(); } });
-['#bk-q', '#bk-s', '#bk-d'].forEach(s => $(s).addEventListener('input', renderBookings));
+['#bk-q', '#bk-s', '#bk-d', '#bk-src'].forEach(s => $(s).addEventListener('input', renderBookings));
 
 /* the small dialog and the Verify drawer both close after an action */
 const closeOverlays = () => { if (dlg.open) dlg.close(); if (vdr.open) vdr.close(); };
@@ -276,7 +277,7 @@ function renderSessions() {
   const soonHtml = soon.map(b => `<div class="card"><div class="row"><h3>${esc(b.studio_name)}</h3>${badge('Confirmed')}</div>
       <p style="margin:8px 0">${esc(b.customer_name)}</p><p class="mut">${tOf(b.start_at)} to ${tOf(b.end_at)}, today</p>${btn('bk-go', b.booking_ref, 'Start session')}</div>`).join('');
   $('#asess').innerHTML = `<div class="grid ge">${liveHtml || '<div class="card"><p class="mut">No sessions in progress.</p></div>'}</div>` +
-    (soonHtml ? `<h2 style="margin:24px 0 12px">Confirmed for today</h2><div class="grid ge">${soonHtml}</div>` : '');
+    (soonHtml ? `<h2 style="margin:24px 0 4px">Confirmed for today</h2><p class="mut" style="margin:0 0 12px">A confirmed session starts by itself when its time begins. You can also start it earlier with Start session.</p><div class="grid ge">${soonHtml}</div>` : '');
 }
 
 
@@ -419,7 +420,7 @@ function eqForm(id) {
              : `<div><label for="eqa">Add-on price (₱)</label><input id="eqa" type="number" min="0" value="${num(c.add_on_rate)}"></div><div><label for="eqo">Outside price (₱)</label><input id="eqo" type="number" min="0" value="${num(c.outside_rate)}"></div>`}
     </div>
     <p class="mut" style="margin-top:6px">Add-on is per session (drum sets per rental). Outside is per 8 hours: each extra hour adds one-eighth, and late returns add the same one-eighth per hour late.</p>
-    <label>Rent options</label><div><button type="button" class="chip ${ad ? 'on' : ''}" id="eqx-ad">Add-on</button><button type="button" class="chip ${ou ? 'on' : ''}" id="eqx-ou">Outside</button></div>
+    <label>Rent options</label><div><button type="button" class="chip ${ad ? 'on' : ''}" id="eqx-ad" aria-pressed="${ad}">Add-on</button><button type="button" class="chip ${ou ? 'on' : ''}" id="eqx-ou" aria-pressed="${ou}">Outside</button></div>
     <label>Equipment image</label><div class="eqimg prev" id="eq-prev"></div>
     <input id="eq-file" type="file" accept="image/*" aria-label="Attach an image">
     <label for="eq-url" style="margin-top:14px">Or paste an image link</label><input id="eq-url" placeholder="https://example.com/photo.jpg">
@@ -432,8 +433,15 @@ function eqForm(id) {
   $('#eq-file').onchange = ev => { const f = ev.target.files[0]; if (!f) return; if (!/^image\//.test(f.type)) { err('Please choose an image file.'); ev.target.value = ''; return; } err(''); file = f; img = URL.createObjectURL(f); $('#eq-url').value = ''; prev(); };
   $('#eq-url').onchange = ev => { const v = ev.target.value.trim(); if (!v) return; if (!/^https?:\/\//i.test(v)) return err('Enter a full link starting with http:// or https://'); err(''); file = null; img = v; prev(); };
   $('#eq-rm').onclick = () => { img = ''; file = null; $('#eq-file').value = ''; $('#eq-url').value = ''; err(''); prev(); };
-  $('#eqx-ad').onclick = ev => { ad = !ad; ev.target.classList.toggle('on', ad); };
-  $('#eqx-ou').onclick = ev => { ou = !ou; ev.target.classList.toggle('on', ou); };
+  // a price box is only used while its option is switched on
+  const syncPrices = () => {
+    if (drum) $('#eqa').disabled = !(ad || ou);
+    else { $('#eqa').disabled = !ad; $('#eqo').disabled = !ou; }
+  };
+  const toggle = (id, on) => { const b = $(id); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); syncPrices(); };
+  $('#eqx-ad').onclick = () => { ad = !ad; toggle('#eqx-ad', ad); };
+  $('#eqx-ou').onclick = () => { ou = !ou; toggle('#eqx-ou', ou); };
+  syncPrices();
   $('#eq-cancel').onclick = () => d.close();
   $('#eqf').onsubmit = async ev => {
     ev.preventDefault();
@@ -444,6 +452,8 @@ function eqForm(id) {
     if (!isNew && t < num(c.in_use)) return err(`Total stock can't be lower than the ${c.in_use} item(s) in use right now.`);
     if (!(a >= 0) || !(o >= 0)) return err('Prices must be 0 or more.');
     if (!ad && !ou) return err('Pick at least one rent option.');
+    if (ad && !(a > 0)) return err('Enter an add-on price above 0.');
+    if (ou && !(o > 0)) return err('Enter an outside price above 0.');
     const row = { description: $('#eqd').value.trim() || null, category_id: cat, total_quantity: t,
       add_on_rate: ad ? a : null, outside_rate: ou ? o : null, allow_addon: ad, allow_outside: ou, min_hours: (ou || drum) ? 8 : 0, image: img || null };
     try { if (file) row.image = await uploadPublic('equipment-images', file); } catch (x) { return err('Image upload failed: ' + x.message); }
@@ -472,32 +482,42 @@ const dueLabel = l => !l.due_at ? '-' : shortDate(dOf(l.due_at)) + ', ' + tOf(l.
 function groups() {
   const map = new Map();
   RL.forEach(l => {
-    if (!map.has(l.rental_ref)) map.set(l.rental_ref, { ref: l.rental_ref, type: l.rental_type, status: l.status, customer: l.customer_name, phone: l.customer_number, booking: l.booking_ref, reason: l.rejected_reason, lines: [] });
+    if (!map.has(l.rental_ref)) map.set(l.rental_ref, { ref: l.rental_ref, type: l.rental_type, source: l.source, status: l.status, customer: l.customer_name, phone: l.customer_number, booking: l.booking_ref, reason: l.rejected_reason, lines: [] });
     map.get(l.rental_ref).lines.push(l);
   });
   return [...map.values()];
 }
 const gMatch = (g, f) => f === 'All' || (f === 'Overdue' ? g.lines.some(l => l.days_overdue > 0) : f === 'Due today' ? g.lines.some(l => l.status === 'Active' && dueToday(l)) : rnStatus(g.status) === f);
 
-function rnActions(g) {
-  // Verify opens the transaction in the Payments tab (ID, down payment, items, approve or reject)
-  if (g.status === 'Pending') return btn('rn-verify', g.ref, 'Verify');
-  if (g.status === 'Approved') return btn('rn-issue', g.ref, 'Issue') + btn('rn-verify', g.ref, 'Verify', 1);
-  if (g.status === 'Active') return btn('rn-ret', g.ref, 'Process return') + btn('rn-verify', g.ref, 'Verify', 1);
-  return btn('rn-verify', g.ref, 'Verify', 1);
+/* Verify is shown only while something still has to be verified: the rental itself is Pending,
+   or its payment (an add-on rides on its booking's payment) is Pending. After that it is a Details button. */
+function needsVerify(g) {
+  if (g.status === 'Pending') return true;
+  const own = PAY.find(p => p.reference === g.ref);
+  if (own && own.status === 'Pending') return true;
+  if (g.type === 'Add-on' && g.booking) { const bp = PAY.find(p => p.reference === g.booking && p.kind === 'Booking'); if (bp && bp.status === 'Pending') return true; }
+  return false;
 }
+function rnActions(g) {
+  if (needsVerify(g)) return btn('rn-verify', g.ref, 'Verify');            // opens the Verify window in the Payments tab
+  if (g.status === 'Approved') return btn('rn-issue', g.ref, 'Issue') + btn('rn-det', g.ref, 'Details', 1);
+  if (g.status === 'Active') return btn('rn-ret', g.ref, 'Process return') + btn('rn-det', g.ref, 'Details', 1);
+  return btn('rn-det', g.ref, 'Details', 1);
+}
+let rsrc = '';
 function renderRentals() {
   const gs = groups();
-  const list = gs.filter(g => gMatch(g, rf));
+  const list = gs.filter(g => gMatch(g, rf) && (!rsrc || g.source === rsrc));
   if (rf === 'Overdue') list.sort((a, b) => Math.max(...b.lines.map(l => l.days_overdue)) - Math.max(...a.lines.map(l => l.days_overdue)));
   const cnt = f => f === 'Overdue' ? ' (' + gs.filter(g => gMatch(g, 'Overdue')).length + ')' : f === 'Pending' ? ' (' + gs.filter(g => g.status === 'Pending').length + ')' : '';
-  $('#arn').innerHTML = `<div class="tabs">${RF.map(x => `<button data-rf="${x}" class="${x === rf ? 'on' : ''}">${x}${cnt(x)}</button>`).join('')}</div>` +
+  $('#arn').innerHTML = `<div class="row" style="margin-bottom:10px;justify-content:flex-start"><select id="rn-src" style="max-width:190px" aria-label="Rental source"><option value="">Online and onsite</option><option value="Online" ${rsrc === 'Online' ? 'selected' : ''}>Online rentals</option><option value="Onsite" ${rsrc === 'Onsite' ? 'selected' : ''}>Onsite rentals</option></select></div><div class="tabs">${RF.map(x => `<button data-rf="${x}" class="${x === rf ? 'on' : ''}">${x}${cnt(x)}</button>`).join('')}</div>` +
     '<div class="card"><div class="tw">' + tbl(['Order', 'Customer', 'Items', 'Rent type', 'Status', 'Actions'],
-      list.map(g => [`<button class="lk" data-act="rn-verify" data-id="${esc(g.ref)}">${esc(g.type === 'Add-on' ? (g.booking || g.ref) : g.ref)}</button>`,
+      list.map(g => [`<button class="lk" data-act="${needsVerify(g) ? 'rn-verify' : 'rn-det'}" data-id="${esc(g.ref)}">${esc(g.type === 'Add-on' ? (g.booking || g.ref) : g.ref)}</button>`,
         esc(g.customer), g.lines.length === 1 ? esc(g.lines[0].equipment_name) + ' x' + g.lines[0].quantity : g.lines.length + ' items',
         TYB[g.type], badge(rnStatus(g.status)), rnActions(g)])) + '</div></div>';
 }
 $('#arn').addEventListener('click', e => { const t = e.target.closest('[data-rf]'); if (t) { rf = t.dataset.rf; renderRentals(); } });
+$('#arn').addEventListener('change', e => { if (e.target.id === 'rn-src') { rsrc = e.target.value; renderRentals(); } });
 
 const setRental = async (ref, status, reason) => {
   const patch = { status }; if (reason) patch.rejected_reason = reason;
@@ -562,9 +582,9 @@ const reasonPicker = () => `<label for="v-reason">Reason if rejecting (the custo
   <select id="v-reason">${REASONS_RENTAL.map(r => `<option>${r}</option>`).join('')}</select>
   <div id="v-other-wrap" hidden><label for="v-other">Message to customer</label><input id="v-other" maxlength="300" placeholder="Describe the reason"></div>`;
 const pickedReason = () => { const r = $('#v-reason').value; return r === 'Other' ? ($('#v-other').value.trim() || 'Other') : r; };
-const drawerShell = (title, ref, badges, body) => `<div class="dr">
+const drawerShell = (title, ref, badges, body) => `<div class="in"><div class="dr" style="padding:0">
   <div class="row"><div><p class="mut" style="margin:0">${title}</p><h2 style="margin:0">${esc(ref)}</h2></div><button type="button" class="btn sm line" data-close aria-label="Close">Close</button></div>
-  <div>${badges}</div>${body}</div>`;
+  <div>${badges}</div>${body}</div></div>`;
 
 /* work out which booking or rental a Verify button means */
 function resolveTx(key) {
@@ -626,7 +646,9 @@ function drawBookingTx(tx) {
   if (ad.length) {
     body += `<h3>Add-on equipment</h3><div class="dr-items">${ad.map(l => `<div class="dr-item"><div><b>${esc(l.equipment_name)}</b><div class="mut">${l.quantity} x ${money(l.unit_price_at_request)} ${badge(rnStatus(l.status))}</div></div><b>${money(num(l.unit_price_at_request) * l.quantity)}</b></div>`).join('')}</div>`;
   }
-  body += `<h3>Amount</h3><div class="dr-sum"><div><span>Studio</span><span>${money(studio)}</span></div>${adTotal ? `<div><span>Add-on equipment</span><span>${money(adTotal)}</span></div>` : ''}<div class="tot-line"><b>To pay</b><b>${money(pay ? pay.amount : studio + adTotal)}</b></div></div>
+  const grand = studio + adTotal, paidOk = pay && pay.status === 'Verified' ? num(pay.amount) : 0, balance = pay && pay.status === 'Verified' ? Math.max(0, grand - paidOk) : 0;
+  body += `<h3>Amount</h3><div class="dr-sum"><div><span>Studio</span><span>${money(studio)}</span></div>${adTotal ? `<div><span>Add-on equipment</span><span>${money(adTotal)}</span></div>` : ''}<div class="tot-line"><b>Booking total</b><b>${money(grand)}</b></div>
+    ${balance > 0 ? `<div><span>Already paid (verified)</span><span>${money(paidOk)}</span></div><div><span>Add-on balance to collect</span><b style="color:var(--warn)">${money(balance)}</b></div>` : ''}</div>
     <h3>Payment</h3>${payBlock(pay, studio + adTotal)}`;
 
   if (needsCheck) {
@@ -646,7 +668,7 @@ function drawBookingTx(tx) {
     if (b.status === 'In Progress') acts.push(btn('bk-done', b.booking_ref, 'Mark completed'));
     body += `<div class="acts"><button class="btn line" data-close>Close</button>${acts.join('')}</div>`;
   }
-  vdr.innerHTML = drawerShell('Verify booking', b.booking_ref, `<span class="mut">Booking</span> ${badge(bkStatus(b.status))} ` + (pay ? `<span class="mut">Payment</span> ${badge(pay.status)}` : ''), body);
+  vdr.innerHTML = drawerShell(needsCheck ? 'Verify booking' : 'Booking details', b.booking_ref, `<span class="mut">Booking</span> ${badge(bkStatus(b.status))} ` + (pay ? `<span class="mut">Payment</span> ${badge(pay.status)}` : ''), body);
   wireChecks();
 }
 
@@ -696,7 +718,7 @@ function drawRentalTx(tx) {
     const acts = g.status === 'Approved' ? btn('rn-issue', g.ref, 'Issue equipment') : g.status === 'Active' ? btn('rn-ret', g.ref, 'Return everything') : '';
     body += `<div class="acts"><button class="btn line" data-close>Close</button>${acts}</div>`;
   }
-  vdr.innerHTML = drawerShell('Verify rental', g.type === 'Add-on' ? (g.booking || g.ref) : g.ref, `<span class="mut">Rental</span> ${badge(rnStatus(g.status))} ` + (pay ? `<span class="mut">Payment</span> ${badge(pay.status)}` : ''), body);
+  vdr.innerHTML = drawerShell(needApprove || payPending ? 'Verify rental' : 'Rental details', g.type === 'Add-on' ? (g.booking || g.ref) : g.ref, `<span class="mut">Rental</span> ${badge(rnStatus(g.status))} ` + (pay ? `<span class="mut">Payment</span> ${badge(pay.status)}` : ''), body);
   wireChecks();
   if (out) loadRentalId(g.ref, 'v-id');
 }
@@ -726,7 +748,7 @@ ACT['v-rn-reject'] = ref => setRental(ref, 'Rejected', pickedReason());
 ACT['pay-verify'] = id => openVerify({ paymentId: id });
 ACT['bk-verify'] = ref => verifyFromTab({ bookingRef: ref });
 ACT['rn-verify'] = ref => verifyFromTab({ rentalRef: ref });
-ACT['rn-det'] = ACT['rn-verify'];
+ACT['rn-det'] = ref => openVerify({ rentalRef: ref });   // Details: open it right here, no redirect
 
 
 /* ============================ 8. CUSTOMERS ============================ */
@@ -888,21 +910,6 @@ if (addStaffBtn) addStaffBtn.onclick = () => { if (OWNER) staffForm(); else toas
 /* ============================ 10. ONSITE BOOKING & RENTAL ============================ */
 
 const nameParts = n => { const [first, ...rest] = n.trim().split(/\s+/); return [first, rest.join(' ')]; };
-
-function renderOnsiteLog() {
-  const payBy = {}; PAY.forEach(p => { payBy[p.reference] = p; });
-  const rows = [];
-  BK.filter(b => b.source === 'Onsite').forEach(b => rows.push([b.created_at, 'Studio booking', b.booking_ref, esc(b.customer_name),
-    `${esc(b.studio_name)}, ${shortDate(dOf(b.start_at))} ${tOf(b.start_at)} (${pl(Math.round(num(b.hours)), 'hr')})`, money(b.total_amount), esc(b.payment_method || '')]));
-  groups().filter(g => RL.find(l => l.rental_ref === g.ref).source === 'Onsite').forEach(g => {
-    const p = payBy[g.ref];
-    rows.push([g.lines[0].created_at, g.type === 'Add-on' ? 'Rental (add-on)' : 'Rental (outside)', g.type === 'Add-on' ? (g.booking || g.ref) : g.ref, esc(g.customer),
-      g.lines.map(l => esc(l.equipment_name) + ' x' + l.quantity).join(', ') + ', return ' + dueLabel(g.lines[0]), p ? money(p.amount) : '-', p ? esc(p.method) : '']);
-  });
-  rows.sort((a, b) => new Date(b[0]) - new Date(a[0]));
-  const out = rows.slice(0, 40).map(r => [stampLabel(r[0]), ...r.slice(1)]);
-  ['ob-log', 'or-log'].forEach(id => tb(id, ['Time', 'Type', 'Ref', 'Customer', 'Details', 'Amount', 'Payment'], out));
-}
 
 function renderForms() {
   setOpts($('#ob-s'), STUDIOS.map((s, i) => ['Maintenance', 'Unavailable'].includes(s.status) ? '' : `<option value="${i}">Studio ${esc(s.id)}, ${money(s.rate)}/hr</option>`).join(''));
@@ -1116,7 +1123,7 @@ $('#a-rep').addEventListener('click', e => {
 function renderAll(poll) {
   setOpts($('#bk-s'), '<option value="">All studios</option>' + STU.map(s => `<option value="${s.studio_id}">${esc(s.name)}</option>`).join(''));
   renderOverview(); renderBookings(); renderPayments(); renderSessions(); renderStudios();
-  renderEquipmentTab(); renderRentals(); renderCustomers(); renderStaff(); renderOnsiteLog();
+  renderEquipmentTab(); renderRentals(); renderCustomers(); renderStaff();
   if (!poll || location.hash === '#a-rep') renderReports();
 }
 

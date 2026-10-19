@@ -64,8 +64,18 @@
             <div class="bkt" id="rsum" hidden></div>
 
             <div id="fa">
-              <label for="lb">Attach to booking</label>
-              <select id="lb"></select>
+              <div id="fa-member">
+                <label for="lb">Attach to booking</label>
+                <select id="lb"></select>
+              </div>
+              <div id="fa-guest" hidden>
+                <label for="lb-ref">Booking reference code</label>
+                <div style="display:flex;gap:8px">
+                  <input id="lb-ref" placeholder="e.g. TOD-9F3A21C7" autocomplete="off">
+                  <button type="button" class="btn line sm" id="lb-find" style="flex:none">Find booking</button>
+                </div>
+                <p class="mut" id="lb-info" style="margin-top:6px">Enter the reference code from your booking confirmation. The equipment is added to that booking and its total is updated.</p>
+              </div>
             </div>
 
             <div id="fo" hidden>
