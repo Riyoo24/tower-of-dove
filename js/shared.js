@@ -152,6 +152,14 @@ function isPastSlot(dateISO, i) {
   return dateISO < now.date || (dateISO === now.date && 10 + i <= now.hour);
 }
 
+/* Dates on the studio's clock (Manila), whatever the visitor's device says. */
+const manilaDay = n => manilaParts(new Date(Date.now() + n * 864e5)).date;
+
+/* After the last start time of the day (the studio closes at 10 PM, the last hour you can start is
+   9 PM) nothing more can be booked today, so the first day that can be booked is tomorrow. */
+const todayIsClosed = () => SLOTS.every((_, i) => isPastSlot(manilaDay(0), i));
+const firstBookableDate = () => manilaDay(todayIsClosed() ? 1 : 0);
+
 /* Slots held (not booked) by someone else right now. */
 const heldSlots = (studioIdx, dateISO) => new Set(HELD[STUDIOS[studioIdx].dbId + '|' + dateISO] || []);
 
@@ -253,7 +261,17 @@ async function logout() {
 
 // the Supabase session ended (expired or signed out elsewhere): forget the cached user
 sb.auth.getSession().then(({ data }) => {
-  if (!data.session && getUser()) { clearUser(); location.reload(); }
+  if (!data.session && getUser()) { clearUser(); location.reload(); return; }
+  // a customer whose account staff disabled is signed out
+  const u = getUser();
+  if (data.session && data.session.user && u && u.role === 'customer') {
+    sb.from('customer').select('status').eq('auth_user_id', data.session.user.id).maybeSingle().then(({ data: c }) => {
+      if (c && c.status === 'Inactive') {
+        try { sessionStorage.setItem('tod_notice', 'This account has been disabled. Please contact the studio.'); } catch (e) { /* ignore */ }
+        sb.auth.signOut().finally(() => { clearUser(); location.href = ROOT + 'pages/login.html#login'; });
+      }
+    });
+  }
 });
 
 // the dashboard is for owner and staff only

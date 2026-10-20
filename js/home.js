@@ -56,7 +56,7 @@ function renderEquipment() {
     if (e.outside) lines.push(`<div><span class="b out">Outside</span> ${peso(e.outsidePrice)} per 8 hours (1/8 per extra hour)</div>`);
 
     const sub = e.drum
-      ? `${e.drum.kit}, ${e.drum.vip ? 'VIP' : 'Basic'} set-up. 8 hrs minimum, no service.`
+      ? `${e.drum.kit}, ${e.drum.vip ? 'VIP' : 'Basic'} set-up. 8-hour base rental, no service.`
       : `${e.stock} available`;
 
     return `
@@ -128,8 +128,12 @@ async function checkAvailability() {
     box.innerHTML = '<div class="card"><h3>Pick a date</h3><p class="mut">Choose a date, then check availability again.</p></div>';
     return;
   }
-  if (date < TODAY) {
-    box.innerHTML = '<div class="card"><h3>That date has passed</h3><p class="mut">Pick today or a later date.</p></div>';
+  if (date < manilaDay(0)) {
+    box.innerHTML = '<div class="card"><h3>That date has passed</h3><p class="mut">Pick a date from ' + longDate(firstBookableDate()) + ' onward.</p></div>';
+    return;
+  }
+  if (date < firstBookableDate()) {
+    box.innerHTML = '<div class="card"><h3>The studio is closed for today</h3><p class="mut">Pick ' + longDate(firstBookableDate()) + ' or a later date.</p></div>';
     return;
   }
   const nowIdx = SLOTS.map((_, k) => k).filter(k => !isPastSlot(date, k));
@@ -168,21 +172,22 @@ async function checkAvailability() {
 /* Start-time choices: every hour, but never one that has already started on today's date. */
 let qtTouched = false;   // true once the visitor picks a time themselves
 function fillStartTimes() {
-  const date = $('#qd').value || TODAY, sel = $('#qt'), keep = sel.value;
+  const date = $('#qd').value || firstBookableDate(), sel = $('#qt'), keep = sel.value;
   const free = SLOTS.filter((_, k) => !isPastSlot(date, k));
   sel.innerHTML = free.length ? free.map(t => `<option>${t}</option>`).join('') : '<option value="">No more times today</option>';
   // their own choice stays; otherwise today starts at the next upcoming hour and other days at 3:00 PM
-  sel.value = qtTouched && free.includes(keep) ? keep : (date !== TODAY && free.includes('3:00 PM') ? '3:00 PM' : (free[0] || ''));
+  sel.value = qtTouched && free.includes(keep) ? keep : (date !== manilaDay(0) && free.includes('3:00 PM') ? '3:00 PM' : (free[0] || ''));
 }
 
 function initAvailability() {
-  const today = TODAY;
-  $('#qd').value = today;
-  $('#qd').min = today;
+  // after closing time the form starts on tomorrow, and today can no longer be chosen
+  const first = firstBookableDate();
+  $('#qd').value = first;
+  $('#qd').min = first;
   fillStartTimes();
   $('#qt').addEventListener('change', () => { qtTouched = true; });
   $('#qd').addEventListener('change', () => {
-    if ($('#qd').value && $('#qd').value < TODAY) $('#qd').value = TODAY;   // no past dates
+    if ($('#qd').value && $('#qd').value < firstBookableDate()) $('#qd').value = firstBookableDate();   // nothing before the first bookable day
     fillStartTimes();
   });
 

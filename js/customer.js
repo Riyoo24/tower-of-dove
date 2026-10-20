@@ -20,8 +20,8 @@ let RENTALS = [];
 let ADDONS = {};   // booking reference -> [{ name, qty, price }] add-on equipment on that booking
 
 let selStudio = 0;               // studio picked in the booking tab (set once data loads)
-let selDate = TODAY;              // day picked on the calendar
-let calMonth = new Date();        // month shown on the calendar
+let selDate = firstBookableDate();   // day picked on the calendar (tomorrow once today's last start time has passed)
+let calMonth = new Date(selDate + 'T00:00');   // month shown on the calendar
 calMonth.setDate(1);
 let draft = null;                 // booking form in progress
 let idleUntil = 0, idleTimer = 0;
@@ -61,6 +61,7 @@ const studioThumb = s => s.img
   : `<div class="ph" style="background:linear-gradient(135deg,${s.c1},${s.c2})">${s.id}</div>`;
 
 function renderBook() {
+  if (selDate < firstBookableDate()) selDate = firstBookableDate();   // the page was left open past closing time
   $('#cs').innerHTML = STUDIOS.map((s, i) => `
     <div class="card pick ${i === selStudio ? 'sel' : ''}" data-i="${i}">
       ${studioThumb(s)}
@@ -80,7 +81,7 @@ function renderBook() {
     const ds = `${y}-${pad(m + 1)}-${pad(d)}`;
     const n = takenSlots(selStudio, ds).size;
     const cls = ds === selDate ? 'sel' : n >= SLOTS.length ? 'full' : n ? 'part' : '';
-    html += `<button class="cd ${cls}" data-d="${ds}" ${ds < TODAY ? 'disabled' : ''}>${d}<i>${n ? n + 'h' : ''}</i></button>`;
+    html += `<button class="cd ${cls}" data-d="${ds}" ${ds < firstBookableDate() ? 'disabled' : ''}>${d}<i>${n ? n + 'h' : ''}</i></button>`;
   }
   $('#cal').innerHTML = html;
 
@@ -147,6 +148,13 @@ function showSuccess({ title, label, ref, lines, note, shot, icon, status, doneL
 const bkDlg = $('#bkdlg');
 const bkError = msg => { const x = $('#bk-e'); x.textContent = msg; x.hidden = !msg; };
 
+/* The studio closes at 10:00 PM, so a session must end by then: the last start time is 9:00 PM
+   (one hour) and only the durations that still fit are offered. */
+const durationOptions = (t, h) => {
+  const max = Math.min(4, SLOTS.length - t);
+  return Array.from({ length: max }, (_, i) => `<option value="${i + 1}" ${i + 1 === h ? 'selected' : ''}>${i + 1} hour${i ? 's' : ''}</option>`).join('');
+};
+
 /* add-on equipment picked in the booking form: [{ equipment_id, quantity }] */
 const addOnSelection = () => Object.entries(draft ? draft.addons : {}).map(([id, q]) => ({ equipment_id: +id, quantity: +q })).filter(x => x.quantity > 0);
 const addOnPrice = id => { const e = EQUIPMENT.find(x => x.id === id); return e ? e.addonPrice : 0; };
@@ -155,7 +163,7 @@ const addOnPrice = id => { const e = EQUIPMENT.find(x => x.id === id); return e 
 function updateTotals() {
   const studio = STUDIOS[draft.si].rate * draft.h;
   const sel = addOnSelection(), addons = sel.reduce((n, x) => n + addOnPrice(x.equipment_id) * x.quantity, 0);
-  $('#bk-hh').textContent = pl(draft.h, 'hr');
+  $('#bk-hh').textContent = `${pl(draft.h, 'hr')}, ${SLOTS[draft.t]} to ${endTime(SLOTS[draft.t], draft.h)}`;
   $('#bk-st').textContent = peso(studio);
   $('#bk-adr').hidden = !sel.length;
   $('#bk-ao').textContent = peso(addons);
@@ -172,8 +180,10 @@ const slotError = msg => /just taken by another customer/i.test(msg) ? MSG_HELD 
 function drawSlots() {
   const taken = takenSlots(draft.si, draft.d), held = heldSlots(draft.si, draft.d);
   $('#bk-slots').innerHTML = SLOTS.map((t, i) => {
-    const isHeld = taken.has(i) && held.has(i), past = isPastSlot(draft.d, i);
-    return `<button type="button" data-i="${i}" class="${i === draft.t ? 'sel' : ''}${isHeld ? ' held' : ''}" ${taken.has(i) || past ? 'disabled' : ''}${isHeld ? ' title="Someone is already trying to book this schedule"' : ''}>${t}</button>`;
+    const isHeld = taken.has(i) && held.has(i), past = isPastSlot(draft.d, i), late = i + draft.h > SLOTS.length;
+    const tip = isHeld ? ' title="Someone is already trying to book this schedule"'
+              : late ? ` title="A ${draft.h}-hour session from ${t} would run past the 10:00 PM closing time"` : '';
+    return `<button type="button" data-i="${i}" class="${i === draft.t ? 'sel' : ''}${isHeld ? ' held' : ''}" ${taken.has(i) || past || late ? 'disabled' : ''}${tip}>${t}</button>`;
   }).join('');
   if ($('#bk-hint')) $('#bk-hint').hidden = !SLOTS.some((_, i) => taken.has(i) && held.has(i));
   updateTotals();
@@ -194,6 +204,7 @@ async function moveDraft(t, h) {
     return false;
   }
   draft.t = t; draft.h = h;
+  $('#bk-h').innerHTML = durationOptions(t, h);
   bkError('');
   drawSlots();
   return true;
@@ -282,7 +293,7 @@ async function openBook(startIndex) {
   let t = startIndex;
   // never start in the past: on today's date the default is the next upcoming free hour (e.g. 11:31 AM -> 12:00 PM)
   if (t == null || t < 0 || isPastSlot(d, t)) t = SLOTS.findIndex((_, i) => !taken.has(i) && !isPastSlot(d, i));
-  if (t < 0) return toast(d === TODAY ? 'No more times are available today. Choose another date.' : 'No free times for that day.');
+  if (t < 0) return toast(d === manilaDay(0) ? 'No more times are available today. Choose another date.' : 'No free times for that day.');
   if (taken.has(t)) return toast('No free times for that day.');
 
   const h = (t + 1 < SLOTS.length && !taken.has(t + 1)) ? 2 : 1;
@@ -302,10 +313,11 @@ async function openBook(startIndex) {
 
         <label>Start time</label>
         <div class="slots" id="bk-slots"></div>
+        <p class="mut" style="margin-top:6px">The studio is open 10:00 AM to 10:00 PM. The last session starts at 9:00 PM, so every session ends by closing time.</p>
         <p class="mut" id="bk-hint" style="margin-top:6px" hidden>Times with a dashed outline are being booked by someone else right now. They may open up again in about 2 minutes.</p>
 
         <label for="bk-h">Duration</label>
-        <select id="bk-h">${[1, 2, 3, 4].map(x => `<option value="${x}" ${x === h ? 'selected' : ''}>${x} hour${x > 1 ? 's' : ''}</option>`).join('')}</select>
+        <select id="bk-h">${durationOptions(t, h)}</select>
 
         <div class="fg2">
           <div><label for="bk-fn">First name</label><input id="bk-fn" autocomplete="given-name"></div>
@@ -599,25 +611,33 @@ function renderSummary() {
 function renderDuration() {
   const el = $('#rdur'), h = outsideHours();
   el.textContent = h === null ? 'The return must be after the pick-up.'
-    : h < 8 ? `That is only ${h} hours. The minimum rent is 8 hours.`
-    : h === 8 ? 'Rental length: 8 hours (included in the price).'
+    : h < 8 ? `Rental length: ${h} hour${h === 1 ? '' : 's'}. The price covers up to 8 hours, so returning early does not lower it.`
+    : h === 8 ? 'Rental length: 8 hours (the full base duration, included in the price).'
     : `Rental length: ${h} hours. ${Math.ceil(h) - 8} extra hour${Math.ceil(h) - 8 === 1 ? '' : 's'} added to the price.`;
 }
 
 /* category filter above the equipment cards (same idea as the add-on equipment window) */
 let rentCat = 'All';
+/* Only equipment offered for the chosen kind of rent is listed:
+   studio add-ons show the items allowed as add-ons, outside rent shows the items allowed to be taken out. */
+const isOffered = e => rentMode === 'addon' ? e.addon : e.outside;
+
 function renderCategories() {
-  const cats = ['All', ...new Set(EQUIPMENT.map(e => e.category).filter(Boolean))];
+  const cats = ['All', ...new Set(EQUIPMENT.filter(isOffered).map(e => e.category).filter(Boolean))];
   if (!cats.includes(rentCat)) rentCat = 'All';
   $('#eq-cats').innerHTML = cats.map(c => `<button type="button" data-cat="${esc(c)}" class="${c === rentCat ? 'on' : ''}">${esc(c)}</button>`).join('');
 }
 
 function renderEquipment() {
   renderCategories();
+  const shown = EQUIPMENT.filter(isOffered).filter(e => rentCat === 'All' || e.category === rentCat);
+  if (!shown.length) {
+    $('#eq').innerHTML = `<p class="mut">No equipment is offered ${rentMode === 'addon' ? 'as a studio add-on' : 'for outside rent'} right now.</p>`;
+    return;
+  }
   $('#eq').innerHTML = EQUIPMENT.map((e, i) => {
-    if (rentCat !== 'All' && e.category !== rentCat) return '';
-    const offered = rentMode === 'addon' ? e.addon : e.outside;
-    const ok = offered && e.stock > 0 && !outBlocked();
+    if (!isOffered(e) || (rentCat !== 'All' && e.category !== rentCat)) return '';   // hidden, not shown as unavailable
+    const ok = e.stock > 0 && !outBlocked();
     const unit = rentMode === 'addon' ? (e.drum ? 'per rental' : 'per session') : 'per 8 hours, then 1/8 per extra hour';
 
     const info = e.drum
@@ -627,7 +647,7 @@ function renderEquipment() {
            <li>Cymbals (Trojan B8): ${e.drum.vip ? '2 crash, 1 ride, hi-hat, splash' : '1 crash, 1 ride, hi-hat'}</li>
            <li>Hardware: stands, throne, carpet</li>
            <li>Skins: Remo and Evans</li>
-           <li>Minimum rent: 8 hours</li>
+           <li>Base rental: 8 hours</li>
            <li>No service</li></ul></details>`
       : `${e.desc ? `<p class="mut" style="margin-top:4px">${esc(e.desc)}</p>` : ''}<p class="mut">${e.stock} available</p>`;
 
@@ -636,14 +656,14 @@ function renderEquipment() {
       : `<input class="qty" type="number" min="1" max="${e.stock}" value="1" aria-label="Quantity" data-q="${i}" ${ok ? '' : 'disabled'}>`;
 
     return `
-      <div class="card" data-eq="${i}" style="${offered ? '' : 'opacity:.55'}">
+      <div class="card" data-eq="${i}">
         ${equipmentImage(e)}
         <p class="cat">${esc(e.category || '')}</p>
         <div class="row"><h3>${esc(e.name)}</h3>${e.stock < 2 && !e.drum ? badge('Low') : ''}</div>
         ${info}
         <p style="margin-top:6px">${e.addon ? '<span class="b addon">Add-on</span> ' : ''}${e.outside ? '<span class="b out">Outside</span>' : ''}</p>
         <div class="row" style="margin-top:10px;flex-wrap:wrap">
-          <span><b>${offered ? peso(unitPrice(e)) : 'Not offered'}</b> <span class="mut">${offered ? unit : ''}</span></span>
+          <span><b>${peso(unitPrice(e))}</b> <span class="mut">${unit}</span></span>
           <span class="row" style="margin-left:auto">${control}<button class="btn sm" data-add="${i}" ${ok ? '' : 'disabled'}>Add</button></span>
         </div>
       </div>`;
@@ -823,7 +843,7 @@ async function requestRental() {
     if (!first || !last) return toast('Enter your first and last name.');
     if (!pd || !rd) return toast('Choose the pick-up and return dates.');
     if (pd < TODAY || (pd === TODAY && ph <= manilaParts(new Date()).hour)) return toast('The pick-up time must be later than now.');
-    if (hours === null || hours < 8) return toast('The minimum rent is 8 hours. Choose a later return.');
+    if (hours === null) return toast('The return time must be after the pick-up time.');
     if (!/^[\d\s+()-]{7,}$/.test(contact)) return toast('Enter a valid contact number.');
     if (backup && !/^[\d\s+()-]{7,}$/.test(backup)) return toast('The backup contact must be a phone number.');
     if (!file) return toast('Attach a valid ID.');
@@ -948,7 +968,7 @@ function openReschedule(b) {
     <h2>Reschedule ${b.ref}</h2>
     <p class="mut">Studio ${b.studio}, ${b.hours} hr${b.hours > 1 ? 's' : ''}. Pick a new date and start time.</p>
     <label for="rs-d">New date</label>
-    <input id="rs-d" type="date" min="${TODAY}" value="${b.date}">
+    <input id="rs-d" type="date" min="${firstBookableDate()}" value="${b.date}">
     <label>New start time</label>
     <div class="slots" id="rs-slots"></div>
     <div class="acts">
@@ -1166,7 +1186,7 @@ function showRentalDetails(ref) {
       <dl class="dl">
         <dt>${out ? 'Pick-up' : 'Starts'}</dt><dd>${o.when}</dd>
         <dt>${out ? 'Return by' : 'Ends'}</dt><dd>${o.ret}</dd>
-        ${out ? `<dt>Billed length</dt><dd>${hrs} hours</dd>` : `<dt>Booking</dt><dd>${esc(o.ref)}</dd>`}
+        ${out ? `<dt>Scheduled length</dt><dd>${Math.round((r0.hours || 0) * 100) / 100} hours (billed as ${hrs})</dd><dt>Late fees start</dt><dd>${r0.due ? fmtDT(r0.due) : '-'}</dd>` : `<dt>Booking</dt><dd>${esc(o.ref)}</dd>`}
       </dl>
 
       <h3>Items (${sum(o.lines.map(l => l.qty))})</h3>
@@ -1239,7 +1259,7 @@ async function applyUrlParams() {
   if (studio >= 0) selStudio = studio;
 
   const date = q.get('date');
-  if (/^\d{4}-\d{2}-\d{2}$/.test(date || '') && date >= TODAY) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date || '') && date >= firstBookableDate()) {
     selDate = date;
     calMonth = new Date(date + 'T00:00');
     calMonth.setDate(1);

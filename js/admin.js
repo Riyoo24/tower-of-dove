@@ -32,7 +32,7 @@ const dayDiff = (a, b) => Math.round((new Date(a + 'T00:00') - new Date(b + 'T00
 
 // database status -> label shown on screen
 const bkStatus = s => ({ 'Approved': 'Confirmed', 'In Progress': 'Active' }[s] || s);
-const rnStatus = s => ({ 'Active': 'In Use' }[s] || s);
+const rnStatus = s => ({ 'Active': 'In Use', 'Approved': 'Verified' }[s] || s);   // a rental that staff verified shows as Verified
 
 const tbl = (head, rows) =>
   `<table><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>` +
@@ -240,14 +240,30 @@ ACT['bk-det'] = ref => {
 
 /* ---- Payments ---- */
 let payF = 'All';
+let payKind = '', paySrc = '', payMeth = '';
+/* where a payment came from: the source of its booking or rental (Online or Onsite) */
+const paySource = p => p.kind === 'Booking' ? (findBk(p.reference) || {}).source : (RL.find(l => l.rental_ref === p.reference) || {}).source;
 function renderPayments() {
-  const rows = PAY.filter(p => payF === 'All' || p.status === payF);
-  $('#apy').innerHTML = tabsHtml(['All', 'Pending', 'Verified', 'Rejected'], payF, 'pf') + '<div class="tw">' + tbl(
+  const rows = PAY.filter(p => (payF === 'All' || p.status === payF) && (!payKind || p.kind === payKind)
+    && (!paySrc || paySource(p) === paySrc) && (!payMeth || p.method === payMeth));
+  const sel = (id, label, opts, cur) => `<select id="${id}" aria-label="${label}" style="max-width:200px">${opts.map(([v, t]) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
+  $('#apy').innerHTML = '<div class="row" style="justify-content:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:12px">' +
+    sel('pay-kind', 'Payments for', [['', 'Bookings and rentals'], ['Booking', 'Bookings'], ['Rental', 'Rentals']], payKind) +
+    sel('pay-src', 'Where it was made', [['', 'Online and onsite'], ['Online', 'Online'], ['Onsite', 'Onsite']], paySrc) +
+    sel('pay-meth', 'Payment method', [['', 'GCash and cash'], ['GCash', 'GCash'], ['Cash', 'Cash']], payMeth) + '</div>' +
+    tabsHtml(['All', 'Pending', 'Verified', 'Rejected'], payF, 'pf') + '<div class="tw">' + tbl(
     ['Reference', 'Customer', 'Amount', 'Method', 'Payment reference', 'Status', 'Actions'],
     rows.map(p => [esc(p.reference) + ` <span class="mut">${p.kind}</span>`, esc(p.customer_name), money(p.amount), esc(p.method),
       p.method === 'GCash' ? esc(p.gcash_reference || '') : 'Pay at studio', badge(p.status),
       p.status === 'Pending' ? btn('pay-verify', p.payment_id, 'Verify') : btn('pay-verify', p.payment_id, 'Details', 1)])) + '</div>';
 }
+$('#apy').addEventListener('change', e => {
+  if (e.target.id === 'pay-kind') payKind = e.target.value;
+  else if (e.target.id === 'pay-src') paySrc = e.target.value;
+  else if (e.target.id === 'pay-meth') payMeth = e.target.value;
+  else return;
+  renderPayments();
+});
 $('#apy').addEventListener('click', e => { const t = e.target.closest('[data-pf]'); if (t) { payF = t.dataset.pf; renderPayments(); } });
 const setPay = async (id, status) => {
   const p = PAY.find(x => x.payment_id === +id), ref = p && p.kind === 'Booking' ? p.reference : null, had = !!ref && pendingAddons(ref);
@@ -358,7 +374,7 @@ function renderEquipmentTab() {
   const list = STK.filter(c => !eqLow || c.stock_status === 'Low' || c.stock_status === 'In Use');
   $('#aeq').innerHTML = tbl(['Equipment', 'Category', 'Total', 'Avail.', 'In use', 'Add-on price', 'Outside price', 'Rent options', 'Status', ''],
     list.map(c => {
-      const sub = c.is_drum_set ? esc((c.drum_kit || '').replace(/ drum set.*/i, '')) + ', ' + (c.is_vip ? 'VIP' : 'Basic') + ' set-up, 8 hrs minimum' : (c.description ? esc(c.description) : '');
+      const sub = c.is_drum_set ? esc((c.drum_kit || '').replace(/ drum set.*/i, '')) + ', ' + (c.is_vip ? 'VIP' : 'Basic') + ' set-up, 8-hour base rental' : (c.description ? esc(c.description) : '');
       const chips = OWNER
         ? `<div class="stk"><button class="chip ${c.allow_addon ? 'on' : ''}" data-act="eq-chip" data-id="${c.equipment_id}:allow_addon">Add-on</button><button class="chip ${c.allow_outside ? 'on' : ''}" data-act="eq-chip" data-id="${c.equipment_id}:allow_outside">Outside</button></div>`
         : `${c.allow_addon ? '<span class="b addon">Add-on</span> ' : ''}${c.allow_outside ? '<span class="b out">Outside</span>' : ''}`;
@@ -455,7 +471,7 @@ function eqForm(id) {
     if (ad && !(a > 0)) return err('Enter an add-on price above 0.');
     if (ou && !(o > 0)) return err('Enter an outside price above 0.');
     const row = { description: $('#eqd').value.trim() || null, category_id: cat, total_quantity: t,
-      add_on_rate: ad ? a : null, outside_rate: ou ? o : null, allow_addon: ad, allow_outside: ou, min_hours: (ou || drum) ? 8 : 0, image: img || null };
+      add_on_rate: ad ? a : null, outside_rate: ou ? o : null, allow_addon: ad, allow_outside: ou, min_hours: 0, image: img || null };
     try { if (file) row.image = await uploadPublic('equipment-images', file); } catch (x) { return err('Image upload failed: ' + x.message); }
     const r = isNew ? await run(sb.from('equipment').insert({ ...row, name })) : await run(sb.from('equipment').update(row).eq('equipment_id', c.equipment_id));
     if (r) { d.close(); await loadCatalog(); await refresh(); toast(isNew ? name + ' added.' : name + ' updated.'); }
@@ -467,7 +483,7 @@ function eqForm(id) {
 /* ============================ 7. RENTALS ============================ */
 
 let rf = 'All';
-const RF = ['All', 'Pending', 'Approved', 'In Use', 'Due today', 'Overdue', 'Returned', 'Rejected'];
+const RF = ['All', 'Pending', 'Verified', 'In Use', 'Due today', 'Overdue', 'Returned', 'Rejected'];
 const TYB = { 'Add-on': '<span class="b addon">Add-on</span>', 'Outside': '<span class="b out">Outside</span>' };
 const lateDays = l => (l.line_returned_at && l.due_at) ? Math.max(0, dayDiff(dOf(l.line_returned_at), dOf(l.due_at))) : 0;
 
@@ -687,7 +703,8 @@ function drawRentalTx(tx) {
 
   let body = `<h3>Customer</h3><dl class="dl"><dt>Name</dt><dd>${esc(g.customer)}</dd><dt>Phone</dt><dd>${esc(g.phone || 'Not on file')}</dd></dl>
     <h3>${out ? 'Pick-up and return' : 'Rental'}</h3><dl class="dl"><dt>Rent type</dt><dd>${TYB[g.type]}</dd>
-      ${out ? `<dt>Pick-up</dt><dd>${l0.pickup_date ? shortDate(dOf(l0.pickup_date)) + ', ' + tOf(l0.pickup_date) : '-'}</dd><dt>Return by</dt><dd>${dueLabel(l0)}</dd><dt>Billed length</dt><dd>${hrs} hours</dd>`
+      ${out ? `<dt>Pick-up</dt><dd>${l0.pickup_date ? shortDate(dOf(l0.pickup_date)) + ', ' + tOf(l0.pickup_date) : '-'}</dd><dt>Return by</dt><dd>${l0.return_date ? shortDate(dOf(l0.return_date)) + ', ' + tOf(l0.return_date) : '-'}</dd>
+            <dt>Overdue after</dt><dd>${dueLabel(l0)} <span class="mut">(end of the 8-hour window)</span></dd><dt>Length</dt><dd>${Math.round(num(l0.rental_hours) * 100) / 100} hours scheduled, billed as ${hrs}</dd>`
             : `<dt>Booking</dt><dd>${esc(g.booking || '-')}</dd>`}
       ${g.reason ? `<dt>Reason</dt><dd>${esc(g.reason)}</dd>` : ''}</dl>
     <h3>Items (${sum(g.lines.map(l => l.quantity))})</h3>
@@ -756,36 +773,43 @@ ACT['rn-det'] = ref => openVerify({ rentalRef: ref });   // Details: open it rig
 function renderCustomers() {
   const q = ($('#cu-q').value || '').toLowerCase();
   tb('acu', ['Name', 'Phone', 'Account', 'Bookings', 'Rentals', 'Total spent', 'Status', ''],
-    CUS.filter(c => c.status !== 'Inactive')   // removed accounts are not listed (their past records stay on bookings and reports)
-       .filter(c => !q || `${c.customer_name} ${c.number}`.toLowerCase().includes(q))
-       .map(c => [esc(c.customer_name), esc(c.number || ''), c.account_type, String(c.bookings), String(c.rentals), money(c.total_spent), esc(c.status || 'Active'),
-         btn('cu-hist', c.customer_id, 'History', 1) + (OWNER ? dbtn('cu-del', c.customer_id, 'Remove') : '')]));
+    CUS.filter(c => !q || `${c.customer_name} ${c.number}`.toLowerCase().includes(q))
+       .map(c => {
+         const off = c.status === 'Inactive', reg = c.account_type === 'Registered', hist = num(c.bookings) + num(c.rentals);
+         // registered accounts are disabled (or enabled again); a guest with no records can be removed
+         const owner = !OWNER ? '' : reg ? (off ? btn('cu-on', c.customer_id, 'Enable', 1) : dbtn('cu-off', c.customer_id, 'Disable'))
+                                          : (hist === 0 ? dbtn('cu-del', c.customer_id, 'Remove') : '');
+         return [esc(c.customer_name), esc(c.number || ''), c.account_type, String(c.bookings), String(c.rentals), money(c.total_spent),
+           off ? '<span class="b rejected">Disabled</span>' : esc(c.status || 'Active'), btn('cu-hist', c.customer_id, 'History', 1) + owner];
+       }));
 }
 $('#cu-q').addEventListener('input', renderCustomers);
+
+ACT['cu-off'] = id => {
+  const c = CUS.find(x => x.customer_id === +id);
+  showDlg(`<h2 style="margin:0 0 8px">Disable ${esc(c.customer_name)}?</h2>
+    <p class="mut">They can no longer log in or make bookings and rentals. Their bookings, payments and history stay on record, and you can enable the account again at any time.</p>
+    <div class="acts"><button class="btn line" data-close>Cancel</button>${dbtn('cu-off-go', c.customer_id, 'Disable account')}</div>`);
+};
+ACT['cu-off-go'] = async id => {
+  const c = CUS.find(x => x.customer_id === +id);
+  if (await run(sb.from('customer').update({ status: 'Inactive' }).eq('customer_id', +id))) afterAction(`${c.customer_name}'s account was disabled.`);
+};
+ACT['cu-on'] = async id => {
+  const c = CUS.find(x => x.customer_id === +id);
+  if (await run(sb.from('customer').update({ status: 'Active' }).eq('customer_id', +id))) afterAction(`${c.customer_name}'s account is enabled again.`);
+};
 ACT['cu-del'] = id => {
-  const c = CUS.find(x => x.customer_id === +id), hist = num(c.bookings) + num(c.rentals);
-  if (c.account_type === 'Guest' && hist > 0) {
-    showDlg(`<h2 style="margin:0 0 8px">${esc(c.customer_name)} can't be removed</h2>
-      <p class="mut">This guest has ${pl(hist, 'booking/rental record')} on record, so the record is kept for your reports. Guests have no account to remove.</p>
-      <div class="acts"><button class="btn line" data-close>Close</button></div>`);
-    return;
-  }
+  const c = CUS.find(x => x.customer_id === +id);
   showDlg(`<h2 style="margin:0 0 8px">Remove ${esc(c.customer_name)}?</h2>
-    <p class="mut">${hist === 0
-      ? 'This customer has no bookings or rentals, so the account and the record are deleted completely.'
-      : `They have ${pl(hist, 'booking/rental record')} on record. Their login is deleted so they can no longer sign in, and they disappear from this list. Their name stays on past bookings so your reports and revenue remain correct.`}</p>
-    <p class="mut" style="margin-top:8px">This can't be undone.</p>
-    <div class="alert" id="cu-e" hidden></div>
-    <div class="acts"><button class="btn line" data-close>Cancel</button>${dbtn('cu-del-go', c.customer_id, 'Remove account')}</div>`);
+    <p class="mut">This guest has no bookings or rentals, so the record is deleted. This can't be undone.</p>
+    <div class="acts"><button class="btn line" data-close>Cancel</button>${dbtn('cu-del-go', c.customer_id, 'Remove record')}</div>`);
 };
 ACT['cu-del-go'] = async id => {
   const c = CUS.find(x => x.customer_id === +id);
-  try {
-    const r = await fnCall({ action: 'delete_customer', customer_id: +id });
-    await afterAction(r && r.kept ? `${c.customer_name}'s account was removed. Past records are kept.` : `${c.customer_name} was deleted.`);
-  } catch (err) {
-    if ($('#cu-e')) { $('#cu-e').textContent = err.message; $('#cu-e').hidden = false; } else toast(err.message);
-  }
+  const r = await sb.from('customer').delete().eq('customer_id', +id);
+  if (r.error) return toast(r.error.code === '23503' ? `${c.customer_name} has records on file, so it can't be removed.` : r.error.message);
+  afterAction(`${c.customer_name} was removed.`);
 };
 ACT['cu-hist'] = id => {
   const c = CUS.find(x => x.customer_id === +id);
@@ -962,20 +986,34 @@ function orForm() {
   ['or-ow', 'or-rw', 'or-tw', 'or-cw'].forEach(x => { $('#' + x).hidden = m !== 'o'; });
   $('#or-gw').hidden = $('#or-pm').value !== 'GCash';
   setOpts($('#or-b'), BK.filter(b => ['Approved', 'In Progress'].includes(b.status)).map(b => `<option value="${b.booking_ref}">${b.booking_ref}, ${esc(b.customer_name)}</option>`).join('') || '<option value="">No confirmed bookings</option>');
-  if (!$('#or-r').value) $('#or-r').value = dayOffset(1);
+  // start and return choices (studio hours), with sensible defaults: start now, return 8 hours later
+  const opt = (from, to) => Array.from({ length: to - from + 1 }, (_, i) => `<option value="${from + i}">${tlabel(from + i)}</option>`).join('');
+  if (!$('#or-st').options.length) { $('#or-st').innerHTML = opt(10, 22); $('#or-rt').innerHTML = opt(10, 22); }
+  if (!$('#or-sd').value) {
+    const nowH = manilaParts(new Date()).hour, start = Math.min(22, Math.max(10, nowH)), end = Math.min(22, start + 8);
+    $('#or-sd').value = manilaDay(0); $('#or-st').value = String(start);
+    $('#or-r').value = manilaDay(0); $('#or-rt').value = String(end);
+  }
   orTot();
 }
+const onsiteHours = () => {
+  const sd = $('#or-sd').value, rd = $('#or-r').value;
+  if (!sd || !rd) return null;
+  const h = (new Date(manilaTS(rd, +$('#or-rt').value)) - new Date(manilaTS(sd, +$('#or-st').value))) / 36e5;
+  return h > 0 ? h : null;
+};
 function orTot() {
   const id = $('#or-eq').value, m = $('#or-m').value, e = STK.find(x => x.equipment_id === +id);
   if (!e) { $('#or-tot').textContent = money(0); return 0; }
   const q = +$('#or-q').value || 1;
-  // outside: the price covers 8 hours, each extra hour adds price / 8 (counted until 10 PM on the return date)
-  const hrs = m === 'o' ? Math.max(8, Math.ceil((new Date(manilaTS($('#or-r').value || TODAY, 22)) - Date.now()) / 36e5)) : 8;
+  // outside: the price covers 8 hours (an earlier return costs the same), each extra hour adds price / 8
+  const len = m === 'o' ? onsiteHours() : null, hrs = m === 'o' ? Math.max(8, Math.ceil(len || 8)) : 8;
+  if (m === 'o' && $('#or-dur')) $('#or-dur').textContent = len === null ? 'The return must be after the start.' : len < 8 ? `${len} hours. The 8-hour base price applies.` : `${len} hours billed${len > 8 ? ' (8 hours base + extra hours)' : ''}.`;
   const total = num(m === 'a' ? e.add_on_rate : e.outside_rate) * q * (m === 'o' ? hrs / 8 : 1);
   $('#or-tot').textContent = money(total);
   return total;
 }
-['or-m', 'or-eq', 'or-q', 'or-r', 'or-pm'].forEach(x => $('#' + x).addEventListener('change', () => (x === 'or-m' || x === 'or-pm') ? orForm() : orTot()));
+['or-m', 'or-eq', 'or-q', 'or-r', 'or-pm', 'or-sd', 'or-st', 'or-rt'].forEach(x => $('#' + x).addEventListener('change', () => (x === 'or-m' || x === 'or-pm') ? orForm() : orTot()));
 
 $('#onr').onsubmit = async e => {
   e.preventDefault();
@@ -992,21 +1030,23 @@ $('#onr').onsubmit = async e => {
     args.p_booking_ref = $('#or-b').value;
     if (!args.p_booking_ref) return er('Choose a confirmed booking.');
   } else {
-    const n = $('#or-n').value.trim(), ret = $('#or-r').value;
+    const n = $('#or-n').value.trim(), ret = $('#or-r').value, sd = $('#or-sd').value;
     if (!n) return er('Enter the customer name.');
-    if (!ret || ret < TODAY) return er('Choose a valid return date.');
+    if (!sd || sd < manilaDay(0)) return er('Choose a start date from today onward.');
+    if (!ret || onsiteHours() === null) return er('The return must be after the start.');
     if (!$('#or-id').checked) return er('Confirm that you checked a valid ID.');
     [args.p_first_name, args.p_last_name] = nameParts(n);
-    args.p_return_date = manilaTS(ret, 22); args.p_id_type = $('#or-t').value; args.p_id_checked = true;
+    args.p_pickup_date = manilaTS(sd, +$('#or-st').value);
+    args.p_return_date = manilaTS(ret, +$('#or-rt').value); args.p_id_type = $('#or-t').value; args.p_id_checked = true;
   }
   const r = await run(sb.rpc('staff_create_onsite_rental', args));
   if (!r) return er('Could not record the rental. See the message above.');
   er('');
   const row = Array.isArray(r.data) ? r.data[0] : r.data;
   await loadCatalog();
-  $('#onr').reset(); $('#or-r').value = '';
+  $('#onr').reset(); $('#or-r').value = ''; $('#or-sd').value = '';
   await refresh();
-  toast(`Rental ${row && row.rental_ref ? row.rental_ref : ''} issued. Stock updated.`);
+  toast(`Rental ${row && row.rental_ref ? row.rental_ref : ''} saved as Verified. It goes In Use when its start time arrives, or press Issue to start it earlier.`);
 };
 
 

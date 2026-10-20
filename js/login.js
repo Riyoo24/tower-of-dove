@@ -19,6 +19,8 @@ async function signIn(username, password) {
 
   if (staff && staff.status !== 'Active') { await sb.auth.signOut(); throw new Error('This staff account is deactivated. Ask the owner.'); }
   if (staff) return { role: staff.role.toLowerCase(), label: staff.role === 'Owner' ? 'Owner' : staff.first_name };
+  const { data: me } = await sb.from('customer').select('status').eq('auth_user_id', data.user.id).maybeSingle();
+  if (me && me.status === 'Inactive') { await sb.auth.signOut(); throw new Error('This account has been disabled. Please contact the studio.'); }
   return { role: 'customer', label: username.trim() };
 }
 
@@ -134,4 +136,10 @@ $$('input[type="password"]').forEach(input => {
   };
   wrap.appendChild(toggle);
 });
+
+// a customer whose account was disabled while they were logged in is sent here with a message
+try {
+  const notice = sessionStorage.getItem('tod_notice');
+  if (notice) { showError('#login-err', notice); sessionStorage.removeItem('tod_notice'); }
+} catch (e) { /* storage blocked */ }
 

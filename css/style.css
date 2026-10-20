@@ -434,3 +434,8 @@ dialog.drawer.wide { width: min(620px, 100vw); }
 .bad-text { color: var(--bad); font-size: 13.5px; }
 .dlg.verify { max-width: 640px; }
 
+/* ===== Outside rental policy note ===== */
+.policy { margin-top: 12px; padding: 12px 14px; border: 1px solid var(--info); border-radius: 10px; background: var(--info-bg); font-size: 13.5px; line-height: 1.5; }
+.policy ul { margin: 6px 0 0 18px; padding: 0; }
+.policy li { margin: 3px 0; }
+
