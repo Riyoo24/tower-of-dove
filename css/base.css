@@ -1,0 +1,56 @@
+/* =====================================================================
+   base.css - palette (CSS variables), reset, typography, links, focus
+   ---------------------------------------------------------------------
+   Loaded FIRST on every page. Change a colour here and the whole site
+   follows. Nothing in this file is specific to one page.
+   ===================================================================== */
+
+/* ===== Tower of Dove palette (sampled from the logo and banner) =====
+   Stage Black #0B0B0D  Charcoal #17171B  Graphite #26262C
+   Dove Crimson #B3202F (buttons)  Signal #CF3E4D  Wine #8E161F
+   Oxblood #450011  Glow #FF2D36  Cream #F4F1EE
+   This page uses the dark theme only. */
+
+:root {
+  --black: #0B0B0D; --char: #17171B; --graph: #26262C;
+  --brand: #B3202F; --brand-hi: #CF3E4D; --brand-lo: #8E161F; --oxblood: #450011; --glow: #FF2D36;
+
+  --paper: #0B0B0D; --surface: #17171B; --dove: #222228;
+  --line: #2E2E35; --line-strong: #5A5A66;
+  --field: #0F0F12; --field-bd: #3A3A44;
+  --ink: #F4F1EE; --mut: #A3A1AD;
+  --accent: #E23B4E; --link: #FF6B78; --focus: #FF6B78;
+
+  --sel: #B3202F; --sel-fg: #fff; --bar: #4A4A55;
+  --btn: #2B2B33; --btn-fg: #F4F1EE; --btn-bd: #3A3A44;
+
+  --ok: #4ED3A0; --warn: #F2A93B; --bad: #FF7A85; --info: #8DB0FF;
+  --ok-bg: #12332A; --warn-bg: #3A2A0A; --bad-bg: #3E1319; --info-bg: #16264A;
+  --out-bg: #2A1F45; --out-fg: #C4A9FF; --occ-bg: #3A2A0A; --occ-fg: #F2C36B;
+
+  --shadow: #000000a6;
+  --r: 10px;
+  --sw: 240px;               /* sidebar width, changed by body.sc */
+}
+body.sc { --sw: 76px; }      /* sidebar collapsed */
+
+/* ===== Base ===== */
+* { box-sizing: border-box; margin: 0; }
+body {
+  font: 15px/1.5 'Instrument Sans', system-ui, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  color-scheme: dark;
+}
+h1, h2, h3 { font-family: 'Bricolage Grotesque', Georgia, serif; letter-spacing: -.01em; }
+h1 { font-size: 30px; line-height: 1.15; margin-bottom: 4px; }
+h2 { font-size: 20px; margin-bottom: 10px; }
+h3 { font-size: 16px; }
+p.sub { color: var(--mut); margin-bottom: 20px; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.pubside :focus-visible { outline-color: var(--glow); }
+[hidden] { display: none !important; }
+a { color: var(--link); }
+
+.icon { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }

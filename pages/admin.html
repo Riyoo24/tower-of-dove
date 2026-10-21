@@ -8,7 +8,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../css/style.css">
+  <!-- Stylesheets: shared first, then this page's own file -->
+  <link rel="stylesheet" href="../css/base.css">
+  <link rel="stylesheet" href="../css/components.css">
+  <link rel="stylesheet" href="../css/layout.css">
+  <link rel="stylesheet" href="../css/modals.css">
+  <link rel="stylesheet" href="../css/admin.css">
 </head>
 <body data-role="admin" data-active="a-over">
 
@@ -82,8 +87,7 @@
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-  <script src="../js/supabase-config.js"></script>
-  <script src="../js/shared.js"></script>
-  <script src="../js/admin.js"></script>
+  <!-- All site code is ES modules; this one entry file imports the rest -->
+  <script type="module" src="../js/admin/index.js"></script>
 </body>
 </html>

@@ -1,0 +1,66 @@
+/* =====================================================================
+   customer.css - customer page (pages/customer.html)
+   ---------------------------------------------------------------------
+   Book a studio (picker, calendar, time slots), Rent equipment,
+   My bookings, My rental (side drawer rows), guest lookup,
+   add-on equipment window, booking form pieces.
+   ===================================================================== */
+
+/* studio picker */
+.pick { cursor: pointer; transition: border-color .15s; }
+.pick.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+
+/* calendar */
+.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
+.cd { border: 1px solid var(--field-bd); background: var(--surface); border-radius: 8px; padding: 6px 0; cursor: pointer; display: flex; flex-direction: column; align-items: center; min-height: 48px; }
+.cd i { font-size: 11px; font-style: normal; min-height: 14px; }
+.cd.part { background: var(--occ-bg); color: var(--occ-fg); }
+.cd.full { background: var(--bad-bg); color: var(--bad); }
+.cd.sel { outline: 2px solid var(--accent); }
+.cd:disabled { opacity: .4; cursor: not-allowed; }
+
+/* segmented switch, lists, totals */
+.seg { display: flex; gap: 4px; background: var(--dove); padding: 3px; border-radius: 10px; margin: 4px 0 6px; }
+.seg button { flex: 1; border: 0; background: none; padding: 7px 8px; border-radius: 8px; cursor: pointer; font-weight: 600; color: var(--mut); }
+.seg button.on { background: var(--brand); color: #fff; }
+.bundle-tag { background: var(--out-bg); color: var(--out-fg); border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+
+/* equipment cards on the rent tab */
+#eq .card { display: flex; flex-direction: column; }
+#eq .card > .row:last-child { margin-top: auto !important; padding-top: 10px; }
+.card.hl { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.qty { width: 64px; }
+.dset { margin-top: 8px; font-size: 13px; color: var(--mut); }
+.dset summary { cursor: pointer; color: var(--ink); font-weight: 600; }
+.dset ul { margin: 6px 0 0 18px; padding: 0; }
+.find-row { max-width: 520px; margin-top: 8px; flex-wrap: wrap; }
+.find-row input { flex: 1; min-width: 140px; }
+
+.slots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.slots button { padding: 7px 0; border: 1px solid var(--field-bd); background: var(--surface); border-radius: 8px; cursor: pointer; font-size: 13px; }
+.slots button.sel { background: var(--sel); color: var(--sel-fg); border-color: var(--sel); }
+.slots button:disabled { background: var(--dove); color: var(--mut); opacity: .6; text-decoration: line-through; cursor: not-allowed; }
+/* a time someone else is in the middle of booking: not struck through, it may free up soon */
+.slots button.held:disabled { text-decoration: none; opacity: 1; border: 1px dashed var(--warn); color: var(--warn); background: transparent; }
+.hold { background: var(--warn-bg); color: #F2C36B; border-radius: 8px; padding: 8px 12px; font-size: 13px; margin-top: 12px; }
+.slots button.past:disabled { opacity: .45; }
+
+/* Guest reference-code lookup */
+.lookup { max-width: 520px; }
+.res { margin-top: 14px; }
+
+.adl { display: grid; gap: 8px; max-height: 230px; overflow: auto; }
+.ad { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.ad select { width: 74px; flex: none; }
+
+/* ===== Add-on equipment window and booking-form summary ===== */
+.adsum { display: grid; gap: 6px; }
+.adrow { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 14px; }
+.eqgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; margin: 14px 0; }
+.eqcard { display: flex; flex-direction: column; gap: 4px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+.eqcard h3 { margin: 0; }
+.eqcard p { margin: 0; font-size: 13.5px; line-height: 1.45; }
+.qtyl { display: flex; align-items: center; gap: 8px; margin: 0; font-weight: 600; }
+.qtyl select { width: 76px; }
+
+.itm { display: inline-block; max-width: 280px; white-space: normal; line-height: 1.4; }

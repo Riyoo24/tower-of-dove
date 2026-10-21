@@ -1,0 +1,82 @@
+/* =====================================================================
+   layout.css - page frame: sidebar, mobile top bar, page area, grids
+   ---------------------------------------------------------------------
+   The sidebar and mobile bar are injected by js/shared/layout.js.
+   Desktop: collapsible sidebar. Phones (under 820px): slide-in drawer.
+   ===================================================================== */
+
+/* ===== Sidebar (collapsible on desktop, drawer on mobile) ===== */
+.pubside {
+  position: fixed; top: 0; left: 0; bottom: 0; width: 240px; z-index: 150;
+  background: #0B0B0D; border-right: 2px solid var(--brand);
+  display: flex; flex-direction: column; padding: 20px 0;
+  overflow-x: hidden; overflow-y: auto; transition: width .3s ease;
+}
+.pubside.collapsed { width: 76px; }
+.ps-menu { padding: 0 26px; cursor: pointer; color: var(--brand-hi); margin-bottom: 14px; user-select: none; line-height: 1; }
+.ps-links { list-style: none; padding: 0; margin: 0; width: 100%; }
+.ps-links li { position: relative; margin: 6px 0 6px 12px; }
+.ps-links a {
+  display: flex; align-items: center; gap: 12px; padding: 12px 18px;
+  color: #A3A1AD; font-weight: 600; font-size: 14.5px; text-decoration: none; white-space: nowrap;
+  border-radius: 30px 0 0 30px; transition: color .2s, background .2s;
+}
+.ps-links .ico { width: 22px; display: grid; place-items: center; flex: none; }
+.ps-links li:hover a { color: #fff; background: #B3202F59; }
+.ps-links li.active a { color: #fff; background: var(--brand); }
+.ps-links .curve-top, .ps-links .curve-bottom { display: none; position: absolute; right: 0; width: 20px; height: 20px; pointer-events: none; }
+.ps-links li.active .curve-top, .ps-links li.active .curve-bottom { display: block; }
+.ps-links .curve-top { top: -20px; border-bottom-right-radius: 20px; box-shadow: 6px 6px 0 6px var(--brand); }
+.ps-links .curve-bottom { bottom: -20px; border-top-right-radius: 20px; box-shadow: 6px -6px 0 6px var(--brand); }
+.ps-auth { margin-top: auto !important; }
+.ps-logo { padding: 16px 12px 0; text-align: center; border-top: 1px solid var(--graph); }
+.ps-logo img { width: 64px; height: 64px; border-radius: 50%; border: 2px solid var(--brand); display: block; margin: 0 auto; }
+.ps-title { font: 700 16px 'Bricolage Grotesque', serif; color: #fff; margin-top: 8px; white-space: nowrap; }
+.pubside.collapsed .lbl, .pubside.collapsed .ps-title { display: none; }
+.pubside.collapsed .ps-links a { padding: 12px 20px; }
+.pubside.collapsed .ps-logo img { width: 40px; height: 40px; }
+
+.mbar, .scrim, .ps-x { display: none; }
+
+/* page area sits to the right of the sidebar */
+.page { margin-left: var(--sw); transition: margin-left .3s ease; }
+
+.wrap { max-width: 1120px; margin: 0 auto; padding: 24px 20px 60px; }
+.pg { display: none; }
+.pg.on { display: block; }
+.ge { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.g2 { grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr); align-items: start; }
+
+/* let grid children shrink instead of widening the page */
+.grid > * { min-width: 0; }                 /* let grid children shrink instead of widening the page */
+
+/* ===== Mobile (under 820px): sidebar becomes a drawer ===== */
+@media (max-width: 820px) {
+  .g2 { grid-template-columns: 1fr; }
+  .mbar { display: flex; position: sticky; top: 0; z-index: 140; align-items: center; gap: 12px; height: 56px; padding: 0 14px; background: var(--black); border-bottom: 2px solid var(--brand); color: #fff; }
+  .mbar button { background: none; border: 0; color: #fff; padding: 6px; display: grid; place-items: center; cursor: pointer; }
+  .mb-brand { display: flex; align-items: center; gap: 8px; font: 700 17px 'Bricolage Grotesque', serif; margin-right: auto; }
+  .mb-brand img { width: 30px; height: 30px; border-radius: 50%; }
+
+  .pubside, .pubside.collapsed { width: min(82vw, 320px); transform: translateX(-100%); transition: transform .25s; z-index: 200; padding: 0; border-right: 0; }
+  .pubside.open { transform: none; box-shadow: 0 0 40px #000c; }
+  .scrim { display: block; position: fixed; inset: 0; background: #0009; z-index: 190; opacity: 0; pointer-events: none; transition: opacity .25s; }
+  .scrim.on { opacity: 1; pointer-events: auto; }
+  .ps-x { display: grid; place-items: center; align-self: flex-end; margin: 12px 14px; background: none; border: 0; color: #fff; cursor: pointer; }
+  .ps-menu, .ps-logo, .ps-links .curve-top, .ps-links .curve-bottom, .ps-links .ico { display: none !important; }
+  .ps-links li { margin: 0; border-bottom: 1px solid var(--graph); }
+  .ps-links:first-of-type { border-top: 1px solid var(--graph); }
+  .ps-links a, .pubside.collapsed .ps-links a { border-radius: 0; padding: 15px 22px; }
+  .pubside.collapsed .lbl { display: inline; }
+  .ps-links li.active a, .ps-links li:hover a { background: none; color: var(--brand-hi); }
+  .ps-auth { margin-top: 0 !important; }
+  .page { margin-left: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pubside, .page, .scrim { transition: none; }
+}
+
+@media (max-width: 820px) {
+  .g2 { grid-template-columns: minmax(0, 1fr); }
+}

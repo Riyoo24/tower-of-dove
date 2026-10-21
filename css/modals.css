@@ -1,0 +1,52 @@
+/* =====================================================================
+   modals.css - toast message, dialogs, side drawers, success pop-up
+   ---------------------------------------------------------------------
+   .toast   small message at the bottom of the screen (js: toast())
+   .dlg     centred <dialog> windows      .drawer  side panels
+   ===================================================================== */
+
+/* toast */
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: 24px; z-index: 300;
+  background: var(--char); color: #fff; border: 1px solid #3A3A44; border-left: 3px solid var(--brand);
+  padding: 10px 18px; border-radius: 10px; box-shadow: 0 8px 24px #0009; font-size: 14px; max-width: calc(100vw - 32px);
+}
+
+
+/* dialogs */
+.dlg { margin: auto; border: 0; border-radius: 14px; padding: 0; max-width: 520px; width: calc(100% - 32px); max-height: calc(100vh - 32px); overflow: auto; box-shadow: 0 20px 60px #0B0B0D66; background: var(--surface); color: var(--ink); }
+.dlg::backdrop { background: #0B0B0D99; }
+.dlg .in { padding: 22px; }
+.acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; margin-top: 16px; }
+.acts .btn { margin: 0; }
+.dl { display: grid; grid-template-columns: 110px 1fr; gap: 8px 12px; margin: 14px 0; }
+.dl dt { color: var(--mut); }
+.dl dd { margin: 0; font-weight: 500; }
+
+.dlg.wide { max-width: 940px; }
+.dlg.verify { max-width: 640px; }
+
+/* ===== Success pop-up ===== */
+.ok { text-align: center; }
+.okic { width: 64px; height: 64px; margin: 0 auto 12px; border-radius: 50%; display: grid; place-items: center; background: var(--ok-bg); color: var(--ok); }
+.okref { margin: 10px auto 8px; padding: 12px 16px; max-width: 320px; border: 1px dashed var(--line); border-radius: 12px; background: var(--field); font: 700 30px 'Bricolage Grotesque'; letter-spacing: .06em; user-select: all; }
+
+/* ===== Screenshot notice on the success pop-up and the booking receipt ===== */
+.shot { margin-top: 14px; padding: 10px 12px; border: 1px solid var(--warn); border-radius: 10px; background: var(--warn-bg); text-align: left; font-size: 13.5px; line-height: 1.45; }
+.shot b { color: var(--warn); }
+
+/* ===== My Rental: grouped order rows and the side drawer ===== */
+dialog.drawer { position: fixed; inset: 0 0 0 auto; margin: 0; width: min(480px, 100vw); max-width: 100vw; height: 100dvh; max-height: 100dvh; padding: 0; border: 0; border-left: 1px solid var(--line); border-radius: 16px 0 0 16px; background: var(--surface); color: var(--ink); overflow: auto; box-shadow: -20px 0 60px #0B0B0D66; }
+dialog.drawer::backdrop { background: #0B0B0D99; }
+dialog.drawer[open] { animation: drawer-in .22s ease-out; }
+@keyframes drawer-in { from { transform: translateX(100%); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) { dialog.drawer[open] { animation: none; } }
+.dr { display: grid; gap: 14px; padding: 22px; }
+.dr h3 { margin: 6px 0 0; font-size: 14px; }
+.dr-items { display: grid; gap: 8px; }
+.dr-item { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.dr-sum { display: grid; gap: 6px; font-size: 14px; color: var(--mut); }
+.dr-sum > div { display: flex; justify-content: space-between; gap: 12px; }
+.dr-sum .tot-line { padding-top: 8px; border-top: 1px dashed var(--line); color: var(--ink); font-size: 15px; }
+/* ===== Verify drawer (dashboard) ===== */
+dialog.drawer.wide { width: min(620px, 100vw); }
