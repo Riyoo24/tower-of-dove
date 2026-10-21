@@ -9,7 +9,7 @@ import { sb } from '../config/supabaseClient.js';
 import { loadMyBookings, loadMyRentals } from './data.js';
 import { normRef } from './myBookings.js';
 import { showSuccess } from './ui.js';
-import { BOOKINGS } from '../shared/availability.js';
+import { BOOKINGS, firstBookableDate, isPastSlot } from '../shared/availability.js';
 import { equipmentImage } from '../shared/cards.js';
 import { EQUIPMENT, gcashQrUrl } from '../shared/catalog.js';
 import { isMember } from '../shared/session.js';
@@ -207,14 +207,38 @@ function loadRentalQr() {
   img.src = gcashQrUrl();
 }
 
+/* ---- Outside rental: no past times (Manila time) ----
+   Before 9:00 PM today's hours that already passed are greyed out in BOTH the pick-up and the
+   return list (at 11:31 AM the first choice for today is 12:00 PM). From 9:00 PM on, today is
+   closed, so the date pickers start tomorrow (firstBookableDate). */
+function limitOutsidePickers() {
+  const min = firstBookableDate();
+  const pd = $('#pd'), rd = $('#rd');
+  pd.min = min;
+  if (pd.value && pd.value < min) pd.value = min;                    // typed/old date -> earliest allowed day
+  rd.min = (pd.value && pd.value > min) ? pd.value : min;            // return is never before pick-up
+  if (rd.value && rd.value < rd.min) rd.value = rd.min;
+
+  [['#pd', '#pt'], ['#rd', '#rt']].forEach(([dateSel, timeSel]) => {
+    const date = $(dateSel).value, list = $(timeSel);
+    [...list.options].forEach(o => { o.disabled = !!date && isPastSlot(date, +o.value - 10); });
+    const chosen = list.selectedOptions[0];
+    if (chosen && chosen.disabled) {                                  // move to the first hour still open
+      const open = [...list.options].find(o => !o.disabled);
+      if (open) list.value = open.value;
+    }
+  });
+}
+
 export function initRentTab() {
   // pick-up times: studio hours; return times also allow 10:00 PM closing
   $('#pt').innerHTML = SLOTS.map((t, i) => `<option value="${10 + i}">${t}</option>`).join('');
   $('#rt').innerHTML = SLOTS.map((t, i) => `<option value="${10 + i}">${t}</option>`).join('') + '<option value="22">10:00 PM</option>';
-  $('#pd').min = $('#rd').min = TODAY;
   $('#pd').value = $('#rd').value = dayOffset(1);
   $('#pt').value = '10';
   $('#rt').value = '18';
+  limitOutsidePickers();
+  setInterval(limitOutsidePickers, 60 * 1000);   // keeps the list right when the hour changes or 9:00 PM passes
   loadRentalQr();
 
   $('#rm').addEventListener('click', e => {
@@ -247,11 +271,13 @@ export function initRentTab() {
   });
 
   $('#pd').addEventListener('change', () => {
-    $('#rd').min = $('#pd').value || TODAY;
+    $('#rd').min = $('#pd').value || firstBookableDate();
     if ($('#rd').value < $('#pd').value) $('#rd').value = $('#pd').value;
+    limitOutsidePickers();
     renderCart();
   });
-  ['#rd', '#pt', '#rt'].forEach(sel => $(sel).addEventListener('change', renderCart));
+  $('#rd').addEventListener('change', () => { limitOutsidePickers(); renderCart(); });
+  ['#pt', '#rt'].forEach(sel => $(sel).addEventListener('change', renderCart));
   $('#or-agree').addEventListener('change', e => { if (e.target.checked) $('#or-terms').classList.remove('err'); });
   $('#vf').addEventListener('change', updateRequestButton);
   $('#rq').addEventListener('click', requestRental);
@@ -297,7 +323,9 @@ async function requestRental() {
 
     if (!first || !last) return toast('Enter your first and last name.');
     if (!pd || !rd) return toast('Choose the pick-up and return dates.');
-    if (pd < TODAY || (pd === TODAY && ph <= manilaParts(new Date()).hour)) return toast('The pick-up time must be later than now.');
+    if (pd < firstBookableDate()) return toast('Same-day rentals are closed after 9:00 PM. Choose tomorrow or a later date.');
+    if (isPastSlot(pd, ph - 10)) return toast('The pick-up time must be later than now.');
+    if (isPastSlot(rd, rh - 10)) return toast('The return time must be later than now.');
     if (hours === null) return toast('The return time must be after the pick-up time.');
     if (!/^[\d\s+()-]{7,}$/.test(contact)) return toast('Enter a valid contact number.');
     if (backup && !/^[\d\s+()-]{7,}$/.test(backup)) return toast('The backup contact must be a phone number.');

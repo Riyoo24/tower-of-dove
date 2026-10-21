@@ -2,7 +2,8 @@
 
 1. Create a Supabase project.
 2. SQL Editor: run `01_schema.sql`, `02_functions.sql`, `03_security.sql`, `04_seed.sql` in order
-   (or paste `all_in_one.sql`). Every file is safe to re-run.
+   (or paste `all_in_one.sql`, which already includes every numbered file up to `13_...`).
+   Existing projects: just run the newest numbered file(s) you have not run yet (latest: `13_overdue_hours_addon_return.sql`). Every file is safe to re-run.
 3. Authentication > Providers > Email: turn **off** "Confirm email".
    Sign-in uses a username, so the site turns `juan` into `juan@towerofdove.app` for Supabase Auth.
 4. Create the owner: follow the comment block at the bottom of `04_seed.sql`.

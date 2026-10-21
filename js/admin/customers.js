@@ -5,7 +5,8 @@
 
 import { afterAction } from './bookings.js';
 import { BK, CUS, RL } from './data.js';
-import { ACT, OWNER, bkStatus, btn, dOf, dbtn, money, num, rnStatus, run, showDlg, tb, tbl } from './helpers.js';
+import { ACT, OWNER, bkStatus, btn, dOf, dbtn, money, num, run, showDlg, tb, tbl } from './helpers.js';
+import { dueB, lineStatus } from './rentals.js';
 import { sb } from '../config/supabaseClient.js';
 import { $, badge, esc, shortDate, toast } from '../shared/utils.js';
 
@@ -64,6 +65,6 @@ ACT['cu-hist'] = id => {
   showDlg(`<div class="row"><h2 style="margin:0">${esc(c.customer_name)}</h2><span class="mut">${c.account_type}</span></div>
     <p class="mut" style="margin:4px 0 12px">${esc(c.number || '')}. Total spent (verified payments): <b>${money(c.total_spent)}</b></p>
     <h3 style="font-size:14px">Studio bookings</h3><div class="tw">${tbl(['Booking', 'Studio', 'Date', 'Hours', 'Amount', 'Status'], bks.map(b => [b.booking_ref, esc(b.studio_name), shortDate(dOf(b.start_at)), String(Math.round(num(b.hours))), money(b.total_amount), badge(bkStatus(b.status))]))}</div>
-    <h3 style="font-size:14px;margin-top:14px">Equipment rented</h3><div class="tw">${tbl(['Order', 'Equipment', 'Qty', 'Date', 'Status'], lines.map(l => [l.rental_ref, esc(l.equipment_name), String(l.quantity), shortDate(dOf(l.created_at)), badge(rnStatus(l.status))]))}</div>
+    <h3 style="font-size:14px;margin-top:14px">Equipment rented</h3><p class="mut" style="margin:0 0 6px">Past rentals are listed with how they ended: returned on time, returned late, or overdue now.</p><div class="tw">${tbl(['Order', 'Equipment', 'Qty', 'Date', 'Status', 'Return'], lines.map(l => [l.rental_ref, esc(l.equipment_name), String(l.quantity), shortDate(dOf(l.created_at)), badge(lineStatus(l)), dueB(l)]))}</div>
     <div class="acts"><button class="btn line" data-close>Close</button></div>`);
 };

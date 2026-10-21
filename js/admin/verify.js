@@ -6,7 +6,7 @@
 import { closeOverlays, findBk } from './bookings.js';
 import { PAY, RL, STK, refresh } from './data.js';
 import { ACT, bkStatus, btn, dOf, money, num, rnStatus, run, stampLabel, tOf } from './helpers.js';
-import { TYB, dueB, dueLabel, groups, loadRentalId, setRental } from './rentals.js';
+import { TYB, dueB, dueLabel, groupStatus, groups, lineStatus, loadRentalId, overdueHours, setRental } from './rentals.js';
 import { sb } from '../config/supabaseClient.js';
 import { loadCatalog } from '../shared/catalog.js';
 import { $, $$, badge, esc, longDate, pl, shortDate, sum, toast } from '../shared/utils.js';
@@ -94,7 +94,7 @@ function drawBookingTx(tx) {
     <h3>Booking</h3><dl class="dl"><dt>Studio</dt><dd>${esc(b.studio_name)}</dd><dt>Date</dt><dd>${longDate(dOf(b.start_at))}</dd>
       <dt>Time</dt><dd>${tOf(b.start_at)} to ${tOf(b.end_at)} (${pl(Math.round(num(b.hours)), 'hr')})</dd><dt>Source</dt><dd>${esc(b.source)}</dd></dl>`;
   if (ad.length) {
-    body += `<h3>Add-on equipment</h3><div class="dr-items">${ad.map(l => `<div class="dr-item"><div><b>${esc(l.equipment_name)}</b><div class="mut">${l.quantity} x ${money(l.unit_price_at_request)} ${badge(rnStatus(l.status))}</div></div><b>${money(num(l.unit_price_at_request) * l.quantity)}</b></div>`).join('')}</div>`;
+    body += `<h3>Add-on equipment</h3><div class="dr-items">${ad.map(l => `<div class="dr-item"><div><b>${esc(l.equipment_name)}</b><div class="mut">${l.quantity} x ${money(l.unit_price_at_request)} ${badge(lineStatus(l))}</div></div><b>${money(num(l.unit_price_at_request) * l.quantity)}</b></div>`).join('')}</div>`;
   }
   const grand = studio + adTotal, paidOk = pay && pay.status === 'Verified' ? num(pay.amount) : 0, balance = pay && pay.status === 'Verified' ? Math.max(0, grand - paidOk) : 0;
   body += `<h3>Amount</h3><div class="dr-sum"><div><span>Studio</span><span>${money(studio)}</span></div>${adTotal ? `<div><span>Add-on equipment</span><span>${money(adTotal)}</span></div>` : ''}<div class="tot-line"><b>Booking total</b><b>${money(grand)}</b></div>
@@ -165,11 +165,11 @@ function drawRentalTx(tx) {
   } else {
     if (g.status === 'Approved' && down > 0) body += `<div class="alert">Collect the balance of ${money(Math.max(0, total - down))} before handing over the equipment.</div>`;
     if (g.status === 'Active' && fee > 0) body += `<div class="alert">The equipment is late. A late fee of ${money(fee)} (price / 8 per hour, per item) is charged when you process the return. Collect it then.</div>`;
-    else if (g.lines.some(l => l.days_overdue > 0)) body += '<div class="alert">This order is overdue. Contact the customer to arrange the return.</div>';
+    else if (g.lines.some(l => overdueHours(l) > 0)) body += '<div class="alert">This order is overdue. Contact the customer to arrange the return.</div>';
     const acts = g.status === 'Approved' ? btn('rn-issue', g.ref, 'Issue equipment') : g.status === 'Active' ? btn('rn-ret', g.ref, 'Return everything') : '';
     body += `<div class="acts"><button class="btn line" data-close>Close</button>${acts}</div>`;
   }
-  vdr.innerHTML = drawerShell(needApprove || payPending ? 'Verify rental' : 'Rental details', g.type === 'Add-on' ? (g.booking || g.ref) : g.ref, `<span class="mut">Rental</span> ${badge(rnStatus(g.status))} ` + (pay ? `<span class="mut">Payment</span> ${badge(pay.status)}` : ''), body);
+  vdr.innerHTML = drawerShell(needApprove || payPending ? 'Verify rental' : 'Rental details', g.type === 'Add-on' ? (g.booking || g.ref) : g.ref, `<span class="mut">Rental</span> ${badge(groupStatus(g))} ` + (pay ? `<span class="mut">Payment</span> ${badge(pay.status)}` : ''), body);
   wireChecks();
   if (out) loadRentalId(g.ref, 'v-id');
 }

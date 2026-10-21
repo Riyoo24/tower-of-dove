@@ -21,9 +21,30 @@ export const TYB = { 'Add-on': '<span class="b addon">Add-on</span>', 'Outside':
 
 export const lateDays = l => (l.line_returned_at && l.due_at) ? Math.max(0, dayDiff(dOf(l.line_returned_at), dOf(l.due_at))) : 0;
 
+/* ---- overdue is measured in HOURS (a started hour counts as a full hour, like the late fee) ----
+   hours_overdue comes from the v_rental_lines view (supabase/13_...sql). If the view has not been
+   updated yet, the same number is worked out here from due_at, so the page still works. */
+export function overdueHours(l) {
+  if (l.hours_overdue !== undefined && l.hours_overdue !== null) return num(l.hours_overdue);
+  if (l.status !== 'Active' || l.line_returned_at || !l.due_at) return 0;
+  const late = Date.now() - new Date(l.due_at).getTime();
+  return late > 0 ? Math.max(1, Math.ceil(late / 36e5)) : 0;
+}
+
+/* hours a returned item was late (0 = on time) */
+export const lateHours = l => {
+  if (!l.line_returned_at || !l.due_at) return 0;
+  const late = new Date(l.line_returned_at).getTime() - new Date(l.due_at).getTime();
+  return late > 0 ? Math.max(1, Math.ceil(late / 36e5)) : 0;
+};
+
+/* A rental that is in use but past its due time shows as Overdue instead of In Use. */
+export const lineStatus = l => (l.status === 'Active' && overdueHours(l) > 0) ? 'Overdue' : rnStatus(l.status);
+export const groupStatus = g => (g.status === 'Active' && g.lines.some(l => overdueHours(l) > 0)) ? 'Overdue' : rnStatus(g.status);
+
 export function dueB(l) {
-  if (l.days_overdue > 0) return `<span class="b overdue">${pl(l.days_overdue, 'day')} overdue</span>`;
-  if (l.line_returned_at) return lateDays(l) ? `<span class="b out">Returned ${pl(lateDays(l), 'day')} late</span>` : '<span class="mut">Returned on time</span>';
+  if (overdueHours(l) > 0) return `<span class="b overdue">${pl(overdueHours(l), 'hour')} overdue</span>`;
+  if (l.line_returned_at) return lateHours(l) ? `<span class="b out">Returned ${pl(lateHours(l), 'hour')} late</span>` : '<span class="mut">Returned on time</span>';
   if (l.status === 'Active' && dueToday(l)) return '<span class="b duetoday">Due today</span>';
   return '<span class="mut">-</span>';
 }
@@ -39,7 +60,7 @@ export function groups() {
   return [...map.values()];
 }
 
-const gMatch = (g, f) => f === 'All' || (f === 'Overdue' ? g.lines.some(l => l.days_overdue > 0) : f === 'Due today' ? g.lines.some(l => l.status === 'Active' && dueToday(l)) : rnStatus(g.status) === f);
+const gMatch = (g, f) => f === 'All' || (f === 'Overdue' ? groupStatus(g) === 'Overdue' : f === 'Due today' ? g.lines.some(l => l.status === 'Active' && dueToday(l)) : groupStatus(g) === f);
 
 /* Verify is shown only while something still has to be verified: the rental itself is Pending,
    or its payment (an add-on rides on its booking's payment) is Pending. After that it is a Details button. */
@@ -63,13 +84,13 @@ let rsrc = '';
 export function renderRentals() {
   const gs = groups();
   const list = gs.filter(g => gMatch(g, rf) && (!rsrc || g.source === rsrc));
-  if (rf === 'Overdue') list.sort((a, b) => Math.max(...b.lines.map(l => l.days_overdue)) - Math.max(...a.lines.map(l => l.days_overdue)));
+  if (rf === 'Overdue') list.sort((a, b) => Math.max(...b.lines.map(overdueHours)) - Math.max(...a.lines.map(overdueHours)));
   const cnt = f => f === 'Overdue' ? ' (' + gs.filter(g => gMatch(g, 'Overdue')).length + ')' : f === 'Pending' ? ' (' + gs.filter(g => g.status === 'Pending').length + ')' : '';
   $('#arn').innerHTML = `<div class="row" style="margin-bottom:10px;justify-content:flex-start"><select id="rn-src" style="max-width:190px" aria-label="Rental source"><option value="">Online and onsite</option><option value="Online" ${rsrc === 'Online' ? 'selected' : ''}>Online rentals</option><option value="Onsite" ${rsrc === 'Onsite' ? 'selected' : ''}>Onsite rentals</option></select></div><div class="tabs">${RF.map(x => `<button data-rf="${x}" class="${x === rf ? 'on' : ''}">${x}${cnt(x)}</button>`).join('')}</div>` +
     '<div class="card"><div class="tw">' + tbl(['Order', 'Customer', 'Items', 'Rent type', 'Status', 'Actions'],
       list.map(g => [`<button class="lk" data-act="${needsVerify(g) ? 'rn-verify' : 'rn-det'}" data-id="${esc(g.ref)}">${esc(g.type === 'Add-on' ? (g.booking || g.ref) : g.ref)}</button>`,
         esc(g.customer), g.lines.length === 1 ? esc(g.lines[0].equipment_name) + ' x' + g.lines[0].quantity : g.lines.length + ' items',
-        TYB[g.type], badge(rnStatus(g.status)), rnActions(g)])) + '</div></div>';
+        TYB[g.type], badge(groupStatus(g)), rnActions(g)])) + '</div></div>';
 }
 
 $('#arn').addEventListener('click', e => { const t = e.target.closest('[data-rf]'); if (t) { rf = t.dataset.rf; renderRentals(); } });
