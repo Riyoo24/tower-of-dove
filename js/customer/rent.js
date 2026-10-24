@@ -8,12 +8,12 @@ import { state } from './state.js';
 import { sb } from '../config/supabaseClient.js';
 import { loadMyBookings, loadMyRentals } from './data.js';
 import { normRef } from './myBookings.js';
-import { showSuccess } from './ui.js';
+import { showIdViewer, showSuccess } from './ui.js';
 import { BOOKINGS, firstBookableDate, isPastSlot } from '../shared/availability.js';
 import { equipmentImage } from '../shared/cards.js';
 import { EQUIPMENT, gcashQrUrl } from '../shared/catalog.js';
 import { isMember } from '../shared/session.js';
-import { $, $$, SLOTS, TODAY, badge, dayOffset, esc, longDate, manilaParts, manilaTS, peso, shortDate, sum, toast } from '../shared/utils.js';
+import { $, $$, SLOTS, TODAY, badge, dayOffset, esc, isName, longDate, manilaParts, manilaTS, peso, shortDate, sum, toast } from '../shared/utils.js';
 
 /* ============================ 3. RENT EQUIPMENT ============================ */
 
@@ -188,6 +188,28 @@ function updateRequestButton() {
                                          : (!isMember() && !attachBooking);   // a guest needs a found booking first
 }
 
+/* ---- Valid ID preview: the customer can look at the file they picked before sending it ---- */
+let idObjUrl = null;
+const idIsPdf = f => f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+
+function updateIdPreview() {
+  const f = $('#vf').files[0];
+  if (idObjUrl) { URL.revokeObjectURL(idObjUrl); idObjUrl = null; }
+  $('#vf-prev').hidden = !f;
+  if (!f) { $('#vf-img').removeAttribute('src'); return; }
+  idObjUrl = URL.createObjectURL(f);
+  const pdf = idIsPdf(f);
+  $('#vf-img').hidden = pdf;
+  $('#vf-pdf').hidden = !pdf;
+  if (!pdf) $('#vf-img').src = idObjUrl;
+  $('#vf-name').textContent = f.name;
+}
+
+function viewPickedId() {
+  const f = $('#vf').files[0];
+  if (f && idObjUrl) showIdViewer({ url: idObjUrl, pdf: idIsPdf(f), title: 'Your valid ID' });
+}
+
 /* Bookings an add-on can be attached to: upcoming and not cancelled. */
 export function renderAttachOptions() {
   const usable = BOOKINGS.filter(b => b.mine && b.date >= TODAY && ['Pending', 'Confirmed', 'Active'].includes(b.status));
@@ -279,7 +301,10 @@ export function initRentTab() {
   $('#rd').addEventListener('change', () => { limitOutsidePickers(); renderCart(); });
   ['#pt', '#rt'].forEach(sel => $(sel).addEventListener('change', renderCart));
   $('#or-agree').addEventListener('change', e => { if (e.target.checked) $('#or-terms').classList.remove('err'); });
-  $('#vf').addEventListener('change', updateRequestButton);
+  $('#vf').addEventListener('change', () => { updateIdPreview(); updateRequestButton(); });
+  $('#vf-view').addEventListener('click', viewPickedId);
+  $('#vf-img').addEventListener('click', viewPickedId);
+  $('#vf-clear').addEventListener('click', () => { $('#vf').value = ''; updateIdPreview(); updateRequestButton(); });
   $('#rq').addEventListener('click', requestRental);
   $('#lb-find').addEventListener('click', findGuestBooking);
   $('#lb-ref').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); findGuestBooking(); } });
@@ -322,6 +347,7 @@ async function requestRental() {
     const gref = $('#og').value.replace(/\s/g, ''), file = $('#vf').files[0], hours = outsideHours();
 
     if (!first || !last) return toast('Enter your first and last name.');
+    if (!isName(first) || !isName(last)) return toast('First and last names can only contain letters.');
     if (!pd || !rd) return toast('Choose the pick-up and return dates.');
     if (pd < firstBookableDate()) return toast('Same-day rentals are closed after 9:00 PM. Choose tomorrow or a later date.');
     if (isPastSlot(pd, ph - 10)) return toast('The pick-up time must be later than now.');
@@ -354,6 +380,7 @@ async function requestRental() {
 
     state.cart = {};
     $('#vf').value = '';
+    updateIdPreview();
     $('#og').value = '';
     $('#or-agree').checked = false;
     renderCart();

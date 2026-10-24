@@ -87,22 +87,23 @@
               <div class="alert" id="fo-guest" hidden>Renting equipment to take outside the studio is for registered customers only. <a href="login.html#login" data-route="login">Log in</a> or <a href="login.html#register">create an account</a> to continue. Guests can still add equipment to a studio booking.</div>
 
               <div id="fo-form">
+                <p class="req-note"><span class="req">*</span> Required</p>
                 <div class="fg2">
-                  <div><label for="on-fn">First name</label><input id="on-fn" autocomplete="given-name"></div>
-                  <div><label for="on-ln">Last name</label><input id="on-ln" autocomplete="family-name"></div>
+                  <div><label for="on-fn">First name <span class="req" aria-hidden="true">*</span></label><input id="on-fn" data-letters autocomplete="given-name" required aria-required="true"></div>
+                  <div><label for="on-ln">Last name <span class="req" aria-hidden="true">*</span></label><input id="on-ln" data-letters autocomplete="family-name" required aria-required="true"></div>
                 </div>
-                <label for="oc">Contact number</label>
-                <input id="oc" type="tel" placeholder="09XX XXX XXXX" autocomplete="tel">
+                <label for="oc">Contact number <span class="req" aria-hidden="true">*</span></label>
+                <input id="oc" type="tel" placeholder="09XX XXX XXXX" autocomplete="tel" required aria-required="true">
                 <label for="sm-link">Backup contact number (optional)</label>
                 <input id="sm-link" type="tel" placeholder="09XX XXX XXXX">
 
                 <div class="fg2">
-                  <div><label for="pd">Pick-up date</label><input id="pd" type="date"></div>
-                  <div><label for="pt">Pick-up time</label><select id="pt"></select></div>
+                  <div><label for="pd">Pick-up date <span class="req" aria-hidden="true">*</span></label><input id="pd" type="date"></div>
+                  <div><label for="pt">Pick-up time <span class="req" aria-hidden="true">*</span></label><select id="pt"></select></div>
                 </div>
                 <div class="fg2">
-                  <div><label for="rd">Return date</label><input id="rd" type="date"></div>
-                  <div><label for="rt">Return time</label><select id="rt"></select></div>
+                  <div><label for="rd">Return date <span class="req" aria-hidden="true">*</span></label><input id="rd" type="date"></div>
+                  <div><label for="rt">Return time <span class="req" aria-hidden="true">*</span></label><select id="rt"></select></div>
                 </div>
                 <p class="mut" id="rdur" style="margin-top:6px"></p>
                 <div class="policy"><b>How outside rental time works</b>
@@ -114,7 +115,7 @@
                   </ul>
                 </div>
 
-                <label for="vt">ID type</label>
+                <label for="vt">ID type <span class="req" aria-hidden="true">*</span></label>
                 <select id="vt">
                   <option>Driver's license</option>
                   <option>Passport</option>
@@ -123,17 +124,24 @@
                   <option>Postal ID</option>
                   <option>School ID</option>
                 </select>
-                <label for="vf">Attach valid ID</label>
-                <input id="vf" type="file" accept="image/*,.pdf">
+                <label for="vf">Attach valid ID <span class="req" aria-hidden="true">*</span></label>
+                <input id="vf" type="file" accept="image/*,.pdf" required aria-required="true">
                 <p class="mut" style="margin-top:4px">Required for outside rentals. Upload a clear photo or PDF of the front of your ID (JPG, PNG or PDF).</p>
+                <div class="idprev" id="vf-prev" hidden>
+                  <img id="vf-img" alt="Preview of your valid ID" hidden>
+                  <div class="pdfic" id="vf-pdf" hidden>PDF</div>
+                  <span class="nm" id="vf-name"></span>
+                  <button type="button" class="btn line sm" id="vf-view">View ID</button>
+                  <button type="button" class="btn line sm" id="vf-clear">Remove</button>
+                </div>
 
                 <div id="opay">
                   <div class="gq">
                     <img id="oq-img" alt="GCash QR code to scan" hidden>
                     <p class="mut" id="oq-note">Scan this QR code with GCash and pay the down payment of <b id="oq-amt"></b>. Then enter the reference number from your GCash receipt below.</p>
                   </div>
-                  <label for="og">GCash reference number (down payment)</label>
-                  <input id="og" placeholder="13-digit reference" inputmode="numeric" autocomplete="off">
+                  <label for="og">GCash reference number (down payment) <span class="req" aria-hidden="true">*</span></label>
+                  <input id="og" placeholder="13-digit reference" inputmode="numeric" autocomplete="off" required aria-required="true">
                 </div>
 
                 <label class="terms" id="or-terms">

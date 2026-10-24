@@ -19,6 +19,7 @@ import { dataReady } from '../shared/catalog.js';
 import { setActiveNav } from '../shared/layout.js';
 import { $, $$, esc } from '../shared/utils.js';
 import { injectChrome } from '../shared/layout.js';
+import '../shared/formRules.js';
 import { ROOT } from '../config/paths.js';
 import { who } from './helpers.js';
 

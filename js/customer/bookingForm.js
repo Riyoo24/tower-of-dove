@@ -14,7 +14,7 @@ import { equipmentImage } from '../shared/cards.js';
 import { EQUIPMENT, STUDIOS, gcashQrUrl } from '../shared/catalog.js';
 import { HOLD_TOKEN, LOCK_TTL, holdSlots, releaseHold } from '../shared/holds.js';
 import { isMember } from '../shared/session.js';
-import { $, SLOTS, endTime, esc, longDate, manilaDay, manilaTS, pad, peso, pl, toast } from '../shared/utils.js';
+import { $, SLOTS, endTime, esc, isName, longDate, manilaDay, manilaTS, pad, peso, pl, toast } from '../shared/utils.js';
 
 const bkError = msg => { const x = $('#bk-e'); x.textContent = msg; x.hidden = !msg; };
 
@@ -197,12 +197,13 @@ export async function openBook(startIndex) {
         <label for="bk-h">Duration</label>
         <select id="bk-h">${durationOptions(t, h)}</select>
 
+        <p class="req-note"><span class="req">*</span> Required</p>
         <div class="fg2">
-          <div><label for="bk-fn">First name</label><input id="bk-fn" autocomplete="given-name"></div>
-          <div><label for="bk-ln">Last name</label><input id="bk-ln" autocomplete="family-name"></div>
+          <div><label for="bk-fn">First name <span class="req" aria-hidden="true">*</span></label><input id="bk-fn" data-letters autocomplete="given-name" required aria-required="true"></div>
+          <div><label for="bk-ln">Last name <span class="req" aria-hidden="true">*</span></label><input id="bk-ln" data-letters autocomplete="family-name" required aria-required="true"></div>
         </div>
-        <label for="bk-p">Phone</label>
-        <input id="bk-p" placeholder="09XX XXX XXXX" autocomplete="tel">
+        <label for="bk-p">Phone <span class="req" aria-hidden="true">*</span></label>
+        <input id="bk-p" type="tel" placeholder="09XX XXX XXXX" autocomplete="tel" required aria-required="true">
 
         <label>Add-on equipment <span class="mut" style="font-weight:400">(optional)</span></label>
         <div class="adsum" id="bk-ad"></div>
@@ -216,8 +217,8 @@ export async function openBook(startIndex) {
             <img id="bk-qr" alt="GCash QR code to scan" hidden>
             <p class="mut" id="bk-qn">Scan this QR code with GCash and pay <b id="bk-qa"></b>. Then enter the reference number from your GCash receipt below.</p>
           </div>
-          <label for="bk-g">GCash reference number</label>
-          <input id="bk-g" placeholder="13-digit reference" inputmode="numeric">
+          <label for="bk-g">GCash reference number <span class="req" aria-hidden="true">*</span></label>
+          <input id="bk-g" placeholder="13-digit reference" inputmode="numeric" required aria-required="true">
         </div>
 
         <div class="bkt">
@@ -310,7 +311,9 @@ export async function openBook(startIndex) {
     const method = $('#bk-m').value, gcash = $('#bk-g').value.replace(/\s/g, '');
 
     if (!first) return bkError('Enter your first name.');
+    if (!isName(first)) return bkError('The first name can only contain letters.');
     if (!last) return bkError('Enter your last name.');
+    if (!isName(last)) return bkError('The last name can only contain letters.');
     if (!/^[\d\s+()-]{7,}$/.test(phone)) return bkError('Enter a valid phone number.');
     if (method === 'GCash' && !/^\d{13}$/.test(gcash)) return bkError('Enter the 13-digit GCash reference.');
     if (!$('#bk-agree').checked) {

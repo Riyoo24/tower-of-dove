@@ -6,7 +6,7 @@
 
 import { state } from './state.js';
 import { BK, PAY, RL, refresh } from './data.js';
-import { ACT, bkStatus, btn, dOf, dlg, money, num, run, showDlg, tOf, tabsHtml, tbl } from './helpers.js';
+import { ACT, CONFIRM, bkStatus, btn, dOf, dlg, money, num, run, showDlg, tOf, tabsHtml, tbl } from './helpers.js';
 import { vdr } from './verify.js';
 import { sb } from '../config/supabaseClient.js';
 import { $, badge, esc, longDate, pl, shortDate, toast } from '../shared/utils.js';
@@ -55,6 +55,14 @@ export const verifiedMsg = (ref, had) => !had ? `${ref} confirmed. Payment verif
   : pendingAddons(ref) ? `${ref} confirmed. Some add-on equipment is still pending (not enough stock). Check the Rentals tab.`
   : `${ref} confirmed. Add-on equipment approved too.`;
 
+const bkWho = b => `${b.booking_ref} (${b.customer_name}, ${b.studio_name}, ${shortDate(dOf(b.start_at))} ${tOf(b.start_at)})`;
+
+CONFIRM['bk-ok'] = ref => { const b = findBk(ref); return { title: b.payment_id ? 'Verify this payment?' : 'Confirm this booking?', message: `${bkWho(b)} will be marked as confirmed. Only continue if you checked the payment.`, ok: b.payment_id ? 'Yes, verify payment' : 'Yes, confirm booking' }; };
+CONFIRM['bk-no'] = ref => ({ title: 'Reject this booking?', message: `${bkWho(findBk(ref))} will be rejected and the time slot is released.`, ok: 'Yes, reject', danger: true });
+CONFIRM['bk-go'] = ref => ({ title: 'Start this session?', message: `Start the session for ${bkWho(findBk(ref))} now? It will be marked Active.`, ok: 'Yes, start session' });
+CONFIRM['bk-done'] = ref => ({ title: 'Mark this session as completed?', message: `${bkWho(findBk(ref))} will be marked Completed.`, ok: 'Yes, mark completed' });
+CONFIRM['bk-cx'] = ref => ({ title: 'Cancel this booking?', message: `${bkWho(findBk(ref))} will be cancelled and the time slot is released. This can't be undone.`, ok: 'Yes, cancel booking', cancel: 'No, keep it', danger: true });
+
 ACT['bk-ok'] = async ref => {
   const b = findBk(ref), had = pendingAddons(ref);
   const r = b.payment_id ? await run(sb.from('payment').update({ status: 'Verified' }).eq('payment_id', b.payment_id)) : await setBooking(b, 'Approved');
@@ -72,7 +80,6 @@ ACT['bk-go'] = async ref => { if (await setBooking(findBk(ref), 'In Progress')) 
 ACT['bk-done'] = async ref => { if (await setBooking(findBk(ref), 'Completed')) afterAction(`${ref} marked completed.`); };
 
 ACT['bk-cx'] = async ref => {
-  if (!confirm(`Cancel booking ${ref}? The time slot is released.`)) return;
   if (await run(sb.rpc('cancel_booking', { p_booking_ref: ref }))) afterAction(`${ref} cancelled.`);
 };
 

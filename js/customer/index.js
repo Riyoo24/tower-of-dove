@@ -16,6 +16,7 @@ import { firstBookableDate } from '../shared/availability.js';
 import { EQUIPMENT, STUDIOS, dataReady, isClosed, studioIndex } from '../shared/catalog.js';
 import { $, SLOTS } from '../shared/utils.js';
 import { injectChrome } from '../shared/layout.js';
+import '../shared/formRules.js';
 
 injectChrome();   // sidebar + mobile bar
 

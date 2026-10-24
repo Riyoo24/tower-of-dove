@@ -50,3 +50,6 @@ dialog.drawer[open] { animation: drawer-in .22s ease-out; }
 .dr-sum .tot-line { padding-top: 8px; border-top: 1px dashed var(--line); color: var(--ink); font-size: 15px; }
 /* ===== Verify drawer (dashboard) ===== */
 dialog.drawer.wide { width: min(620px, 100vw); }
+
+.dlg.confirm { max-width: 440px; }
+.dlg.confirm .acts { margin-top: 16px; }

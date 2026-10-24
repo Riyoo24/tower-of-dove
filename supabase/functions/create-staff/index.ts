@@ -4,7 +4,7 @@
 // (Supabase provides it to the function automatically; it never reaches the browser).
 //
 // POST body:
-//   { "action": "create", "first_name": "...", "last_name": "...", "username": "...", "number": "...", "password": "..." }
+//   { "action": "create", "first_name": "...", "last_name": "...", "email": "name@example.com", "number": "...", "password": "..." }
 //   { "action": "reset_password", "user_id": 12, "password": "..." }
 //   { "action": "delete_customer", "customer_id": 34 }
 
@@ -43,37 +43,40 @@ Deno.serve(async (req) => {
     if (body.action === 'create') {
       const first = String(body.first_name ?? '').trim();
       const last = String(body.last_name ?? '').trim();
-      const username = String(body.username ?? '').trim().toLowerCase();
+      // Staff log in with a real e-mail address (older callers may still send it as "username").
+      const email = String(body.email ?? body.username ?? '').trim().toLowerCase();
       const number = String(body.number ?? '').trim() || null;
       const password = String(body.password ?? '');
 
+      const nameOk = (v: string) => /\p{L}/u.test(v) && !/[^\p{L}\p{M}\s.'\u2019-]/u.test(v);
       if (!first || !last) return json({ error: 'Enter the first and last name.' }, 400);
-      if (!/^[a-z0-9_.]{3,30}$/.test(username)) return json({ error: 'Username: 3 to 30 letters, numbers, dots or underscores, no spaces.' }, 400);
+      if (!nameOk(first) || !nameOk(last)) return json({ error: 'First and last names can only contain letters.' }, 400);
+      if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return json({ error: 'Enter a valid email address, like name@example.com.' }, 400);
       if (password.length < 8) return json({ error: 'The password must be at least 8 characters.' }, 400);
       if (number && !/^[0-9+()\s-]{7,20}$/.test(number)) return json({ error: 'Enter a valid phone number or leave it empty.' }, 400);
 
-      const { data: taken } = await admin.from('app_user').select('user_id').ilike('username', username).maybeSingle();
-      if (taken) return json({ error: 'That username is already taken.' }, 409);
+      const { data: taken } = await admin.from('app_user').select('user_id').eq('username', email).maybeSingle();
+      if (taken) return json({ error: 'That email address is already used by another staff account.' }, 409);
 
-      // Auth account (the site turns the username into username@towerofdove.app).
+      // Auth account: the staff member signs in with this e-mail address.
       // user_metadata.kind = 'staff' so the sign-up trigger does NOT create a customer row.
       const { data: created, error: e1 } = await admin.auth.admin.createUser({
-        email: `${username}@towerofdove.app`, password, email_confirm: true, user_metadata: { kind: 'staff' },
+        email, password, email_confirm: true, user_metadata: { kind: 'staff' },
       });
       if (e1 || !created?.user) {
         const taken2 = /already|registered|exists/i.test(e1?.message ?? '');
-        return json({ error: taken2 ? 'That username is already taken.' : (e1?.message ?? 'Could not create the account.') }, taken2 ? 409 : 400);
+        return json({ error: taken2 ? 'That email address is already registered.' : (e1?.message ?? 'Could not create the account.') }, taken2 ? 409 : 400);
       }
 
       // Profile row that makes the account staff.
       const { error: e2 } = await admin.from('app_user').insert({
-        auth_user_id: created.user.id, first_name: first, last_name: last, username, number, role: 'Staff',
+        auth_user_id: created.user.id, first_name: first, last_name: last, username: email, email, number, role: 'Staff',
       });
       if (e2) {
         await admin.auth.admin.deleteUser(created.user.id);   // undo, so no half-created account is left
         return json({ error: e2.message }, 400);
       }
-      return json({ ok: true, username });
+      return json({ ok: true, email });
     }
 
     // ---- reset a staff member's password ----

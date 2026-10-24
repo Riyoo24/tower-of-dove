@@ -5,7 +5,7 @@
 
 import { closeOverlays, findBk } from './bookings.js';
 import { PAY, RL, STK, refresh } from './data.js';
-import { ACT, bkStatus, btn, dOf, money, num, rnStatus, run, stampLabel, tOf } from './helpers.js';
+import { ACT, bkStatus, btn, dOf, money, num, rnStatus, run, stampLabel, tOf, CONFIRM } from './helpers.js';
 import { TYB, dueB, dueLabel, groupStatus, groups, lineStatus, loadRentalId, overdueHours, setRental } from './rentals.js';
 import { sb } from '../config/supabaseClient.js';
 import { loadCatalog } from '../shared/catalog.js';
@@ -173,6 +173,15 @@ function drawRentalTx(tx) {
   wireChecks();
   if (out) loadRentalId(g.ref, 'v-id');
 }
+
+const txWho = ref => { const g = groups().find(x => x.ref === ref); return g ? `${ref} (${g.customer})` : ref; };
+
+CONFIRM['v-rn-ok'] = ref => {
+  const g = groups().find(x => x.ref === ref);
+  return { title: g && g.status === 'Pending' ? 'Verify and approve this rental?' : 'Verify this down payment?', message: `${txWho(ref)}: you confirm that everything ticked above was checked.`, ok: 'Yes, confirm' };
+};
+CONFIRM['v-rn-no'] = ref => ({ title: 'Reject this request?', message: `${txWho(ref)} will be rejected with the reason you picked.`, ok: 'Yes, reject', danger: true });
+CONFIRM['v-rn-reject'] = CONFIRM['v-rn-no'];
 
 /* the two buttons that need more than one database change */
 ACT['v-rn-ok'] = async ref => {

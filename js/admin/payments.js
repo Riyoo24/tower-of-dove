@@ -6,7 +6,7 @@
 import { state } from './state.js';
 import { closeOverlays, findBk, pendingAddons, verifiedMsg } from './bookings.js';
 import { PAY, RL, refresh } from './data.js';
-import { ACT, btn, money, run, tabsHtml, tbl } from './helpers.js';
+import { ACT, btn, money, run, tabsHtml, tbl, CONFIRM } from './helpers.js';
 import { sb } from '../config/supabaseClient.js';
 import { $, badge, esc, toast } from '../shared/utils.js';
 
@@ -47,6 +47,11 @@ const setPay = async (id, status) => {
   closeOverlays();
   toast(status === 'Verified' && ref ? verifiedMsg(ref, had) : 'Payment ' + status.toLowerCase() + '.');
 };
+
+const payWho = id => { const p = PAY.find(x => x.payment_id === +id); return p ? `${p.reference}${p.customer_name ? ' (' + p.customer_name + ')' : ''}` : 'this payment'; };
+
+CONFIRM['pay-ok'] = id => ({ title: 'Verify this payment?', message: `${payWho(id)} will be marked as verified. Only continue if you checked that the money was received.`, ok: 'Yes, verify payment' });
+CONFIRM['pay-no'] = id => ({ title: 'Reject this payment?', message: `${payWho(id)} will be rejected.`, ok: 'Yes, reject', danger: true });
 
 ACT['pay-ok'] = id => setPay(id, 'Verified');
 

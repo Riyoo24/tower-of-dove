@@ -4,12 +4,14 @@
    ===================================================================== */
 
 import { initAvailability, initCardButtons } from './availability.js';
+import { initContact } from './contact.js';
 import { SLIDES, initCarousel } from './carousel.js';
 import { renderEquipment, renderStudioOptions, renderStudios } from './render.js';
 import { STUDIOS, dataReady } from '../shared/catalog.js';
 import { injectChrome } from '../shared/layout.js';
 
 injectChrome();   // sidebar + mobile bar
+initContact();    // Contact Us section
 
 /* ============================ START ============================ */
 

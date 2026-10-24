@@ -2,18 +2,20 @@
 
 1. Create a Supabase project.
 2. SQL Editor: run `01_schema.sql`, `02_functions.sql`, `03_security.sql`, `04_seed.sql` in order
-   (or paste `all_in_one.sql`, which already includes every numbered file up to `13_...`).
-   Existing projects: just run the newest numbered file(s) you have not run yet (latest: `13_overdue_hours_addon_return.sql`). Every file is safe to re-run.
-3. Authentication > Providers > Email: turn **off** "Confirm email".
-   Sign-in uses a username, so the site turns `juan` into `juan@towerofdove.app` for Supabase Auth.
+   (or paste `all_in_one.sql`, which already includes every numbered file up to `14_...`).
+   Existing projects: just run the newest numbered file(s) you have not run yet (latest: `14_email_login_names_id_view.sql`). Every file is safe to re-run.
+3. Email verification is ON: customers must open the link in a confirmation email before they can log in.
+   Follow **Email verification setup** below (turn on "Confirm email", set the URLs, add an SMTP sender).
+   Customers and staff sign in with their real email address (stored as the Supabase Auth email).
+   Accounts made before file 14 keep their old login written as an email (for example `owner@towerofdove.app`).
 4. Create the owner: follow the comment block at the bottom of `04_seed.sql`.
 
 ## What the website calls
 
 | Screen / action | Call |
 |---|---|
-| Register | `auth.signUp({ email: username + '@towerofdove.app', password, options: { data: { kind: 'customer', full_name, username, number } } })` (a trigger creates the customer row) |
-| Log in | `auth.signInWithPassword({ email: username + '@towerofdove.app', password })`, then read `app_user` to see if it is staff |
+| Register | `auth.signUp({ email, password, options: { data: { kind: 'customer', first_name, last_name, username: email, number } } })` (a trigger creates the customer row) |
+| Log in | `auth.signInWithPassword({ email, password })`, then read `app_user` to see if it is staff |
 | Studios, equipment | `from('studio')`, `from('v_equipment_stock')` (readable without login) |
 | Calendar occupied times | `rpc('get_busy_slots', { p_studio_id, p_from, p_to, p_token })` |
 | Hold a slot (2 min) / release | `rpc('hold_slot', ...)`, `rpc('release_hold', { p_token })` |
@@ -58,4 +60,25 @@
 
 Supabase gives the function `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` itself, so there are no secrets to set.
 Only an active Owner can call it. It creates staff accounts, resets staff passwords and removes customer accounts.
-**If you deployed it earlier, open the function in the dashboard, paste the new code over the old and press Deploy again** (the customer removal needs it).
+**Staff are now created with an email address, so if you deployed it earlier, open the function in the dashboard, paste the new code over the old and press Deploy again** (the customer removal needs it).
+
+## Email verification setup
+
+1. **Authentication > Providers > Email**: turn **on** "Confirm email" and save.
+2. **Authentication > URL Configuration**: set **Site URL** to the address where the site is hosted
+   (for example `https://yourname.github.io/tower-of-dove-main/`). Under **Redirect URLs** add the same address followed by `**`
+   (for example `https://yourname.github.io/tower-of-dove-main/**`). Without this the confirmation link does not return to the site.
+   The site must be opened over `http(s)` (not by double-clicking `index.html`) for the link to work.
+3. **Your own email sender (SMTP)**: Supabase's built-in sender only mails project team members and allows just a few emails per hour,
+   so real customers will not get it. In **Authentication > Emails > SMTP Settings** (older dashboards: Project Settings > Authentication) turn on **Enable custom SMTP**
+   and enter the details from an email service (for example Resend, Brevo, or Gmail with an App Password: host `smtp.gmail.com`, port `465`).
+   Then raise **Authentication > Rate Limits > Emails sent per hour** if you expect many sign-ups.
+4. Optional: **Authentication > Emails > Confirm signup** lets you edit the message. Keep the `{{ .ConfirmationURL }}` link in it.
+5. Test: register with a real inbox, open the link, then log in. Accounts created before this change stay confirmed.
+
+## Forgot password
+
+Works with the same setup as email verification (SMTP sender + Redirect URLs `.../**`). The login page's **Forgot password?** sends a reset link
+to the account's email; the link returns to `pages/login.html?reset=1`, where the person chooses a new password.
+Old accounts that still use a fake `@towerofdove.app` login cannot receive the email: change their email under **Authentication > Users** first.
+Optional: edit the message in **Authentication > Emails > Reset password** (keep `{{ .ConfirmationURL }}`).

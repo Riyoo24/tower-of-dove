@@ -86,12 +86,52 @@ dlg.addEventListener('click', e => { if (e.target === dlg || e.target.closest('[
 
 $('#eqdlg').addEventListener('click', e => { if (e.target.id === 'eqdlg') $('#eqdlg').close(); });
 
-/* every button with data-act runs ACT[name](id) */
+/* ---- "Are you sure?" window ----
+   askConfirm({ title, message, ok, cancel, danger }) resolves true (confirmed) or false (cancelled, Esc or click outside).
+   It opens on top of every other window, so it also works inside the Verify drawer. */
+const cf = document.createElement('dialog');
+cf.className = 'dlg confirm';
+cf.setAttribute('role', 'alertdialog');
+cf.setAttribute('aria-label', 'Please confirm');
+document.body.appendChild(cf);
+
+let cfDone = null;
+
+const cfClose = v => { if (!cfDone) return; const d = cfDone; cfDone = null; if (cf.open) cf.close(); d(v); };
+
+cf.addEventListener('click', e => {
+  if (e.target === cf) return cfClose(false);
+  const b = e.target.closest('[data-cf]');
+  if (b) cfClose(b.dataset.cf === 'yes');
+});
+
+cf.addEventListener('cancel', e => { e.preventDefault(); cfClose(false); });   // Esc key
+
+export function askConfirm({ title = 'Are you sure?', message = '', ok = 'Yes, confirm', cancel = 'Cancel', danger = false } = {}) {
+  cfClose(false);
+  return new Promise(resolve => {
+    cfDone = resolve;
+    cf.innerHTML = `<div class="in"><h2 style="margin:0 0 8px">${esc(title)}</h2>${message ? `<p class="mut">${esc(message)}</p>` : ''}
+      <div class="acts"><button type="button" class="btn line" data-cf="no">${esc(cancel)}</button><button type="button" class="btn ${danger ? 'bad' : 'gold'}" data-cf="yes">${esc(ok)}</button></div></div>`;
+    cf.showModal();
+    cf.querySelector('[data-cf="no"]').focus();   // Cancel has the focus, so Enter never confirms by accident
+  });
+}
+
+/* every button with data-act runs ACT[name](id).
+   If CONFIRM[name] exists, it gives the "Are you sure?" text first and the action only runs after a Yes.
+   CONFIRM[name](id, button) returns { title, message, ok, cancel, danger }, or nothing to skip the question. */
 export const ACT = {};
+
+export const CONFIRM = {};
 
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-act]');
   if (!b || !ACT[b.dataset.act] || b.dataset.busy) return;
   b.dataset.busy = '1';
-  Promise.resolve(ACT[b.dataset.act](b.dataset.id, b)).catch(err => { console.error(err); toast(err.message); }).finally(() => { delete b.dataset.busy; });
+  Promise.resolve()
+    .then(() => { const spec = CONFIRM[b.dataset.act] && CONFIRM[b.dataset.act](b.dataset.id, b); return spec ? askConfirm(spec) : true; })
+    .then(yes => yes ? ACT[b.dataset.act](b.dataset.id, b) : null)
+    .catch(err => { console.error(err); toast(err.message); })
+    .finally(() => { delete b.dataset.busy; });
 });

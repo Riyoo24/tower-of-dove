@@ -8,7 +8,7 @@ import { sb } from '../config/supabaseClient.js';
 import { RN_STATUS, loadMyRentals } from './data.js';
 import { normRef, notFound, startsAt } from './myBookings.js';
 import { fmtDT } from './rent.js';
-import { dlg, showDialog } from './ui.js';
+import { dlg, showDialog, showIdViewer } from './ui.js';
 import { BOOKINGS } from '../shared/availability.js';
 import { getUser } from '../shared/session.js';
 import { $, badge, esc, manilaParts, peso, shortDate, sum, toast } from '../shared/utils.js';
@@ -102,6 +102,7 @@ export function renderMyRentals() {
     orders.map(o => {
       const canCancel = ['Pending', 'Approved'].includes(o.rawStatus);
       const actions = `<button class="btn sm line" data-rn="details" data-ref="${esc(o.rentalRef)}">Details</button>` +
+        (o.type === 'out' ? `<button class="btn sm line" data-rn="viewid" data-ref="${esc(o.rentalRef)}">View ID</button>` : '') +
         (canCancel ? `<button class="btn sm line" data-rn="cancel" data-ref="${esc(o.rentalRef)}">Cancel</button>` : '');
       return {
         cells: [
@@ -118,8 +119,20 @@ export function renderMyRentals() {
 /* Side drawer: every item of the order, prices, totals, status. */
 const rnDrawer = $('#rndrawer');
 
+/* The customer can open the valid ID they sent with an outside rental (private bucket, 10 minute link). */
+async function viewRentalId(ref) {
+  const { data: o, error } = await sb.from('rental_order').select('id_type, id_image_path').eq('rental_ref', ref).maybeSingle();
+  if (error || !o) return toast('Could not load your ID details.');
+  if (!o.id_image_path) return toast('No ID photo was attached to this rental.');
+  const { data: s, error: e2 } = await sb.storage.from('rental-ids').createSignedUrl(o.id_image_path, 600);
+  if (e2 || !s) return toast('Could not open your ID' + (e2 ? ': ' + e2.message : '.'));
+  showIdViewer({ url: s.signedUrl, pdf: /\.pdf$/i.test(o.id_image_path), title: 'Valid ID' + (o.id_type ? ' (' + o.id_type + ')' : '') });
+}
+
 rnDrawer.addEventListener('click', e => {
   if (e.target === rnDrawer || e.target.closest('[data-close]')) return rnDrawer.close();
+  const v = e.target.closest('[data-rn="viewid"]');
+  if (v) return viewRentalId(v.dataset.ref);
   const c = e.target.closest('[data-rn="cancel"]');
   if (c) startCancelRental(c.dataset.ref);
 });
@@ -171,6 +184,8 @@ function showRentalDetails(ref) {
           </div>`).join('')}
       </div>
 
+      ${out ? `<h3>Valid ID</h3><p class="mut" style="margin:0 0 8px">The ID you sent with this request.</p><button type="button" class="btn line sm" data-rn="viewid" data-ref="${esc(o.rentalRef)}">View ID</button>` : ''}
+
       <h3>Summary</h3>
       ${money}
       ${out ? '<p class="mut">Each hour beyond 8 hours adds one-eighth of the item price. Returning late adds the same charge for every hour late.</p>' : ''}
@@ -218,6 +233,7 @@ export function initMyRentals() {
     const b = e.target.closest('[data-rn]');
     if (!b) return;
     if (b.dataset.rn === 'details') return showRentalDetails(b.dataset.ref);
+    if (b.dataset.rn === 'viewid') return viewRentalId(b.dataset.ref);
     startCancelRental(b.dataset.ref);
   });
 }

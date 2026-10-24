@@ -35,6 +35,19 @@ dlg.addEventListener('click', e => {
   if (e.target === dlg || e.target.closest('[data-close]')) dlg.close();   // backdrop or any [data-close] button
 });
 
+/* Larger view of a valid ID (the file just picked, or the one already sent with a rental). */
+export function showIdViewer({ url, pdf, title }) {
+  const u = esc(url);
+  showDialog(`
+    <h2>${esc(title || 'Valid ID')}</h2>
+    ${pdf ? `<iframe class="idframe" src="${u}" title="Valid ID (PDF)"></iframe>`
+          : `<img class="idfull" src="${u}" alt="Valid ID">`}
+    <div class="acts">
+      <a class="btn line" href="${u}" target="_blank" rel="noopener">Open in new tab</a>
+      <button type="button" class="btn gold" data-close>Close</button>
+    </div>`);
+}
+
 export const stampLabel = ts => new Date(ts).toLocaleString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 
 const ICON_OK = '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';

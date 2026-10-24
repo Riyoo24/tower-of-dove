@@ -28,7 +28,11 @@ export const ICONS = {
   door:  '<path d="M5 21V3h14v18M3 21h18"/><circle cx="15" cy="12" r="1"/>',
   plus:  '<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
   tag:   '<path d="M3 12V3h9l9 9-9 9z"/><circle cx="7.5" cy="7.5" r="1"/>',
-  logout:'<path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>'
+  logout:'<path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>',
+  mail:  '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+  pin:   '<path d="M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+  facebook: '<path d="M14 8h3V4h-3a4 4 0 00-4 4v3H7v4h3v6h4v-6h3l1-4h-4V8z"/>',
+  youtube:  '<rect x="2" y="5" width="20" height="14" rx="4"/><path d="M10 9l5 3-5 3z"/>',
 };
 
 export const icon = n => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]}</svg>`;
@@ -39,7 +43,8 @@ export const NAV_ITEMS = [
   ['book',   'Book a Studio',  'cal'],
   ['rent',   'Rent Equipment', 'music'],
   ['mybook', 'My Bookings',    'list'],
-  ['myrent', 'My Rental',      'box']
+  ['myrent', 'My Rental',      'box'],
+  ['contact','Contact Us',     'mail']
 ];
 
 /* Owner and staff sidebar. [tab id, label, icon, ownerOnly]. Links are

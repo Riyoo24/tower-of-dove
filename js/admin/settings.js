@@ -5,15 +5,15 @@
 
 import { afterAction } from './bookings.js';
 import { STAFF } from './data.js';
-import { ACT, OWNER, btn, dlg, run, showDlg, tb } from './helpers.js';
+import { ACT, OWNER, btn, dlg, run, showDlg, tb, CONFIRM } from './helpers.js';
 import { sb } from '../config/supabaseClient.js';
 import { GCASH_QR_PATH, gcashQrUrl } from '../shared/catalog.js';
-import { $, esc, toast } from '../shared/utils.js';
+import { $, esc, isEmail, isName, normalizeEmail, toast } from '../shared/utils.js';
 
 /* ============================ 9. SETTINGS & STAFF ============================ */
 
 export function renderStaff() {
-  const head = OWNER ? ['Name', 'Username', 'Role', 'Status', 'Actions'] : ['Name', 'Role', 'Status'];
+  const head = OWNER ? ['Name', 'Email', 'Role', 'Status', 'Actions'] : ['Name', 'Role', 'Status'];
   tb('stf', head, STAFF.map(u => {
     const name = esc(((u.first_name || '') + ' ' + (u.last_name || '')).trim() || u.username);
     const role = u.role === 'Owner' ? 'Owner/Admin' : 'Staff/Caretaker', status = esc(u.status || 'Active');
@@ -38,22 +38,24 @@ async function fnCall(body) {
 
 function staffForm() {
   showDlg(`<form id="sf-f" novalidate><h2 style="margin:0 0 4px">Add staff account</h2>
-    <p class="mut">The staff member logs in with this username and password. Give them the temporary password in person.</p>
-    <div class="fg" style="grid-template-columns:1fr 1fr"><div><label for="sf-fn">First name</label><input id="sf-fn" autocomplete="off"></div><div><label for="sf-ln">Last name</label><input id="sf-ln" autocomplete="off"></div></div>
-    <label for="sf-u">Username</label><input id="sf-u" autocomplete="off" placeholder="e.g. maria.staff">
-    <label for="sf-p">Phone (optional)</label><input id="sf-p" autocomplete="off">
-    <label for="sf-pw">Temporary password</label><input id="sf-pw" autocomplete="off" placeholder="At least 8 characters">
+    <p class="mut">The staff member logs in with this email address and password. Give them the temporary password in person.</p>
+    <p class="req-note"><span class="req">*</span> Required</p>
+    <div class="fg" style="grid-template-columns:1fr 1fr"><div><label for="sf-fn">First name <span class="req" aria-hidden="true">*</span></label><input id="sf-fn" data-letters autocomplete="off" required aria-required="true"></div><div><label for="sf-ln">Last name <span class="req" aria-hidden="true">*</span></label><input id="sf-ln" data-letters autocomplete="off" required aria-required="true"></div></div>
+    <label for="sf-u">Email address <span class="req" aria-hidden="true">*</span></label><input id="sf-u" type="email" inputmode="email" autocomplete="off" placeholder="e.g. maria@example.com" required aria-required="true">
+    <label for="sf-p">Phone (optional)</label><input id="sf-p" type="tel" autocomplete="off">
+    <label for="sf-pw">Temporary password <span class="req" aria-hidden="true">*</span></label><input id="sf-pw" autocomplete="off" placeholder="At least 8 characters" required aria-required="true">
     <div class="alert" id="sf-e" hidden></div>
     <div class="acts"><button type="button" class="btn line" data-close>Cancel</button><button class="btn gold" id="sf-go">Create account</button></div></form>`);
   $('#sf-f').onsubmit = async ev => {
     ev.preventDefault();
     const err = m => { $('#sf-e').textContent = m; $('#sf-e').hidden = !m; };
-    const v = { action: 'create', first_name: $('#sf-fn').value.trim(), last_name: $('#sf-ln').value.trim(), username: $('#sf-u').value.trim().toLowerCase(), number: $('#sf-p').value.trim(), password: $('#sf-pw').value };
+    const v = { action: 'create', first_name: $('#sf-fn').value.trim(), last_name: $('#sf-ln').value.trim(), email: normalizeEmail($('#sf-u').value), number: $('#sf-p').value.trim(), password: $('#sf-pw').value };
     if (!v.first_name || !v.last_name) return err('Enter the first and last name.');
-    if (!/^[a-z0-9_.]{3,30}$/.test(v.username)) return err('Username: 3 to 30 letters, numbers, dots or underscores, no spaces.');
+    if (!isName(v.first_name) || !isName(v.last_name)) return err('First and last names can only contain letters.');
+    if (!isEmail(v.email)) return err('Enter a valid email address, like name@example.com.');
     if (v.password.length < 8) return err('The password must be at least 8 characters.');
     $('#sf-go').disabled = true; err('');
-    try { await fnCall(v); await afterAction(`Staff account "${v.username}" created.`); }
+    try { await fnCall(v); await afterAction(`Staff account "${v.email}" created.`); }
     catch (x) { err(x.message); $('#sf-go').disabled = false; }
   };
 }
@@ -74,9 +76,14 @@ ACT['sf-pw'] = id => {
   };
 };
 
+/* only deactivating asks "Are you sure?"; activating again does not */
+CONFIRM['sf-tog'] = id => {
+  const u = STAFF.find(x => x.user_id === +id);
+  return u && u.status === 'Active' ? { title: 'Deactivate this staff account?', message: `${u.username} will no longer be able to log in or use the dashboard. You can activate the account again later.`, ok: 'Yes, deactivate', danger: true } : null;
+};
+
 ACT['sf-tog'] = async id => {
   const u = STAFF.find(x => x.user_id === +id), next = u.status === 'Active' ? 'Inactive' : 'Active';
-  if (next === 'Inactive' && !confirm(`Deactivate ${u.username}? They can no longer use the dashboard.`)) return;
   if (await run(sb.from('app_user').update({ status: next }).eq('user_id', u.user_id))) afterAction(`${u.username} ${next === 'Active' ? 'activated' : 'deactivated'}.`);
 };
 

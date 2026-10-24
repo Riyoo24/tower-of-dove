@@ -39,11 +39,10 @@ on conflict (lower(name)) do nothing;
 -- CREATING THE FIRST OWNER (run once, after the four files)
 --
 -- 1. Supabase dashboard -> Authentication -> Users -> Add user.
---    Email: owner@towerofdove.app   (the website turns the username "owner"
---    into username@towerofdove.app when signing in)
+--    Email: the owner's real email address (it is the login on the website)
 --    Password: choose one. Tick "Auto Confirm User".
--- 2. Authentication -> Providers -> Email: turn OFF "Confirm email"
---    (the fake @towerofdove.app addresses cannot receive mail).
+-- 2. Authentication -> Providers -> Email: turn ON "Confirm email" (see supabase/README.md > Email verification setup)
+--    ("Auto Confirm User" above keeps the owner able to log in; customers must confirm by email.)
 -- 3. Run this, replacing the email if you used another one:
 --
 -- insert into public.app_user (auth_user_id, first_name, last_name, username, role)

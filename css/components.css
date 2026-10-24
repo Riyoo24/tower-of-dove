@@ -107,3 +107,19 @@ td { padding: 10px; border-bottom: 1px solid var(--dove); white-space: nowrap; }
 .eqimg img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .price-lines { margin: 10px 0; font-size: 14px; }
 .price-lines div + div { margin-top: 4px; }
+
+/* Red asterisk after the label of a required field, and the "* Required" reminder line */
+.req { color: var(--bad, #d64545); font-weight: 700; margin-left: 2px; }
+.req-note { font-size: 12.5px; color: var(--mut, #8a8a8a); margin: 2px 0 6px; }
+.req-note .req { margin: 0 2px 0 0; }
+
+/* Preview of the valid ID the customer picked */
+.idprev { display: flex; align-items: center; gap: 12px; margin-top: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 10px; }
+.idprev[hidden] { display: none; }
+.idprev img { width: 72px; height: 52px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); background: #000; cursor: zoom-in; }
+.idprev .pdfic { width: 72px; height: 52px; display: grid; place-items: center; border-radius: 6px; border: 1px solid var(--line); font-weight: 700; font-size: 13px; }
+.idprev .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.idfull { display: block; max-width: 100%; max-height: 70vh; margin: 12px auto; border-radius: 10px; border: 1px solid var(--line); background: #000; object-fit: contain; }
+.idframe { display: block; width: 100%; height: 70vh; margin: 12px 0; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+
+.alert.ok { background: var(--ok-bg); color: var(--ok); }

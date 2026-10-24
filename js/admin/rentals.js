@@ -5,7 +5,7 @@
 
 import { afterAction, closeOverlays } from './bookings.js';
 import { PAY, RL, refresh } from './data.js';
-import { ACT, btn, dOf, dayDiff, money, num, rnStatus, run, tOf, tbl } from './helpers.js';
+import { ACT, CONFIRM, btn, dOf, dayDiff, money, num, rnStatus, run, tOf, tbl } from './helpers.js';
 import { dueToday } from './overview.js';
 import { sb } from '../config/supabaseClient.js';
 import { loadCatalog } from '../shared/catalog.js';
@@ -104,6 +104,17 @@ export const setRental = async (ref, status, reason) => {
     afterAction({ Approved: `${ref} approved.`, Active: `${ref} issued.`, Rejected: `${ref} rejected. The customer will see: ${reason}.` }[status]);
   }
 };
+
+const rnWho = ref => { const g = groups().find(x => x.ref === ref); return g ? `${ref} (${g.customer})` : ref; };
+
+CONFIRM['rn-ok'] = ref => ({ title: 'Approve this rental?', message: `${rnWho(ref)} will be marked as Verified.`, ok: 'Yes, approve' });
+CONFIRM['rn-issue'] = ref => ({ title: 'Issue the equipment?', message: `Hand over the equipment for ${rnWho(ref)} now? The rental will be marked In Use.`, ok: 'Yes, issue equipment' });
+CONFIRM['rn-ret'] = ref => ({ title: 'Process the return?', message: `All equipment in ${rnWho(ref)} will be marked as returned and put back in stock. Any late fee is worked out now.`, ok: 'Yes, process return' });
+CONFIRM['rn-retline'] = id => {
+  const [ref, eid] = id.split(':'), l = RL.find(x => x.rental_ref === ref && x.equipment_id === +eid);
+  return { title: 'Return this item?', message: `${l ? l.equipment_name + ' from ' : ''}${rnWho(ref)} will be marked as returned and put back in stock.`, ok: 'Yes, return item' };
+};
+CONFIRM['rn-reject-go'] = ref => ({ title: 'Reject this rental?', message: `${rnWho(ref)} will be rejected and the customer will see the reason.`, ok: 'Yes, reject', danger: true });
 
 ACT['rn-ok'] = ref => setRental(ref, 'Approved');
 

@@ -1,19 +1,26 @@
 /* =====================================================================
    shared/utils.js - small helpers used everywhere
    DOM shortcuts ($, $$), text/number formatting, dates (Manila time), the
-   bookable time slots, the toast message and the username -> e-mail helper.
+   bookable time slots, the toast message and the e-mail / name checks.
    ===================================================================== */
 
-/* Usernames become fake emails for Supabase Auth: juan -> juan@towerofdove.app */
-export const toEmail = username => String(username).trim().toLowerCase() + '@towerofdove.app';
+/* Accounts (customers and staff) log in with a real e-mail address. */
+export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+export const normalizeEmail = v => String(v).trim().toLowerCase();
+export const isEmail = v => EMAIL_RE.test(normalizeEmail(v)) && normalizeEmail(v).length <= 254;
+
+/* First and last names: letters only (any language), plus spaces, hyphens, apostrophes and dots
+   (so "Mary-Ann", "De la Cruz" and "Ma. Cristina" still work). Numbers and other symbols are refused. */
+export const NAME_BAD = /[^\p{L}\p{M}\s.'\u2019-]/gu;
+export const isName = v => { const t = String(v).trim(); return t.length > 0 && /\p{L}/u.test(t) && !/[^\p{L}\p{M}\s.'\u2019-]/u.test(t); };
 
 /* The database stores real timestamps; the studio runs on Manila time (UTC+8). */
 export const manilaTS = (dateISO, hour) => `${dateISO}T${String(hour).padStart(2, '0')}:00:00+08:00`;
 
-/* timestamp from the database -> { date: 'YYYY-MM-DD', hour: 14 } in Manila time */
+/* timestamp from the database -> { date: 'YYYY-MM-DD', hour: 14, minute: 31 } in Manila time */
 export function manilaParts(ts) {
   const m = new Date(new Date(ts).getTime() + 8 * 3600e3);
-  return { date: m.toISOString().slice(0, 10), hour: m.getUTCHours() };
+  return { date: m.toISOString().slice(0, 10), hour: m.getUTCHours(), minute: m.getUTCMinutes() };
 }
 
 /* Bookable hourly slots (10:00 AM to 9:00 PM start times). */

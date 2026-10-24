@@ -13,9 +13,9 @@ import { $, badge, esc, shortDate, toast } from '../shared/utils.js';
 /* ============================ 8. CUSTOMERS ============================ */
 
 export function renderCustomers() {
-  const q = ($('#cu-q').value || '').toLowerCase();
+  const q = ($('#cu-q').value || '').toLowerCase(), type = $('#cu-type').value;
   tb('acu', ['Name', 'Phone', 'Account', 'Bookings', 'Rentals', 'Total spent', 'Status', ''],
-    CUS.filter(c => !q || `${c.customer_name} ${c.number}`.toLowerCase().includes(q))
+    CUS.filter(c => (!type || c.account_type === type) && (!q || `${c.customer_name} ${c.number}`.toLowerCase().includes(q)))
        .map(c => {
          const off = c.status === 'Inactive', reg = c.account_type === 'Registered', hist = num(c.bookings) + num(c.rentals);
          // registered accounts are disabled (or enabled again); a guest with no records can be removed
@@ -27,6 +27,8 @@ export function renderCustomers() {
 }
 
 $('#cu-q').addEventListener('input', renderCustomers);
+
+$('#cu-type').addEventListener('change', renderCustomers);
 
 ACT['cu-off'] = id => {
   const c = CUS.find(x => x.customer_id === +id);

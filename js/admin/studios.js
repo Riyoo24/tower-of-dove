@@ -5,7 +5,7 @@
 
 import { closeOverlays } from './bookings.js';
 import { BK, STU, refresh } from './data.js';
-import { ACT, OWNER, btn, dbtn, money, num, run, showDlg, uploadPublic } from './helpers.js';
+import { ACT, OWNER, askConfirm, btn, dbtn, money, num, run, showDlg, uploadPublic } from './helpers.js';
 import { sb } from '../config/supabaseClient.js';
 import { STUDIO_COLORS, loadCatalog } from '../shared/catalog.js';
 import { $, badge, esc, pl, toast } from '../shared/utils.js';
@@ -29,7 +29,7 @@ ACT['st-tog'] = async id => {
   if (await run(sb.from('studio').update({ status: s.status === 'Available' ? 'Unavailable' : 'Available' }).eq('studio_id', s.studio_id))) afterStudio(`${s.name} updated.`);
 };
 
-ACT['st-del'] = id => {
+ACT['st-del'] = async id => {
   const s = STU.find(x => x.studio_id === +id), n = BK.filter(b => b.studio_id === s.studio_id).length;
   if (n > 0) {
     showDlg(`<h2 style="margin:0 0 8px">${esc(s.name)} can't be deleted</h2>
@@ -37,13 +37,9 @@ ACT['st-del'] = id => {
       <div class="acts"><button class="btn line" data-close>Close</button>${s.status === 'Available' ? btn('st-tog', s.studio_id, 'Disable ' + esc(s.name)) : ''}</div>`);
     return;
   }
-  showDlg(`<h2 style="margin:0 0 8px">Delete ${esc(s.name)}?</h2>
-    <p class="mut">The studio is removed from the system. It has no bookings. This can't be undone.</p>
-    <div class="acts"><button class="btn line" data-close>Cancel</button>${dbtn('st-del-go', s.studio_id, 'Delete studio')}</div>`);
-};
-
-ACT['st-del-go'] = async id => {
-  const s = STU.find(x => x.studio_id === +id);
+  // no bookings: it can be deleted, but only after an "Are you sure?"
+  const yes = await askConfirm({ title: `Delete ${s.name}?`, message: 'The studio is removed from the system. It has no bookings. This can\'t be undone.', ok: 'Yes, delete studio', cancel: 'No, keep it', danger: true });
+  if (!yes) return;
   const r = await sb.from('studio').delete().eq('studio_id', s.studio_id);
   if (r.error) return toast(r.error.code === '23503' ? `${s.name} has bookings on record, so it can't be deleted. Disable it instead.` : r.error.message);
   afterStudio(`${s.name} deleted.`);
