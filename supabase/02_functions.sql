@@ -606,8 +606,7 @@ select
     when e.total_quantity - public.equipment_in_use(e.equipment_id) = 1 and e.total_quantity > 1 then 'Low'
     else 'Available'
   end as stock_status,
-  e.add_on_rate, e.outside_rate, e.allow_addon, e.allow_outside, e.min_hours,
-  e.is_drum_set, e.drum_kit, e.is_vip
+  e.add_on_rate, e.outside_rate, e.allow_addon, e.allow_outside, e.min_hours
 from public.equipment e
 join public.equipment_category c on c.category_id = e.category_id;
 

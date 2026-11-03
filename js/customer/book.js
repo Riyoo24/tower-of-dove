@@ -5,16 +5,54 @@
 
 import { state } from './state.js';
 import { openBook } from './bookingForm.js';
-import { firstBookableDate, loadBusy, takenSlots } from '../shared/availability.js';
+import { firstBookableDate, isPastSlot, lastBookableDate, loadBusy, takenSlots } from '../shared/availability.js';
 import { studioThumb } from '../shared/cards.js';
 import { STUDIOS, isClosed } from '../shared/catalog.js';
-import { $, SLOTS, badge, esc, longDate, pad, peso } from '../shared/utils.js';
+import { $, SLOTS, badge, esc, longDate, manilaDay, pad, peso, toast } from '../shared/utils.js';
+
+/* A day is fully booked (red) only when it can still be booked and every hour that is left is taken.
+   Past days are never red, and neither is a day with no hours left to book (like today after closing);
+   on today, hours that have already passed are ignored, so today is red once all the remaining hours are booked. */
+const dayIsFull = (studioIdx, ds) => {
+    if (ds < manilaDay(0))
+        return false;
+    const taken = takenSlots(studioIdx, ds);
+    const open = SLOTS.map((_, i) => i).filter(i => !isPastSlot(ds, i));
+    return open.length > 0 && open.every(i => taken.has(i));
+};
+
+const nextDay = ds => {
+    const d = new Date(ds + 'T00:00');
+    d.setDate(d.getDate() + 1);
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
+/* Book Now on a fully booked day: select the next day that still has a free hour (the form is not opened). */
+async function bookNow() {
+    const si = state.selStudio, last = lastBookableDate();
+    await loadBusy(si, state.selDate, last);   // the following days may be in another month, so load them first
+    if (dayIsFull(si, state.selDate)) {
+        let ds = nextDay(state.selDate);
+        while (ds <= last && dayIsFull(si, ds))
+            ds = nextDay(ds);
+        if (ds > last)
+            return toast('This studio is fully booked for the next 4 weeks. Please try another studio.');
+        const wasToday = state.selDate === manilaDay(0);
+        state.selDate = ds;
+        state.calMonth = new Date(ds + 'T00:00');
+        state.calMonth.setDate(1);
+        await refreshBook();   // only select the next available day; the customer presses Book Now again to open the form
+        return toast(`${wasToday ? 'Today is' : 'That day is'} fully booked. We selected ${longDate(ds)} for you.`);
+    }
+    return openBook();
+}
 
 /* ============================ 2. BOOK A STUDIO ============================ */
 
 function renderBook() {
-  if (state.selDate < firstBookableDate()) state.selDate = firstBookableDate();   // the page was left open past closing time
-  $('#cs').innerHTML = STUDIOS.map((s, i) => `
+    if (state.selDate < firstBookableDate())
+        state.selDate = firstBookableDate();   // the page was left open past closing time
+    $('#cs').innerHTML = STUDIOS.map((s, i) => `
     <div class="card pick ${i === state.selStudio ? 'sel' : ''}" data-i="${i}">
       ${studioThumb(s)}
       <div class="row"><h3>Studio ${s.id}</h3>${badge(s.status)}</div>
@@ -22,47 +60,59 @@ function renderBook() {
       <p style="margin-top:6px"><b>${peso(s.rate)}</b> <span class="mut">per hour</span></p>
     </div>`).join('');
 
-  const y = state.calMonth.getFullYear(), m = state.calMonth.getMonth();
-  const firstWeekday = new Date(y, m, 1).getDay();
-  const daysInMonth = new Date(y, m + 1, 0).getDate();
-  $('#cal-t').textContent = state.calMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) + ', Studio ' + STUDIOS[state.selStudio].id;
+    const y = state.calMonth.getFullYear(), m = state.calMonth.getMonth();
+    const firstWeekday = new Date(y, m, 1).getDay();
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    $('#cal-t').textContent = state.calMonth.toLocaleDateString('en-US', {
+        month: 'long',
+        year: 'numeric'
+    }) + ', Studio '
+        + STUDIOS[state.selStudio].id;
 
-  let html = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => `<small class="mut">${d}</small>`).join('')
-           + '<span></span>'.repeat(firstWeekday);
-  for (let d = 1; d <= daysInMonth; d++) {
-    const ds = `${y}-${pad(m + 1)}-${pad(d)}`;
-    const n = takenSlots(state.selStudio, ds).size;
-    const cls = ds === state.selDate ? 'sel' : n >= SLOTS.length ? 'full' : n ? 'part' : '';
-    html += `<button class="cd ${cls}" data-d="${ds}" ${ds < firstBookableDate() ? 'disabled' : ''}>${d}<i>${n ? n + 'h' : ''}</i></button>`;
-  }
-  $('#cal').innerHTML = html;
+    let html = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => `<small class="mut">${d}</small>`).join('')
+        + '<span></span>'.repeat(firstWeekday);
+    for (let d = 1; d <= daysInMonth; d++) {
+        const ds = `${y}-${pad(m + 1)}-${pad(d)}`;
+        const n = takenSlots(state.selStudio, ds).size;
+        // the selected day keeps its red (fully booked) or shaded (partly booked) background; 'sel' only adds the outline
+        const cls = [dayIsFull(state.selStudio, ds) ? 'full' : n ? 'part' : '', ds === state.selDate ? 'sel' : ''].join(' ').trim();
+        html += `<button class="cd ${cls}" data-d="${ds}" ${ds < firstBookableDate() || ds > lastBookableDate() ? 'disabled' : ''}>${d}<i>${n ? n + 'h' : ''}</i></button>`;
+    }
+    $('#cal').innerHTML = html;
 
-  const occupied = [...takenSlots(state.selStudio, state.selDate)].sort((a, b) => a - b);
-  $('#dayocc').innerHTML = `<h3 style="font-size:14px">${longDate(state.selDate)}</h3>` + (occupied.length
-    ? `<p class="mut">Occupied: ${occupied.map(i => SLOTS[i]).join(', ')}</p>`
-    : '<p class="mut">No occupied times. The whole day is open.</p>');
+    const occupied = [...takenSlots(state.selStudio, state.selDate)].sort((a, b) => a - b);
+    $('#dayocc').innerHTML = `<h3 style="font-size:14px">${longDate(state.selDate)}</h3>`
+        + (occupied.length
+            ? `<p class="mut">Occupied: ${occupied.map(i => SLOTS[i]).join(', ')}</p>`
+            : '<p class="mut">No occupied times. The whole day is open.</p>');
 
-  $('#bk-now').disabled = isClosed(STUDIOS[state.selStudio]);
+    $('#bk-now').disabled = isClosed(STUDIOS[state.selStudio]);
 }
 
 /* Load the month's taken hours from the database, then draw the calendar. */
 export async function refreshBook() {
-  const y = state.calMonth.getFullYear(), m = state.calMonth.getMonth();
-  await loadBusy(state.selStudio, `${y}-${pad(m + 1)}-01`, `${y}-${pad(m + 1)}-${pad(new Date(y, m + 1, 0).getDate())}`);
-  renderBook();
+    const y = state.calMonth.getFullYear(), m = state.calMonth.getMonth();
+    await loadBusy(state.selStudio, `${y}-${pad(m + 1)}-01`, `${y}-${pad(m + 1)}-${pad(new Date(y, m + 1, 0).getDate())}`);
+    renderBook();
 }
 
 export function initBookTab() {
-  $('#c-book').addEventListener('click', e => {
-    const pick = e.target.closest('.pick'), day = e.target.closest('.cd');
-    if (pick) state.selStudio = +pick.dataset.i;
-    else if (day) state.selDate = day.dataset.d;
-    else if (e.target.closest('#cal-p')) state.calMonth = new Date(state.calMonth.getFullYear(), state.calMonth.getMonth() - 1, 1);
-    else if (e.target.closest('#cal-n')) state.calMonth = new Date(state.calMonth.getFullYear(), state.calMonth.getMonth() + 1, 1);
-    else if (e.target.closest('#bk-now')) return openBook();
-    else return;
-    (day ? renderBook : refreshBook)();
-  });
+    $('#c-book').addEventListener('click', e => {
+        const pick = e.target.closest('.pick'), day = e.target.closest('.cd');
+        if (pick)
+            state.selStudio = +pick.dataset.i;
+        else if (day)
+            state.selDate = day.dataset.d;
+        else if (e.target.closest('#cal-p'))
+            state.calMonth = new Date(state.calMonth.getFullYear(), state.calMonth.getMonth() - 1, 1);
+        else if (e.target.closest('#cal-n'))
+            state.calMonth = new Date(state.calMonth.getFullYear(), state.calMonth.getMonth() + 1, 1);
+        else if (e.target.closest('#bk-now'))
+            return bookNow();
+        else
+            return;
+        (day ? renderBook : refreshBook)();
+    });
 }
 
 /* ---- success pop-up: stays open until the customer presses Done (no timer) ---- */

@@ -1,93 +1,371 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Dashboard | Tower of Dove Music Studio</title>
-  <link rel="icon" type="image/png" href="../assets/img/logo.png">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-  <!-- Stylesheets: shared first, then this page's own file -->
-  <link rel="stylesheet" href="../css/base.css">
-  <link rel="stylesheet" href="../css/components.css">
-  <link rel="stylesheet" href="../css/layout.css">
-  <link rel="stylesheet" href="../css/modals.css">
-  <link rel="stylesheet" href="../css/admin.css">
-</head>
-<body data-role="admin" data-active="a-over">
-
-  <!-- The sidebar and mobile bar are injected by shared.js -->
-  <main class="page" id="admin">
-    <div class="adm">
-      <div class="wrap" style="max-width:none;width:100%">
-      <section id="a-over" class="pg on">
-        <h1>Overview</h1><p class="sub">Friday, October 9, 2026. Here is what is happening right now.</p>
-        <div class="grid g4" id="ovk">
-          <div class="card kpi"><span class="mut">Total bookings</span><div class="num">148</div></div>
-          <div class="card kpi"><span class="mut">Today's bookings</span><div class="num">6</div></div>
-          <div class="card kpi"><span class="mut">Confirmed</span><div class="num">3</div></div>
-          <div class="card kpi"><span class="mut">Pending</span><div class="num">2</div></div>
-        </div>
-        <div class="card" style="margin-top:16px"><h3>Bookings over the last 7 days</h3><div class="bars" id="bars"></div></div>
-        <h2 style="margin-top:24px">Equipment returns</h2>
-        <div class="grid g4" id="rkpi"></div>
-        <h2 style="margin-top:24px">Studios right now</h2>
-        <div class="grid g4" id="ost"></div>
-        <div class="card" style="margin-top:16px"><h3>Needs attention</h3><ul class="list" id="ovl"></ul></div>
-      </section>
-
-      <section id="a-onb" class="pg"><h1>Onsite booking</h1><p class="sub">Record a walk-in studio booking paid at the counter. It is confirmed and verified right away.</p>
-<div class="grid" style="max-width:760px"><form class="card" id="onb" novalidate><div class="fg" style="grid-template-columns:1fr 1fr"><div><label for="ob-n">Customer name <span class="req" aria-hidden="true">*</span></label><input id="ob-n" data-letters required aria-required="true"></div><div><label for="ob-p">Phone</label><input id="ob-p" type="tel"></div><div><label for="ob-s">Studio</label><select id="ob-s"></select></div><div><label for="ob-d">Date</label><input id="ob-d" type="date"></div><div><label for="ob-h">Duration</label><select id="ob-h"><option value="1">1 hour</option><option value="2" selected>2 hours</option><option value="3">3 hours</option><option value="4">4 hours</option></select></div><div><label for="ob-t">Start time (free only)</label><select id="ob-t"></select></div><div><label for="ob-m">Payment</label><select id="ob-m"><option>Cash</option><option>GCash</option></select></div><div id="ob-gw" hidden><label for="ob-g">GCash reference <span class="req" aria-hidden="true">*</span></label><input id="ob-g"></div></div><p class="req-note"><span class="req">*</span> Required</p><div class="tot"><span>Total received</span><span id="ob-tot"></span></div><div class="alert" id="ob-e" hidden></div><button class="btn gold full">Record booking</button></form></div></section>
-<section id="a-onr" class="pg"><h1>Onsite rental</h1><p class="sub">Record equipment rented in person. Items are issued immediately and stock updates.</p>
-<div class="grid" style="max-width:760px"><form class="card" id="onr" novalidate><div class="fg" style="grid-template-columns:1fr 1fr"><div><label for="or-m">Rent type</label><select id="or-m"><option value="a">Add-on to a studio booking</option><option value="o">Outside rent</option></select></div><div><label for="or-eq">Equipment</label><select id="or-eq"></select></div><div><label for="or-q">Quantity</label><input id="or-q" type="number" min="1" value="1"></div><div><label for="or-pm">Payment</label><select id="or-pm"><option>Cash</option><option>GCash</option></select></div><div id="or-gw" hidden><label for="or-g">GCash reference <span class="req" aria-hidden="true">*</span></label><input id="or-g"></div><div id="or-aw"><label for="or-b">Booking</label><select id="or-b"></select></div><div id="or-ow" hidden><label for="or-n">Customer name <span class="req" aria-hidden="true">*</span></label><input id="or-n" data-letters required aria-required="true"></div><div id="or-rw" hidden>
-          <div class="fg2"><div><label for="or-sd">Start date</label><input id="or-sd" type="date"></div><div><label for="or-st">Start time</label><select id="or-st"></select></div></div>
-          <div class="fg2"><div><label for="or-r">Return date</label><input id="or-r" type="date"></div><div><label for="or-rt">Return time</label><select id="or-rt"></select></div></div>
-          <p class="mut" id="or-dur" style="margin-top:6px"></p>
-        </div><div id="or-tw" hidden><label for="or-t">ID type</label><select id="or-t"><option>Driver's license</option><option>Passport</option><option>UMID</option><option>National ID (PhilSys)</option><option>Postal ID</option><option>School ID</option></select></div></div><label id="or-cw" hidden><input type="checkbox" id="or-id" style="width:auto"> I checked a valid ID in person</label><p class="req-note"><span class="req">*</span> Required</p><div class="tot"><span>Total received</span><span id="or-tot"></span></div><div class="alert" id="or-e" hidden></div><button class="btn gold full">Record rental</button></form></div></section>
-<section id="a-book" class="pg"><h1>Bookings</h1><p class="sub">Search, filter, and confirm bookings.</p>
-        <div class="row" style="margin-bottom:12px;flex-wrap:wrap"><input id="bk-q" placeholder="Search by name or reference" style="max-width:280px"><select id="bk-s" style="max-width:160px"><option value="">All studios</option></select><input id="bk-d" type="date" style="max-width:170px"><select id="bk-src" style="max-width:170px" aria-label="Booking source"><option value="">Online and onsite</option><option value="Online">Online bookings</option><option value="Onsite">Onsite bookings</option></select></div>
-        <div class="card" id="abk"></div></section>
-
-      <section id="a-sess" class="pg"><h1>Studio sessions</h1><p class="sub">Sessions in progress. Remaining time refreshes every minute.</p>
-        <div id="asess"></div></section>
-
-      <section id="a-stud" class="pg"><h1>Studio management</h1><p class="sub">Studios marked Available show up on the customer booking page.</p>
-        <div class="grid g2"><div class="grid ge" id="ast"></div>
-          <aside class="card"><h2>Add new studio</h2><label for="sn">Name or code</label><input id="sn" placeholder="Studio E"><label for="sd">Description</label><input id="sd"><label for="sr">Hourly rate (₱)</label><input id="sr" type="number"><label for="sf">Photo</label><input id="sf" type="file"><label for="ss">Status</label><select id="ss"><option>Available</option><option>Unavailable</option><option>Maintenance</option></select><button class="btn gold full" id="sbtn" type="button">Save studio</button></aside></div></section>
-
-      <section id="a-eqp" class="pg"><h1>Equipment</h1><p class="sub">Total stock the studio owns. Stock drops when a rental is approved and returns when it comes back.</p>
-        <div class="row" style="margin-bottom:12px"><div class="tabs" style="margin:0"><button class="on" data-eqt="all">Equipment list</button><button data-eqt="low">Low stock</button></div><button class="btn gold" id="eq-add">Add equipment</button></div>
-        <div class="card tw" id="aeq"></div></section>
-
-      <section id="a-rent" class="pg"><h1>Rentals</h1><p class="sub">Customer rental requests grouped by order. Outside rentals use an OUT- number. Use the Overdue filter to see equipment not returned by its return date.</p><div id="arn"></div></section>
-
-
-      <section id="a-pay" class="pg"><h1>Payments</h1><p class="sub">Open a payment with Verify to check the GCash reference, the booking or rental details and the customer's ID, then verify or reject.</p><div class="card" id="apy"></div></section>
-      <section id="a-cust" class="pg"><h1>Customers</h1><p class="sub">Contact details and history.</p><div class="row" style="justify-content:flex-start;gap:10px;margin-bottom:12px"><input id="cu-q" placeholder="Search customers" style="max-width:280px"><select id="cu-type" style="max-width:200px" aria-label="Account type"><option value="">All accounts</option><option value="Registered">Registered accounts</option><option value="Guest">Guest accounts</option></select></div><div class="card tw" id="acu"></div></section>
-
-      <section id="a-rep" class="pg"><h1>Reports</h1><p class="sub">What happened during a selected period.</p>
-        <div class="tabs" id="rp-p"></div><div class="tabs" id="rp-t"></div><div id="rp"></div></section>
-
-      <section id="a-set" class="pg"><h1>Settings</h1><p class="sub">Your profile and staff accounts.</p>
-        <div class="grid ge"><div class="card"><h2>Admin profile</h2><label for="an">Name</label><input id="an" value="Studio Owner"><label for="ae">Email address</label><input id="ae" type="email" value="" readonly><label for="ap">New password</label><input id="ap" type="password"><button class="btn full" id="ap-btn" type="button">Change password</button></div>
-          <div class="card"><div class="row"><h2>Staff accounts</h2><button class="btn sm line" id="st-add" type="button">Add staff</button></div><div class="tw" id="stf"></div></div></div><div class="card" id="gq-card" style="margin-top:16px;max-width:520px"><h2>GCash payment QR code</h2>
-          <p class="mut">Customers see this QR code above the GCash reference number in the booking form. In the GCash app open Receive Money, then Show my QR, save it as an image, and upload it here.</p>
-          <div class="gq" id="gq-prev"></div>
-          <label for="gq-file">New QR image (PNG, JPG or WebP, up to 5 MB)</label><input id="gq-file" type="file" accept="image/png,image/jpeg,image/webp">
-          <button class="btn full" id="gq-btn" type="button" style="margin-top:12px">Save QR code</button></div>
-        </section>
-      </div>
-    </div>
-  </main>
-
-  <dialog class="dlg" id="rdlg" aria-label="Rental request"></dialog>
-  <dialog class="dlg verify" id="vdr" aria-label="Verify transaction"></dialog>
-  <dialog class="dlg" id="eqdlg" aria-label="Equipment form"></dialog>
-  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-  <!-- All site code is ES modules; this one entry file imports the rest -->
-  <script type="module" src="../js/admin/index.js"></script>
-</body>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>Dashboard | Tower of Dove Music Studio</title>
+        <link rel="icon" type="image/png" href="../assets/img/logo.png">
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+        <!-- Stylesheets: shared first, then this page's own file -->
+        <link rel="stylesheet" href="../css/base.css">
+        <link rel="stylesheet" href="../css/components.css">
+        <link rel="stylesheet" href="../css/layout.css">
+        <link rel="stylesheet" href="../css/modals.css">
+        <link rel="stylesheet" href="../css/admin.css">
+    </head>
+    <body data-role="admin" data-active="a-over">
+        <!-- The sidebar and mobile bar are injected by js/shared/layout.js -->
+        <main class="page" id="admin">
+            <div class="adm">
+                <div class="wrap">
+                    <section id="a-over" class="pg on">
+                        <h1>Overview</h1>
+                        <p class="sub">Friday, October 9, 2026. Here is what is happening right now.</p>
+                        <div class="grid g4" id="ovk">
+                            <div class="card kpi">
+                                <span class="mut">Total bookings</span>
+                                <div class="num">148</div>
+                            </div>
+                            <div class="card kpi">
+                                <span class="mut">Today's bookings</span>
+                                <div class="num">6</div>
+                            </div>
+                            <div class="card kpi">
+                                <span class="mut">Confirmed</span>
+                                <div class="num">3</div>
+                            </div>
+                            <div class="card kpi">
+                                <span class="mut">Pending</span>
+                                <div class="num">2</div>
+                            </div>
+                        </div>
+                        <div class="card" style="margin-top:16px">
+                            <h3>Bookings over the last 7 days</h3>
+                            <div class="bars" id="bars"></div>
+                        </div>
+                        <h2 style="margin-top:24px">Equipment returns</h2>
+                        <div class="grid g4" id="rkpi"></div>
+                        <h2 style="margin-top:24px">Studios right now</h2>
+                        <div class="grid g4" id="ost"></div>
+                        <div class="card" style="margin-top:16px">
+                            <h3>Needs attention</h3>
+                            <ul class="list" id="ovl"></ul>
+                        </div>
+                    </section>
+                    <section id="a-onb" class="pg">
+                        <h1>Onsite booking</h1>
+                        <p class="sub">Record a walk-in studio booking paid at the counter. It is confirmed and verified right away.</p>
+                        <div class="grid onsite-form-layout">
+                            <form class="card" id="onb" novalidate>
+                                <div class="fg onsite-form-fields">
+                                    <div>
+                                        <label for="ob-n">Customer name <span class="req" aria-hidden="true">*</span></label>
+                                        <input id="ob-n" data-letters required aria-required="true">
+                                    </div>
+                                    <div>
+                                        <label for="ob-p">Phone <span class="req" aria-hidden="true">*</span></label>
+                                        <input id="ob-p" type="tel" data-phone inputmode="tel" autocomplete="off" maxlength="20" placeholder="+63 917 123 4567 or 0917 123 4567" required aria-required="true">
+                                    </div>
+                                    <div>
+                                        <label for="ob-em">Email for the receipt <span class="mut">(optional)</span></label>
+                                        <input id="ob-em" type="email" inputmode="email" autocomplete="off" maxlength="254" placeholder="name@gmail.com">
+                                    </div>
+                                    <div>
+                                        <label for="ob-s">Studio</label>
+                                        <select id="ob-s"></select>
+                                    </div>
+                                    <div>
+                                        <label for="ob-d">Date</label>
+                                        <input id="ob-d" type="date">
+                                    </div>
+                                    <div>
+                                        <label for="ob-h">Duration</label>
+                                        <select id="ob-h">
+                                            <option value="1">1 hour</option>
+                                            <option value="2" selected>2 hours</option>
+                                            <option value="3">3 hours</option>
+                                            <option value="4">4 hours</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label for="ob-t">Start time (free only)</label>
+                                        <select id="ob-t"></select>
+                                    </div>
+                                    <div>
+                                        <label for="ob-m">Payment</label>
+                                        <select id="ob-m">
+                                            <option>Cash</option>
+                                            <option>GCash</option>
+                                        </select>
+                                    </div>
+                                    <div id="ob-pow" hidden>
+                                        <label for="ob-po">Payment option</label>
+                                        <select id="ob-po">
+                                            <option value="full">Full payment</option>
+                                            <option value="down">50% down payment (the rest at the studio)</option>
+                                        </select>
+                                    </div>
+                                    <div id="ob-gw" hidden>
+                                        <label for="ob-g">GCash reference <span class="mut">(optional)</span></label>
+                                        <input id="ob-g">
+                                    </div>
+                                </div>
+                                <div class="tot"><span>Total received</span> <span id="ob-tot"></span></div>
+                                <p class="mut" id="ob-hold" style="margin:6px 0" hidden></p>
+                                <div class="alert" id="ob-e" hidden></div>
+                                <button class="btn gold full">Record booking</button>
+                            </form>
+                        </div>
+                    </section>
+                    <section id="a-onr" class="pg">
+                        <h1>Onsite rental</h1>
+                        <p class="sub">Record equipment rented in person. Items are issued immediately and stock updates.</p>
+                        <div class="grid onsite-form-layout">
+                            <form class="card" id="onr" novalidate>
+                                <div class="fg onsite-form-fields">
+                                    <div>
+                                        <label for="or-m">Rent type</label>
+                                        <select id="or-m">
+                                            <option value="a">Add-on to a studio booking</option>
+                                            <option value="o">Outside rent</option>
+                                        </select>
+                                    </div>
+                                    <div id="or-browsew">
+                                        <label>Equipment</label>
+                                        <button type="button" class="btn line full" id="or-browse">Browse equipment</button>
+                                    </div>
+                                    <div id="or-cartw">
+                                        <label>Items in this rental</label>
+                                        <ul class="list" id="or-cart"></ul>
+                                    </div>
+                                    <div>
+                                        <label for="or-pm">Payment</label>
+                                        <select id="or-pm">
+                                            <option>Cash</option>
+                                            <option>GCash</option>
+                                        </select>
+                                    </div>
+                                    <div id="or-pow" hidden>
+                                        <label for="or-po">Payment option</label>
+                                        <select id="or-po">
+                                            <option value="full">Full payment</option>
+                                            <option value="down">50% down payment (the rest at pick-up)</option>
+                                        </select>
+                                    </div>
+                                    <div id="or-gw" hidden>
+                                        <label for="or-g">GCash reference <span class="mut">(optional)</span></label>
+                                        <input id="or-g">
+                                    </div>
+                                    <div id="or-aw">
+                                        <label for="or-b">Booking</label>
+                                        <select id="or-b"></select>
+                                    </div>
+                                    <div id="or-ow" hidden>
+                                        <label for="or-n">Customer name <span class="req" aria-hidden="true">*</span></label>
+                                        <input id="or-n" data-letters required aria-required="true">
+                                    </div>
+                                    <div id="or-emw" hidden>
+                                        <label for="or-em">Email for the receipt <span class="mut">(optional)</span></label>
+                                        <input id="or-em" type="email" inputmode="email" autocomplete="off" maxlength="254" placeholder="name@gmail.com">
+                                    </div>
+                                    <div id="or-tw" hidden>
+                                        <label for="or-t">ID type</label>
+                                        <select id="or-t">
+                                            <option>Driver's license</option>
+                                            <option>Passport</option>
+                                            <option>UMID</option>
+                                            <option>National ID (PhilSys)</option>
+                                            <option>Postal ID</option>
+                                            <option>School ID</option>
+                                        </select>
+                                    </div>
+                                    <div id="or-rw" hidden>
+                                        <div class="fg2">
+                                            <div>
+                                                <label for="or-sd">Start date</label>
+                                                <input id="or-sd" type="date">
+                                            </div>
+                                            <div>
+                                                <label for="or-st">Start time</label>
+                                                <select id="or-st"></select>
+                                            </div>
+                                        </div>
+                                        <div class="fg2">
+                                            <div>
+                                                <label for="or-r">Return date</label>
+                                                <input id="or-r" type="date">
+                                            </div>
+                                            <div>
+                                                <label for="or-rt">Return time</label>
+                                                <select id="or-rt"></select>
+                                            </div>
+                                        </div>
+                                        <p class="mut" id="or-dur" style="margin-top:6px"></p>
+                                    </div>
+                                </div>
+                                <label id="or-cw" hidden>
+                                    <input type="checkbox" id="or-id" style="width:auto">
+                                    I checked a valid ID in person
+                                </label>
+                                <div class="tot"><span>Total received</span> <span id="or-tot"></span></div>
+                                <div class="alert" id="or-e" hidden></div>
+                                <button class="btn gold full">Record rental</button>
+                            </form>
+                        </div>
+                    </section>
+                    <section id="a-book" class="pg">
+                        <h1>Bookings</h1>
+                        <p class="sub">Search, filter, and confirm bookings.</p>
+                        <div class="row" style="margin-bottom:12px;flex-wrap:wrap">
+                            <input id="bk-q" placeholder="Search by name or reference" style="max-width:280px">
+                            <select id="bk-s" style="max-width:160px">
+                                <option value="">All studios</option>
+                            </select>
+                            <input id="bk-d" type="date" style="max-width:170px">
+                            <select id="bk-src" style="max-width:170px" aria-label="Booking source">
+                                <option value="">Online and onsite</option>
+                                <option value="Online">Online bookings</option>
+                                <option value="Onsite">Onsite bookings</option>
+                            </select>
+                        </div>
+                        <div class="card" id="abk"></div>
+                    </section>
+                    <section id="a-sess" class="pg">
+                        <h1>Studio sessions</h1>
+                        <p class="sub">Every studio and whether it is on session or available. Remaining time refreshes every minute.</p>
+                        <div id="asess"></div>
+                    </section>
+                    <section id="a-stud" class="pg">
+                        <h1>Studio management</h1>
+                        <p class="sub">Studios marked Available show up on the customer booking page.</p>
+                        <div class="grid g2">
+                            <div class="grid ge" id="ast"></div>
+                            <aside class="card">
+                                <h2>Add new studio</h2>
+                                <label for="sn">Name or code</label>
+                                <input id="sn" placeholder="Studio E">
+                                <label for="sd">Description</label>
+                                <input id="sd">
+                                <label for="sr">Hourly rate (₱)</label>
+                                <input id="sr" type="number">
+                                <label for="sf">Photo</label>
+                                <input id="sf" type="file">
+                                <label for="ss">Status</label>
+                                <select id="ss">
+                                    <option>Available</option>
+                                    <option>Unavailable</option>
+                                    <option>Maintenance</option>
+                                </select>
+                                <button class="btn gold full" id="sbtn" type="button">Save studio</button>
+                            </aside>
+                        </div>
+                    </section>
+                    <section id="a-eqp" class="pg">
+                        <h1>Equipment Management</h1>
+                        <p class="sub">Total stock the studio owns. Stock drops when a rental is approved and returns when it comes back.</p>
+                        <div class="row" style="margin-bottom:12px">
+                            <div class="tabs" style="margin:0">
+                                <button class="on" data-eqt="all">Equipment list</button>
+                                <button data-eqt="low">Low stock</button>
+                            </div>
+                            <button class="btn gold" id="eq-add">Add equipment</button>
+                        </div>
+                        <div class="card" id="aeq"></div>
+                    </section>
+                    <section id="a-rent" class="pg">
+                        <h1>Rentals</h1>
+                        <p class="sub">Customer rental requests grouped by order. Outside rentals use an OUT- number. Use the Overdue filter to see equipment not returned by its return date.</p>
+                        <div id="arn"></div>
+                    </section>
+                    <section id="a-pay" class="pg">
+                        <h1>Payments</h1>
+                        <p class="sub">Open a payment with Verify to check the GCash reference, the booking or rental details and the customer's ID, then verify or reject.</p>
+                        <div class="card" id="apy"></div>
+                    </section>
+                    <section id="a-cust" class="pg">
+                        <h1>Customers</h1>
+                        <p class="sub">Contact details and history.</p>
+                        <div class="row" style="justify-content:flex-start;gap:10px;margin-bottom:12px">
+                            <input id="cu-q" placeholder="Search customers" style="max-width:280px">
+                            <select id="cu-type" style="max-width:200px" aria-label="Account type">
+                                <option value="">All accounts</option>
+                                <option value="Registered">Registered accounts</option>
+                                <option value="Guest">Guest accounts</option>
+                            </select>
+                        </div>
+                        <div class="card" id="acu"></div>
+                    </section>
+                    <section id="a-rep" class="pg">
+                        <h1>Reports</h1>
+                        <p class="sub">What happened during a selected period.</p>
+                        <div class="tabs" id="rp-p"></div>
+                        <div class="tabs" id="rp-t"></div>
+                        <div id="rp"></div>
+                    </section>
+                    <section id="a-prof" class="pg">
+                        <h1>Owner profile</h1>
+                        <p class="sub">Update your name, change your email, or request a password link.</p>
+                        <div id="owner-profile-panel"></div>
+                    </section>
+                    <section id="a-set" class="pg">
+                        <h1>Settings</h1>
+                        <p class="sub">Staff accounts and the GCash payment QR code.</p>
+                        <div class="grid ge">
+                            <div class="card">
+                                <div class="row">
+                                    <h2>Staff accounts</h2>
+                                    <button class="btn sm line" id="st-add" type="button">Add staff</button>
+                                </div>
+                                <div id="stf"></div>
+                            </div>
+                        </div>
+                        <div class="card" id="gq-card" style="margin-top:16px;max-width:520px">
+                            <h2>GCash payment QR code</h2>
+                            <p class="mut">Customers see this QR code above the GCash reference number in the booking form. In the GCash app open Receive Money, then Show my QR, save it as an image, and upload it here.</p>
+                            <div class="gq" id="gq-prev"></div>
+                            <label for="gq-file">New QR image (PNG, JPG or WebP, up to 5 MB)</label>
+                            <input id="gq-file" type="file" accept="image/png,image/jpeg,image/webp">
+                            <button class="btn full" id="gq-btn" type="button" style="margin-top:12px">Save QR code</button>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </main>
+        <dialog class="dlg" id="rdlg" aria-label="Rental request"></dialog>
+        <dialog class="dlg verify" id="vdr" aria-label="Verify transaction"></dialog>
+        <dialog class="dlg" id="eqdlg" aria-label="Equipment form"></dialog>
+        <dialog class="dlg wide" id="eqprev" aria-label="Add equipment"></dialog>
+        <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+        <!-- Safety net: if the dashboard has not finished loading after 15 seconds (a script or the first data request stalled,
+             for example right after logging in), the page reloads by itself (up to 3 times). admin/index.js sets data-tod-ready when it is done. -->
+        <script>
+        (function () {
+            var KEY = 'tod_admin_retry';
+            window.addEventListener('load', function () {
+                setTimeout(function () {
+                    try {
+                        if (document.documentElement.dataset.todReady) {
+                            sessionStorage.removeItem(KEY);
+                            return;
+                        }
+                        // up to 3 reloads within 2 minutes (a 502 from the server or ngrok is usually gone on the next try); never loops
+                        var t = JSON.parse(sessionStorage.getItem(KEY) || '[]').filter(function (x) { return Date.now() - x < 120000; });
+                        if (t.length >= 3)
+                            return;
+                        t.push(Date.now());
+                        sessionStorage.setItem(KEY, JSON.stringify(t));
+                    } catch (e) {
+                        return;
+                    }
+                    location.reload();
+                }, 15000);
+            });
+        })();
+        </script>
+        <!-- All site code is ES modules; this one entry file imports the rest -->
+        <script src="../js/shared/boot.js" data-entry="../js/admin/index.js"></script>
+    </body>
 </html>

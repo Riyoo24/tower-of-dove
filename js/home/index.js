@@ -16,13 +16,17 @@ initContact();    // Contact Us section
 /* ============================ START ============================ */
 
 dataReady.then(() => {
-  // studio photos uploaded in the dashboard replace the colored slides
-  SLIDES.forEach(sl => { const st = STUDIOS.find(x => 'Studio ' + x.id === sl.label); if (st && st.img) sl.img = st.img; });
+    // studio photos uploaded in the dashboard replace the colored slides
+    SLIDES.forEach(sl => {
+        const st = STUDIOS.find(x => 'Studio ' + x.id === sl.label);
+        if (st && st.img)
+            sl.img = st.img;
+    });
 
-renderStudioOptions();
-renderStudios();
-renderEquipment();
-initCarousel();
-initAvailability();
-initCardButtons();
+    renderStudioOptions();
+    renderStudios();
+    renderEquipment();
+    initCarousel();
+    initAvailability();
+    initCardButtons();
 });

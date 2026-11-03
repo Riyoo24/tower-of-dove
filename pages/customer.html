@@ -81,6 +81,16 @@
                 </div>
                 <p class="mut" id="lb-info" style="margin-top:6px">Enter the reference code from your booking confirmation. The equipment is added to that booking and its total is updated.</p>
               </div>
+              <div id="apay">
+                <div id="apay-opt"></div>
+                <div class="gq">
+                  <img id="aq-img" alt="GCash QR code to scan" hidden>
+                  <p class="mut" id="aq-note">Scan this QR code with GCash and pay the <span id="aq-kind">down payment</span> of <b id="aq-amt"></b>. Then enter the reference number from your GCash receipt below.</p>
+                </div>
+                <div id="ag-proof"></div>
+                <label for="ag" id="ag-l">GCash reference number (down payment) <span class="req" aria-hidden="true">*</span></label>
+                <input id="ag" placeholder="13-digit reference" inputmode="numeric" autocomplete="off">
+              </div>
             </div>
 
             <div id="fo" hidden>
@@ -94,8 +104,8 @@
                 </div>
                 <label for="oc">Contact number <span class="req" aria-hidden="true">*</span></label>
                 <input id="oc" type="tel" placeholder="09XX XXX XXXX" autocomplete="tel" required aria-required="true">
-                <label for="sm-link">Backup contact number (optional)</label>
-                <input id="sm-link" type="tel" placeholder="09XX XXX XXXX">
+                <label for="sm-link">Backup contact number <span class="req" aria-hidden="true">*</span></label>
+                <input id="sm-link" type="tel" placeholder="09XX XXX XXXX" required aria-required="true">
 
                 <div class="fg2">
                   <div><label for="pd">Pick-up date <span class="req" aria-hidden="true">*</span></label><input id="pd" type="date"></div>
@@ -136,17 +146,19 @@
                 </div>
 
                 <div id="opay">
+                  <div id="opay-opt"></div>
                   <div class="gq">
                     <img id="oq-img" alt="GCash QR code to scan" hidden>
-                    <p class="mut" id="oq-note">Scan this QR code with GCash and pay the down payment of <b id="oq-amt"></b>. Then enter the reference number from your GCash receipt below.</p>
+                    <p class="mut" id="oq-note">Scan this QR code with GCash and pay the <span id="oq-kind">down payment</span> of <b id="oq-amt"></b>. Then enter the reference number from your GCash receipt below.</p>
                   </div>
-                  <label for="og">GCash reference number (down payment) <span class="req" aria-hidden="true">*</span></label>
+                  <div id="og-proof"></div>
+                  <label for="og" id="og-l">GCash reference number (down payment) <span class="req" aria-hidden="true">*</span></label>
                   <input id="og" placeholder="13-digit reference" inputmode="numeric" autocomplete="off" required aria-required="true">
                 </div>
 
                 <label class="terms" id="or-terms">
                   <input type="checkbox" id="or-agree">
-                  <span>I understand and agree that: the <b>50% down payment is non-refundable</b> if I cancel this rental; the price covers <b>up to 8 hours</b> and returning earlier does not lower it; renting for <b>more than 8 hours</b> adds one-eighth of the item's price for every extra hour; and returning the equipment <b>late</b> (after the full 8-hour window) adds the same one-eighth charge for every hour it is late, which I pay at the studio when I return it.</span>
+                  <span id="or-agreetxt">I understand and agree that: the <b>50% down payment is non-refundable</b> if I cancel this rental; the price covers <b>up to 8 hours</b> and returning earlier does not lower it; renting for <b>more than 8 hours</b> adds one-eighth of the item's price for every extra hour; and returning the equipment <b>late</b> (after the full 8-hour window) adds the same one-eighth charge for every hour it is late, which I pay at the studio when I return it.</span>
                 </label>
               </div>
             </div>
@@ -178,7 +190,7 @@
       <!-- ============ My rental ============ -->
       <section id="c-rental" class="pg">
         <h1>My rental</h1>
-        <p class="sub">Equipment tied to your studio bookings, and your outside rentals. Guests: enter the reference code from your confirmation.</p>
+        <p class="sub">Your outside rentals. Equipment added to a studio booking is listed under that booking in My bookings. Guests: enter the reference code from your confirmation.</p>
         <div class="card" id="rt-member"><div class="tw" id="myrent"></div></div>
 
         <div class="card lookup" id="rt-guest" hidden style="max-width:720px">
@@ -199,11 +211,10 @@
   <dialog class="dlg" id="dlg" aria-label="Details"></dialog>
   <dialog class="dlg" id="okdlg" aria-label="Success"></dialog>
   <dialog class="dlg wide" id="eqdlg" aria-label="Add equipment"></dialog>
-  <dialog class="drawer" id="rndrawer" aria-label="Rental details"></dialog>
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
   <!-- All site code is ES modules; this one entry file imports the rest -->
-  <script type="module" src="../js/customer/index.js"></script>
+  <script src="../js/shared/boot.js" data-entry="../js/customer/index.js"></script>
 </body>
 </html>

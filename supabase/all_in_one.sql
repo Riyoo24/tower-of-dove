@@ -79,12 +79,10 @@ create table if not exists public.studio (
   name         varchar(100) not null,
   image        text,
   description  text,
-  capacity     integer      not null default 5,
   hourly_rate  numeric(10,2) not null,
   status       varchar(20)  not null default 'Available',   -- "Occupied" is derived from an In Progress booking
   created_at   timestamptz  not null default now(),
   updated_at   timestamptz  not null default now(),
-  constraint studio_capacity_chk check (capacity > 0),
   constraint studio_rate_chk     check (hourly_rate >= 0),
   constraint studio_status_chk   check (status in ('Available', 'Unavailable', 'Maintenance'))
 );
@@ -102,10 +100,9 @@ create table if not exists public.equipment_category (
 
 -- ---------------------------------------------------------------------
 -- 5. equipment
---    Added vs the doc: min_hours, is_drum_set, drum_kit, is_vip, updated_at.
 --    Rates: add_on_rate is per session; outside_rate is per day.
---    Drum sets are priced per rental (both rates hold the rental price).
 --    min_hours is the minimum length of an OUTSIDE rental.
+--    Use name and description to record drum models and configurations.
 -- ---------------------------------------------------------------------
 create table if not exists public.equipment (
   equipment_id    bigint generated always as identity primary key,
@@ -119,9 +116,6 @@ create table if not exists public.equipment (
   allow_addon     boolean not null default true,
   allow_outside   boolean not null default false,
   min_hours       integer not null default 0,
-  is_drum_set     boolean not null default false,
-  drum_kit        varchar(100),
-  is_vip          boolean not null default false,
   status          varchar(20) not null default 'Available',
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now(),
@@ -131,8 +125,7 @@ create table if not exists public.equipment (
   constraint equipment_min_chk      check (min_hours >= 0),
   constraint equipment_status_chk   check (status in ('Available', 'Unavailable')),
   constraint equipment_addon_rate_required   check (not allow_addon   or add_on_rate  is not null),
-  constraint equipment_outside_rate_required check (not allow_outside or outside_rate is not null),
-  constraint equipment_drum_chk     check (not is_drum_set or drum_kit is not null)
+  constraint equipment_outside_rate_required check (not allow_outside or outside_rate is not null)
 );
 create unique index if not exists equipment_name_uq on public.equipment (lower(name));
 create index if not exists equipment_category_idx on public.equipment (category_id);
@@ -332,19 +325,17 @@ returns integer language sql stable security definer set search_path = public as
     and (p_exclude_order is null or o.rental_order_id <> p_exclude_order);
 $$;
 
--- Order total: add-ons and drum sets are per rental/session, other outside
--- items are per day (rounded up from the pickup and return times).
+-- Order total: add-ons are per session; outside items are per day (rounded up from hours).
 create or replace function public.rental_order_total(p_order_id bigint) returns numeric
 language sql stable security definer set search_path = public as $$
   select coalesce(sum(
     d.quantity * d.unit_price_at_request *
-    case when o.rental_type = 'Outside' and not e.is_drum_set
+    case when o.rental_type = 'Outside'
          then greatest(1, ceil(coalesce(d.rental_hours, 24) / 24.0))
          else 1 end
   ), 0)::numeric(10,2)
   from public.rental_order o
   join public.rental_detail d on d.rental_order_id = o.rental_order_id
-  join public.equipment e on e.equipment_id = d.equipment_id
   where o.rental_order_id = p_order_id;
 $$;
 
@@ -1235,8 +1226,7 @@ select
     when e.total_quantity - public.equipment_in_use(e.equipment_id) = 1 and e.total_quantity > 1 then 'Low'
     else 'Available'
   end as stock_status,
-  e.add_on_rate, e.outside_rate, e.allow_addon, e.allow_outside, e.min_hours,
-  e.is_drum_set, e.drum_kit, e.is_vip
+  e.add_on_rate, e.outside_rate, e.allow_addon, e.allow_outside, e.min_hours
 from public.equipment e
 join public.equipment_category c on c.category_id = e.category_id;
 
@@ -1509,33 +1499,34 @@ create policy tod_ids_staff_read on storage.objects for select to authenticated
 -- File 4 of 4: starting data (safe to re-run)
 -- =====================================================================
 
-insert into public.studio (name, description, capacity, hourly_rate, status) values
-  ('Studio A', 'Drum and full band room',  8, 350, 'Available'),
-  ('Studio B', 'Vocal and acoustic booth', 3, 250, 'Available'),
-  ('Studio C', 'Mid-size band room',       6, 300, 'Available'),
-  ('Studio D', 'Production room',          4, 280, 'Maintenance')
+insert into public.studio (name, description, hourly_rate, status) values
+  ('Studio A', 'Drum and full band room',  350, 'Available'),
+  ('Studio B', 'Vocal and acoustic booth', 250, 'Available'),
+  ('Studio C', 'Mid-size band room',       300, 'Available'),
+  ('Studio D', 'Production room',          280, 'Maintenance')
 on conflict (lower(name)) do nothing;
 
 insert into public.equipment_category (category_name) values
   ('Guitars'), ('Amplifiers'), ('Drums'), ('Keyboards'), ('Effects'), ('Accessories'), ('Other')
 on conflict (category_name) do nothing;
 
--- rates: add-on = per session, outside = per day, drum sets = per rental.
+-- rates: add-on = per session, outside = per day.
 -- min_hours = minimum OUTSIDE rental length.
+-- Drum model and configuration details go in name and description.
 insert into public.equipment
-  (name, category_id, total_quantity, add_on_rate, outside_rate, allow_addon, allow_outside, min_hours, is_drum_set, drum_kit, is_vip)
-select v.name, c.category_id, v.qty, v.addon, v.outside, v.allow_addon, v.allow_outside, v.min_hours, v.drum, v.kit, v.vip
+  (name, category_id, description, total_quantity, add_on_rate, outside_rate, allow_addon, allow_outside, min_hours)
+select v.name, c.category_id, v.desc, v.qty, v.addon, v.outside, v.allow_addon, v.allow_outside, v.min_hours
 from (select row_number() over () as ord, x.* from (values
-  ('Electric guitar',     'Guitars',    4,  100, 250,  true, true,  8,  false, null,                                  false),
-  ('Guitar amplifier',    'Amplifiers', 4,  150, 350,  true, true,  8,  false, null,                                  false),
-  ('Set A Drum Set',      'Drums',      1, 2700, 2700, true, true,  8,  true,  'RDX drum set',                        false),
-  ('Set B Drum Set',      'Drums',      1, 3000, 3000, true, true,  8,  true,  'RDX drum set',                        true),
-  ('Set C Drum Set',      'Drums',      1, 2500, 2500, true, true,  8,  true,  'Steely drum set (high-end model)',    false),
-  ('Set D Drum Set',      'Drums',      1, 2800, 2800, true, true,  8,  true,  'Steely drum set (high-end model)',    true),
-  ('Drum kit add-ons',    'Drums',      2,  120, null, true, false, 0,  false, null,                                  false),
-  ('Keyboard',            'Keyboards',  1,  200, 500,  true, true,  8,  false, null,                                  false),
-  ('Multi-effects pedal', 'Effects',    3,   80, 150,  true, true,  8,  false, null,                                  false)
-) as x(name, cat, qty, addon, outside, allow_addon, allow_outside, min_hours, drum, kit, vip)) as v
+  ('Electric guitar',     'Guitars',    null,                                                                 4,  100,  250,  true, true,  8),
+  ('Guitar amplifier',    'Amplifiers', null,                                                                 4,  150,  350,  true, true,  8),
+  ('Set A Drum Set',      'Drums',      'RDX drum set. 1 crash, 1 ride, hi-hat.',                            1, 2700, 2700, true, true,  8),
+  ('Set B Drum Set',      'Drums',      'RDX drum set. 2 crash, 1 ride, hi-hat, splash.',                    1, 3000, 3000, true, true,  8),
+  ('Set C Drum Set',      'Drums',      'Steely drum set (high-end model). 1 crash, 1 ride, hi-hat.',        1, 2500, 2500, true, true,  8),
+  ('Set D Drum Set',      'Drums',      'Steely drum set (high-end model). 2 crash, 1 ride, hi-hat, splash.',1, 2800, 2800, true, true,  8),
+  ('Drum kit add-ons',    'Drums',      null,                                                                 2,  120, null, true, false, 0),
+  ('Keyboard',            'Keyboards',  null,                                                                 1,  200,  500, true, true,  8),
+  ('Multi-effects pedal', 'Effects',    null,                                                                 3,   80,  150, true, true,  8)
+) as x(name, cat, desc, qty, addon, outside, allow_addon, allow_outside, min_hours)) as v
 join public.equipment_category c on c.category_name = v.cat
 order by v.ord
 on conflict (lower(name)) do nothing;
@@ -1545,15 +1536,15 @@ on conflict (lower(name)) do nothing;
 -- CREATING THE FIRST OWNER (run once, after the four files)
 --
 -- 1. Supabase dashboard -> Authentication -> Users -> Add user.
---    Email: the owner's real email address (it is the login on the website)
+--    Email: towerofdovemusic@gmail.com   (the owner's real email; it is the login on the website)
 --    Password: choose one. Tick "Auto Confirm User".
 -- 2. Authentication -> Providers -> Email: turn ON "Confirm email" (see supabase/README.md > Email verification setup)
 --    ("Auto Confirm User" above keeps the owner able to log in; customers must confirm by email.)
 -- 3. Run this, replacing the email if you used another one:
 --
--- insert into public.app_user (auth_user_id, first_name, last_name, username, role)
--- select id, 'Studio', 'Owner', 'owner', 'Owner'
--- from auth.users where email = 'owner@towerofdove.app';
+-- insert into public.app_user (auth_user_id, first_name, last_name, username, email, role)
+-- select id, 'Studio', 'Owner', 'towerofdovemusic@gmail.com', 'towerofdovemusic@gmail.com', 'Owner'
+-- from auth.users where email = 'towerofdovemusic@gmail.com';
 --
 -- Staff accounts: create the Auth user from a server-side function (an Edge
 -- Function using the service_role key and auth.admin.createUser), then insert
@@ -2480,7 +2471,7 @@ update public.rental_order o
 --     holding the login, but it is now an email (up to 254 characters). The old
 --     letters/numbers-only username rule is replaced by an email-format rule.
 --     Old accounts (for example "owner" or "juan") are NOT touched and keep working: they sign in
---     with their old login written as an email, like owner@towerofdove.app.
+--     with their old login written as an email, like owner@towerofdove.app (the owner now uses towerofdovemusic@gmail.com, see 22_owner_email.sql).
 --  2. New sign-ups copy the email into the customer's email column too.
 --  3. First and last names can no longer contain digits (customer and staff).
 --  4. A customer can open the valid ID they uploaded with their own outside rental
@@ -2560,3 +2551,2916 @@ create policy tod_ids_owner_read on storage.objects for select to authenticated
         and o.customer_id = public.current_customer_id()
     )
   );
+
+
+-- =====================================================================
+-- 15_extend_booking.sql  (safe to re-run)
+-- Staff can extend a Confirmed or Active studio booking by 1 to 4 extra hours.
+--
+--   staff_extension_info(booking_ref)           -> how many extra hours are free right now (and why not more)
+--   staff_extend_booking(booking_ref, hours)    -> moves the end time and adds the cost to the bill
+--
+-- Rules checked by the database (so two staff members can't both take the same free hour):
+--   * only Confirmed (Approved) or Active (In Progress) bookings
+--   * the extra hours must not overlap the next Pending / Confirmed / Active booking of the same studio
+--   * nobody else may be holding that time in the booking form right now
+--   * the studio must be Available, and the session must still end by the 10:00 PM closing time
+-- The studio price is always worked out from start and end time, so the customer's booking page shows the
+-- new end time and total on its own. The booking's payment amount goes up by the extra cost, so the
+-- Payments tab and the revenue report include it.
+-- Run this once in the Supabase SQL Editor (after 14_email_login_names_id_view.sql).
+-- =====================================================================
+
+create or replace function public.staff_extension_info(p_booking_ref text)
+returns table (
+  min_hours integer, max_hours integer, message text,
+  current_end_at timestamptz, hourly_rate numeric, next_start timestamptz, booking_status text
+)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  b public.booking; st public.studio;
+  closing timestamptz; nxt timestamptz; held timestamptz;
+  free_until timestamptz; lo integer := 1; hi integer; msg text;
+begin
+  if not public.is_staff() then raise exception 'Staff only.' using errcode = '42501'; end if;
+
+  select * into b from public.booking where booking_ref = upper(trim(p_booking_ref));
+  if not found then raise exception 'Booking not found.' using errcode = 'P0001'; end if;
+  select * into st from public.studio where studio_id = b.studio_id;
+
+  if b.status not in ('Approved', 'In Progress') then
+    return query select 1, 0, 'Cannot extend: only Confirmed or Active bookings can be extended.'::text,
+                        b.end_at, b.hourly_rate_at_booking, null::timestamptz, b.status::text;
+    return;
+  end if;
+  if st.status <> 'Available' then
+    return query select 1, 0, ('Cannot extend: ' || st.name || ' is ' || lower(st.status) || '.')::text,
+                        b.end_at, b.hourly_rate_at_booking, null::timestamptz, b.status::text;
+    return;
+  end if;
+
+  -- 10:00 PM closing on the day the session ends (Manila time)
+  closing := (date_trunc('day', b.end_at at time zone 'Asia/Manila') + interval '22 hours') at time zone 'Asia/Manila';
+
+  select min(o.start_at) into nxt from public.booking o
+   where o.studio_id = b.studio_id and o.booking_id <> b.booking_id
+     and o.status in ('Pending', 'Approved', 'In Progress') and o.end_at > b.end_at;
+
+  select min(h.start_at) into held from public.slot_hold h
+   where h.studio_id = b.studio_id and h.expires_at > now() and h.end_at > b.end_at;
+
+  free_until := least(closing, coalesce(nxt, 'infinity'::timestamptz), coalesce(held, 'infinity'::timestamptz));
+  hi := least(4, greatest(0, floor(extract(epoch from (free_until - b.end_at)) / 3600.0)::integer));
+
+  -- a session already running past its end time must be extended far enough to cover the time used
+  if b.status = 'In Progress' and now() >= b.end_at then
+    lo := floor(extract(epoch from (now() - b.end_at)) / 3600.0)::integer + 1;
+  end if;
+
+  if hi < lo then
+    if nxt is not null and nxt <= b.end_at + make_interval(hours => lo) then
+      msg := 'Cannot extend: studio is booked for the next time slot.';
+    elsif held is not null and held <= b.end_at + make_interval(hours => lo) then
+      msg := 'Cannot extend: someone is booking the next time slot right now. Try again in a couple of minutes.';
+    elsif closing <= b.end_at + make_interval(hours => lo) then
+      msg := 'Cannot extend: the studio closes at 10:00 PM.';
+    else
+      msg := 'Cannot extend: that time is not free.';
+    end if;
+  elsif hi < 4 then
+    if nxt is not null and nxt = free_until then
+      msg := 'The studio is booked from ' || to_char(nxt at time zone 'Asia/Manila', 'FMHH12:MI AM') || ', so it can be extended by up to ' || hi || ' hour' || case when hi > 1 then 's' else '' end || '.';
+    elsif held is not null and held = free_until then
+      msg := 'Someone is holding the time from ' || to_char(held at time zone 'Asia/Manila', 'FMHH12:MI AM') || ' in the booking form, so the limit is ' || hi || ' hour' || case when hi > 1 then 's' else '' end || ' for now.';
+    else
+      msg := 'The studio closes at 10:00 PM, so it can be extended by up to ' || hi || ' hour' || case when hi > 1 then 's' else '' end || '.';
+    end if;
+  end if;
+
+  return query select lo, hi, msg, b.end_at, b.hourly_rate_at_booking, nxt, b.status::text;
+end $$;
+
+create or replace function public.staff_extend_booking(p_booking_ref text, p_extra_hours integer)
+returns table (booking_ref text, new_end_at timestamptz, extra_cost numeric, studio_total numeric, payment_method text, payment_status text)
+language plpgsql security definer set search_path = public as $$
+declare
+  b public.booking; info record; cost numeric; pay public.payment;
+begin
+  if not public.is_staff() then raise exception 'Staff only.' using errcode = '42501'; end if;
+  if p_extra_hours is null or p_extra_hours < 1 or p_extra_hours > 4 then
+    raise exception 'Choose 1 to 4 extra hours.' using errcode = 'P0001';
+  end if;
+
+  select * into b from public.booking bk where bk.booking_ref = upper(trim(p_booking_ref)) for update;
+  if not found then raise exception 'Booking not found.' using errcode = 'P0001'; end if;
+
+  -- same lock the booking functions use, so nobody can book the free hour while we extend
+  perform pg_advisory_xact_lock(hashtextextended('studio:' || b.studio_id, 0));
+
+  select * into info from public.staff_extension_info(b.booking_ref);
+  if info.max_hours < info.min_hours then
+    raise exception '%', info.message using errcode = 'P0001';
+  end if;
+  if p_extra_hours > info.max_hours then
+    raise exception '%', coalesce(info.message, 'Cannot extend: that time is not free.') using errcode = 'P0001';
+  end if;
+  if p_extra_hours < info.min_hours then
+    raise exception 'The session is already past its end time. Extend by at least % hour(s).', info.min_hours using errcode = 'P0001';
+  end if;
+
+  cost := round(b.hourly_rate_at_booking * p_extra_hours, 2);
+
+  begin
+    update public.booking set end_at = end_at + make_interval(hours => p_extra_hours) where booking_id = b.booking_id;
+  exception when exclusion_violation then
+    raise exception 'Cannot extend: studio is booked for the next time slot.' using errcode = 'P0001';
+  end;
+
+  -- the bill: the booking's payment (Pending or already Verified) goes up by the extra cost
+  select * into pay from public.payment p
+   where p.booking_id = b.booking_id and p.status in ('Pending', 'Verified')
+   order by p.payment_id desc limit 1;
+  if found then
+    update public.payment set amount = amount + cost where payment_id = pay.payment_id;
+  end if;
+
+  return query
+    select b.booking_ref::text, x.end_at, cost, public.booking_total(b.booking_id), pay.method::text, pay.status::text
+      from public.booking x where x.booking_id = b.booking_id;
+end $$;
+
+revoke all on function public.staff_extension_info(text) from public, anon, authenticated;
+revoke all on function public.staff_extend_booking(text, integer) from public, anon, authenticated;
+grant execute on function public.staff_extension_info(text) to authenticated;
+grant execute on function public.staff_extend_booking(text, integer) to authenticated;
+
+
+-- =====================================================================
+-- 16_extension_slot_hold.sql  (safe to re-run)
+-- Slot hold for studio extensions ("Held by Staff").
+--
+-- While a staff member has the Extend window open, the extra hours (from the current end time) are held
+-- for 3 minutes. The window renews the hold every minute and releases it when it is closed.
+--   * customers see those hours as "Held by Staff" and cannot book them
+--   * other staff cannot extend the same session or record an onsite booking in those hours
+--   * two staff members can never extend the same slot at the same time
+--
+-- This replaces staff_extension_info / staff_extend_booking from file 15 with versions that know about holds.
+-- Run once in the Supabase SQL Editor (after 15_extend_booking.sql).
+-- =====================================================================
+
+alter table public.slot_hold add column if not exists held_by_staff boolean not null default false;
+
+-- Calendar lookup: a staff hold is reported as 'staff-held' (customers show it as "Held by Staff").
+create or replace function public.get_busy_slots(p_studio_id bigint, p_from timestamptz, p_to timestamptz, p_token text default null)
+returns table (start_at timestamptz, end_at timestamptz, kind text)
+language sql stable security definer set search_path = public as $$
+  select b.start_at, b.end_at, 'booked'::text
+  from public.booking b
+  where b.studio_id = p_studio_id
+    and b.status in ('Pending', 'Approved', 'In Progress')
+    and b.start_at < p_to and b.end_at > p_from
+  union all
+  select h.start_at, h.end_at, (case when h.held_by_staff then 'staff-held' else 'held' end)::text
+  from public.slot_hold h
+  where h.studio_id = p_studio_id
+    and h.expires_at > now()
+    and h.token is distinct from p_token
+    and h.start_at < p_to and h.end_at > p_from
+  order by 1;
+$$;
+
+drop function if exists public.staff_extension_info(text);
+drop function if exists public.staff_extend_booking(text, integer);
+
+create or replace function public.staff_extension_info(p_booking_ref text, p_token text default null)
+returns table (
+  min_hours integer, max_hours integer, message text,
+  current_end_at timestamptz, hourly_rate numeric, next_start timestamptz, booking_status text
+)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  b public.booking; st public.studio;
+  closing timestamptz; nxt timestamptz; held timestamptz; held_staff boolean := false;
+  free_until timestamptz; lo integer := 1; hi integer; msg text;
+begin
+  if not public.is_staff() then raise exception 'Staff only.' using errcode = '42501'; end if;
+
+  select * into b from public.booking bk where bk.booking_ref = upper(trim(p_booking_ref));
+  if not found then raise exception 'Booking not found.' using errcode = 'P0001'; end if;
+  select * into st from public.studio where studio_id = b.studio_id;
+
+  if b.status not in ('Approved', 'In Progress') then
+    return query select 1, 0, 'Cannot extend: only Confirmed or Active bookings can be extended.'::text,
+                        b.end_at, b.hourly_rate_at_booking, null::timestamptz, b.status::text;
+    return;
+  end if;
+  if st.status <> 'Available' then
+    return query select 1, 0, ('Cannot extend: ' || st.name || ' is ' || lower(st.status) || '.')::text,
+                        b.end_at, b.hourly_rate_at_booking, null::timestamptz, b.status::text;
+    return;
+  end if;
+
+  -- 10:00 PM closing on the day the session ends (Manila time)
+  closing := (date_trunc('day', b.end_at at time zone 'Asia/Manila') + interval '22 hours') at time zone 'Asia/Manila';
+
+  select min(o.start_at) into nxt from public.booking o
+   where o.studio_id = b.studio_id and o.booking_id <> b.booking_id
+     and o.status in ('Pending', 'Approved', 'In Progress') and o.end_at > b.end_at;
+
+  -- the earliest hold by somebody else (a customer filling in the form, or another staff member extending)
+  select h.start_at, h.held_by_staff into held, held_staff from public.slot_hold h
+   where h.studio_id = b.studio_id and h.expires_at > now()
+     and h.token is distinct from p_token and h.end_at > b.end_at
+   order by h.start_at limit 1;
+
+  free_until := least(closing, coalesce(nxt, 'infinity'::timestamptz), coalesce(held, 'infinity'::timestamptz));
+  hi := least(4, greatest(0, floor(extract(epoch from (free_until - b.end_at)) / 3600.0)::integer));
+
+  -- a session already running past its end time must be extended far enough to cover the time used
+  if b.status = 'In Progress' and now() >= b.end_at then
+    lo := floor(extract(epoch from (now() - b.end_at)) / 3600.0)::integer + 1;
+  end if;
+
+  if hi < lo then
+    if nxt is not null and nxt <= b.end_at + make_interval(hours => lo) then
+      msg := 'Cannot extend: studio is booked for the next time slot.';
+    elsif held is not null and held <= b.end_at + make_interval(hours => lo) then
+      msg := case when held_staff
+               then 'Cannot extend: this time is Held by Staff. Another staff member is extending this session right now. Try again in a few minutes.'
+               else 'Cannot extend: someone is booking the next time slot right now. Try again in a couple of minutes.' end;
+    elsif closing <= b.end_at + make_interval(hours => lo) then
+      msg := 'Cannot extend: the studio closes at 10:00 PM.';
+    else
+      msg := 'Cannot extend: that time is not free.';
+    end if;
+  elsif hi < 4 then
+    if nxt is not null and nxt = free_until then
+      msg := 'The studio is booked from ' || to_char(nxt at time zone 'Asia/Manila', 'FMHH12:MI AM') || ', so it can be extended by up to ' || hi || ' hour' || case when hi > 1 then 's' else '' end || '.';
+    elsif held is not null and held = free_until then
+      msg := case when held_staff
+               then 'Held by Staff: another staff member is holding the time from '
+               else 'Someone is holding the time from ' end
+             || to_char(held at time zone 'Asia/Manila', 'FMHH12:MI AM') || case when held_staff then '' else ' in the booking form' end
+             || ', so the limit is ' || hi || ' hour' || case when hi > 1 then 's' else '' end || ' for now.';
+    else
+      msg := 'The studio closes at 10:00 PM, so it can be extended by up to ' || hi || ' hour' || case when hi > 1 then 's' else '' end || '.';
+    end if;
+  end if;
+
+  return query select lo, hi, msg, b.end_at, b.hourly_rate_at_booking, nxt, b.status::text;
+end $$;
+
+-- Hold the extra hours for this staff member (3 minutes; the Extend window renews it every minute).
+-- One token = one open Extend window = one hold. Raises a clear message if the time is not free.
+create or replace function public.staff_hold_extension(p_booking_ref text, p_extra_hours integer, p_token text)
+returns timestamptz
+language plpgsql security definer set search_path = public as $$
+declare b public.booking; info record; till timestamptz := now() + interval '3 minutes';
+begin
+  if not public.is_staff() then raise exception 'Staff only.' using errcode = '42501'; end if;
+  if p_token is null or length(p_token) < 8 or length(p_token) > 80 then
+    raise exception 'Missing hold token.' using errcode = 'P0001';
+  end if;
+  if p_extra_hours is null or p_extra_hours < 1 or p_extra_hours > 4 then
+    raise exception 'Choose 1 to 4 extra hours.' using errcode = 'P0001';
+  end if;
+
+  select * into b from public.booking bk where bk.booking_ref = upper(trim(p_booking_ref));
+  if not found then raise exception 'Booking not found.' using errcode = 'P0001'; end if;
+
+  perform pg_advisory_xact_lock(hashtextextended('studio:' || b.studio_id, 0));
+
+  select * into info from public.staff_extension_info(b.booking_ref, p_token);
+  if info.max_hours < info.min_hours then
+    raise exception '%', info.message using errcode = 'P0001';
+  end if;
+  if p_extra_hours > info.max_hours or p_extra_hours < info.min_hours then
+    raise exception '%', coalesce(info.message, 'Cannot extend: that time is not free.') using errcode = 'P0001';
+  end if;
+
+  delete from public.slot_hold where expires_at < now() or token = p_token;
+  insert into public.slot_hold (studio_id, start_at, end_at, token, expires_at, held_by_staff)
+  values (b.studio_id, b.end_at, b.end_at + make_interval(hours => p_extra_hours), p_token, till, true);
+  return till;
+end $$;
+
+create or replace function public.staff_extend_booking(p_booking_ref text, p_extra_hours integer, p_token text default null)
+returns table (booking_ref text, new_end_at timestamptz, extra_cost numeric, studio_total numeric, payment_method text, payment_status text)
+language plpgsql security definer set search_path = public as $$
+declare
+  b public.booking; info record; cost numeric; pay public.payment;
+begin
+  if not public.is_staff() then raise exception 'Staff only.' using errcode = '42501'; end if;
+  if p_extra_hours is null or p_extra_hours < 1 or p_extra_hours > 4 then
+    raise exception 'Choose 1 to 4 extra hours.' using errcode = 'P0001';
+  end if;
+
+  select * into b from public.booking bk where bk.booking_ref = upper(trim(p_booking_ref)) for update;
+  if not found then raise exception 'Booking not found.' using errcode = 'P0001'; end if;
+
+  -- same lock the booking functions use, so nobody can book the free hour while we extend
+  perform pg_advisory_xact_lock(hashtextextended('studio:' || b.studio_id, 0));
+
+  -- holds by other people block the extension; this staff member's own hold does not
+  select * into info from public.staff_extension_info(b.booking_ref, p_token);
+  if info.max_hours < info.min_hours then
+    raise exception '%', info.message using errcode = 'P0001';
+  end if;
+  if p_extra_hours > info.max_hours then
+    raise exception '%', coalesce(info.message, 'Cannot extend: that time is not free.') using errcode = 'P0001';
+  end if;
+  if p_extra_hours < info.min_hours then
+    raise exception 'The session is already past its end time. Extend by at least % hour(s).', info.min_hours using errcode = 'P0001';
+  end if;
+
+  cost := round(b.hourly_rate_at_booking * p_extra_hours, 2);
+
+  begin
+    update public.booking set end_at = end_at + make_interval(hours => p_extra_hours) where booking_id = b.booking_id;
+  exception when exclusion_violation then
+    raise exception 'Cannot extend: studio is booked for the next time slot.' using errcode = 'P0001';
+  end;
+
+  if p_token is not null then
+    delete from public.slot_hold where token = p_token;     -- the hold did its job
+  end if;
+
+  select * into pay from public.payment p
+   where p.booking_id = b.booking_id and p.status in ('Pending', 'Verified')
+   order by p.payment_id desc limit 1;
+  if found then
+    update public.payment set amount = amount + cost where payment_id = pay.payment_id;
+  end if;
+
+  return query
+    select b.booking_ref::text, x.end_at, cost, public.booking_total(b.booking_id), pay.method::text, pay.status::text
+      from public.booking x where x.booking_id = b.booking_id;
+end $$;
+
+revoke all on function public.staff_extension_info(text, text) from public, anon, authenticated;
+revoke all on function public.staff_hold_extension(text, integer, text) from public, anon, authenticated;
+revoke all on function public.staff_extend_booking(text, integer, text) from public, anon, authenticated;
+grant execute on function public.staff_extension_info(text, text) to authenticated;
+grant execute on function public.staff_hold_extension(text, integer, text) to authenticated;
+grant execute on function public.staff_extend_booking(text, integer, text) to authenticated;
+
+
+-- =====================================================================
+-- 17_customer_extend.sql  (safe to re-run)
+-- Customers can extend their OWN Confirmed or Active studio booking from My bookings.
+--
+-- It uses the same three functions staff use (file 16). They now accept either staff or the customer who
+-- owns the booking, and nobody else:
+--   staff_extension_info(booking_ref, token)            how many extra hours are free right now
+--   staff_hold_extension(booking_ref, hours, token)     holds the hours (3 minutes, renewed by the window)
+--   staff_extend_booking(booking_ref, hours, token)     moves the end time and adds the cost to the bill
+-- A hold made by staff shows as "Held by Staff"; a hold made by a customer is an ordinary hold
+-- ("someone is booking this time"). Either way nobody else can book or extend those hours meanwhile.
+-- The extra cost is added to the booking's bill and is paid at the studio.
+-- Run once in the Supabase SQL Editor (after 16_extension_slot_hold.sql).
+-- =====================================================================
+
+create or replace function public.staff_extension_info(p_booking_ref text, p_token text default null)
+returns table (
+  min_hours integer, max_hours integer, message text,
+  current_end_at timestamptz, hourly_rate numeric, next_start timestamptz, booking_status text
+)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  b public.booking; st public.studio;
+  closing timestamptz; nxt timestamptz; held timestamptz; held_staff boolean := false;
+  free_until timestamptz; lo integer := 1; hi integer; msg text;
+begin
+
+  select * into b from public.booking bk where bk.booking_ref = upper(trim(p_booking_ref));
+  if not found then raise exception 'Booking not found.' using errcode = 'P0001'; end if;
+  if not public.is_staff() and b.customer_id is distinct from public.current_customer_id() then
+    raise exception 'That is not your booking.' using errcode = '42501';
+  end if;
+  select * into st from public.studio where studio_id = b.studio_id;
+
+  if b.status not in ('Approved', 'In Progress') then
+    return query select 1, 0, 'Cannot extend: only Confirmed or Active bookings can be extended.'::text,
+                        b.end_at, b.hourly_rate_at_booking, null::timestamptz, b.status::text;
+    return;
+  end if;
+  if st.status <> 'Available' then
+    return query select 1, 0, ('Cannot extend: ' || st.name || ' is ' || lower(st.status) || '.')::text,
+                        b.end_at, b.hourly_rate_at_booking, null::timestamptz, b.status::text;
+    return;
+  end if;
+
+  -- 10:00 PM closing on the day the session ends (Manila time)
+  closing := (date_trunc('day', b.end_at at time zone 'Asia/Manila') + interval '22 hours') at time zone 'Asia/Manila';
+
+  select min(o.start_at) into nxt from public.booking o
+   where o.studio_id = b.studio_id and o.booking_id <> b.booking_id
+     and o.status in ('Pending', 'Approved', 'In Progress') and o.end_at > b.end_at;
+
+  -- the earliest hold by somebody else (a customer filling in the form, or another staff member extending)
+  select h.start_at, h.held_by_staff into held, held_staff from public.slot_hold h
+   where h.studio_id = b.studio_id and h.expires_at > now()
+     and h.token is distinct from p_token and h.end_at > b.end_at
+   order by h.start_at limit 1;
+
+  free_until := least(closing, coalesce(nxt, 'infinity'::timestamptz), coalesce(held, 'infinity'::timestamptz));
+  hi := least(4, greatest(0, floor(extract(epoch from (free_until - b.end_at)) / 3600.0)::integer));
+
+  -- a session already running past its end time must be extended far enough to cover the time used
+  if b.status = 'In Progress' and now() >= b.end_at then
+    lo := floor(extract(epoch from (now() - b.end_at)) / 3600.0)::integer + 1;
+  end if;
+
+  if hi < lo then
+    if nxt is not null and nxt <= b.end_at + make_interval(hours => lo) then
+      msg := 'Cannot extend: studio is booked for the next time slot.';
+    elsif held is not null and held <= b.end_at + make_interval(hours => lo) then
+      msg := case when held_staff
+               then 'Cannot extend: this time is Held by Staff. Another staff member is extending this session right now. Try again in a few minutes.'
+               else 'Cannot extend: someone is booking the next time slot right now. Try again in a couple of minutes.' end;
+    elsif closing <= b.end_at + make_interval(hours => lo) then
+      msg := 'Cannot extend: the studio closes at 10:00 PM.';
+    else
+      msg := 'Cannot extend: that time is not free.';
+    end if;
+  elsif hi < 4 then
+    if nxt is not null and nxt = free_until then
+      msg := 'The studio is booked from ' || to_char(nxt at time zone 'Asia/Manila', 'FMHH12:MI AM') || ', so it can be extended by up to ' || hi || ' hour' || case when hi > 1 then 's' else '' end || '.';
+    elsif held is not null and held = free_until then
+      msg := case when held_staff
+               then 'Held by Staff: another staff member is holding the time from '
+               else 'Someone is holding the time from ' end
+             || to_char(held at time zone 'Asia/Manila', 'FMHH12:MI AM') || case when held_staff then '' else ' in the booking form' end
+             || ', so the limit is ' || hi || ' hour' || case when hi > 1 then 's' else '' end || ' for now.';
+    else
+      msg := 'The studio closes at 10:00 PM, so it can be extended by up to ' || hi || ' hour' || case when hi > 1 then 's' else '' end || '.';
+    end if;
+  end if;
+
+  return query select lo, hi, msg, b.end_at, b.hourly_rate_at_booking, nxt, b.status::text;
+end $$;
+
+create or replace function public.staff_hold_extension(p_booking_ref text, p_extra_hours integer, p_token text)
+returns timestamptz
+language plpgsql security definer set search_path = public as $$
+declare b public.booking; info record; till timestamptz := now() + interval '3 minutes';
+begin
+  if p_token is null or length(p_token) < 8 or length(p_token) > 80 then
+    raise exception 'Missing hold token.' using errcode = 'P0001';
+  end if;
+  if p_extra_hours is null or p_extra_hours < 1 or p_extra_hours > 4 then
+    raise exception 'Choose 1 to 4 extra hours.' using errcode = 'P0001';
+  end if;
+
+  select * into b from public.booking bk where bk.booking_ref = upper(trim(p_booking_ref));
+  if not found then raise exception 'Booking not found.' using errcode = 'P0001'; end if;
+  if not public.is_staff() and b.customer_id is distinct from public.current_customer_id() then
+    raise exception 'That is not your booking.' using errcode = '42501';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended('studio:' || b.studio_id, 0));
+
+  select * into info from public.staff_extension_info(b.booking_ref, p_token);
+  if info.max_hours < info.min_hours then
+    raise exception '%', info.message using errcode = 'P0001';
+  end if;
+  if p_extra_hours > info.max_hours or p_extra_hours < info.min_hours then
+    raise exception '%', coalesce(info.message, 'Cannot extend: that time is not free.') using errcode = 'P0001';
+  end if;
+
+  delete from public.slot_hold where expires_at < now() or token = p_token;
+  insert into public.slot_hold (studio_id, start_at, end_at, token, expires_at, held_by_staff)
+  values (b.studio_id, b.end_at, b.end_at + make_interval(hours => p_extra_hours), p_token, till, public.is_staff());
+  return till;
+end $$;
+
+create or replace function public.staff_extend_booking(p_booking_ref text, p_extra_hours integer, p_token text default null)
+returns table (booking_ref text, new_end_at timestamptz, extra_cost numeric, studio_total numeric, payment_method text, payment_status text)
+language plpgsql security definer set search_path = public as $$
+declare
+  b public.booking; info record; cost numeric; pay public.payment;
+begin
+  if p_extra_hours is null or p_extra_hours < 1 or p_extra_hours > 4 then
+    raise exception 'Choose 1 to 4 extra hours.' using errcode = 'P0001';
+  end if;
+
+  select * into b from public.booking bk where bk.booking_ref = upper(trim(p_booking_ref)) for update;
+  if not found then raise exception 'Booking not found.' using errcode = 'P0001'; end if;
+  if not public.is_staff() and b.customer_id is distinct from public.current_customer_id() then
+    raise exception 'That is not your booking.' using errcode = '42501';
+  end if;
+
+  -- same lock the booking functions use, so nobody can book the free hour while we extend
+  perform pg_advisory_xact_lock(hashtextextended('studio:' || b.studio_id, 0));
+
+  -- holds by other people block the extension; this staff member's own hold does not
+  select * into info from public.staff_extension_info(b.booking_ref, p_token);
+  if info.max_hours < info.min_hours then
+    raise exception '%', info.message using errcode = 'P0001';
+  end if;
+  if p_extra_hours > info.max_hours then
+    raise exception '%', coalesce(info.message, 'Cannot extend: that time is not free.') using errcode = 'P0001';
+  end if;
+  if p_extra_hours < info.min_hours then
+    raise exception 'The session is already past its end time. Extend by at least % hour(s).', info.min_hours using errcode = 'P0001';
+  end if;
+
+  cost := round(b.hourly_rate_at_booking * p_extra_hours, 2);
+
+  begin
+    update public.booking set end_at = end_at + make_interval(hours => p_extra_hours) where booking_id = b.booking_id;
+  exception when exclusion_violation then
+    raise exception 'Cannot extend: studio is booked for the next time slot.' using errcode = 'P0001';
+  end;
+
+  if p_token is not null then
+    delete from public.slot_hold where token = p_token;     -- the hold did its job
+  end if;
+
+  select * into pay from public.payment p
+   where p.booking_id = b.booking_id and p.status in ('Pending', 'Verified')
+   order by p.payment_id desc limit 1;
+  if found then
+    update public.payment set amount = amount + cost where payment_id = pay.payment_id;
+  end if;
+
+  return query
+    select b.booking_ref::text, x.end_at, cost, public.booking_total(b.booking_id), pay.method::text, pay.status::text
+      from public.booking x where x.booking_id = b.booking_id;
+end $$;
+
+revoke all on function public.staff_extension_info(text, text) from public, anon, authenticated;
+revoke all on function public.staff_hold_extension(text, integer, text) from public, anon, authenticated;
+revoke all on function public.staff_extend_booking(text, integer, text) from public, anon, authenticated;
+grant execute on function public.staff_extension_info(text, text) to authenticated;
+grant execute on function public.staff_hold_extension(text, integer, text) to authenticated;
+grant execute on function public.staff_extend_booking(text, integer, text) to authenticated;
+
+
+-- =====================================================================
+-- 18_booking_reject_reason.sql  (safe to re-run)
+-- Rejecting a booking now needs a reason, and the customer sees it.
+--   * staff_reject_booking(booking_ref, reason)  rejects a Pending booking (and its pending payment) with a reason
+--   * v_booking_summary gets a rejected_reason column (My bookings reads it)
+--   * lookup_booking (guest reference lookup) returns rejected_reason too
+-- Run once in the Supabase SQL Editor (after 17_customer_extend.sql).
+-- =====================================================================
+
+create or replace view public.v_booking_summary with (security_invoker = true) as
+select
+  b.booking_id, b.booking_ref, b.status, b.source,
+  b.studio_id, s.name as studio_name,
+  b.customer_id, trim(c.first_name || ' ' || c.last_name) as customer_name, c.number as customer_number,
+  (c.auth_user_id is null) as is_guest,
+  b.start_at, b.end_at,
+  extract(epoch from (b.end_at - b.start_at)) / 3600.0 as hours,
+  b.actual_start_at, b.actual_end_at,
+  b.hourly_rate_at_booking,
+  round(b.hourly_rate_at_booking * extract(epoch from (b.end_at - b.start_at)) / 3600.0, 2) as total_amount,
+  p.payment_id, p.method as payment_method, p.gcash_reference, p.status as payment_status,
+  b.approved_by, b.created_at,
+  b.rejected_reason
+from public.booking b
+join public.studio s   on s.studio_id = b.studio_id
+join public.customer c on c.customer_id = b.customer_id
+left join lateral (
+  select * from public.payment p where p.booking_id = b.booking_id order by p.payment_id desc limit 1
+) p on true;
+grant select on public.v_booking_summary to authenticated;
+
+create or replace function public.staff_reject_booking(p_booking_ref text, p_reason text)
+returns void language plpgsql security definer set search_path = public as $$
+declare b public.booking; why text := trim(coalesce(p_reason, ''));
+begin
+  if not public.is_staff() then raise exception 'Staff only.' using errcode = '42501'; end if;
+  if length(why) < 3 then raise exception 'Enter the reason for rejecting this booking.' using errcode = 'P0001'; end if;
+  if length(why) > 300 then raise exception 'Keep the reason under 300 characters.' using errcode = 'P0001'; end if;
+
+  select * into b from public.booking bk where bk.booking_ref = upper(trim(p_booking_ref)) for update;
+  if not found then raise exception 'Booking not found.' using errcode = 'P0001'; end if;
+  if b.status <> 'Pending' then
+    raise exception 'Only a Pending booking can be rejected (this one is %).', b.status using errcode = 'P0001';
+  end if;
+
+  update public.booking set status = 'Rejected', rejected_reason = why where booking_id = b.booking_id;
+  update public.payment set status = 'Rejected' where booking_id = b.booking_id and status = 'Pending';
+end $$;
+
+revoke all on function public.staff_reject_booking(text, text) from public, anon, authenticated;
+grant execute on function public.staff_reject_booking(text, text) to authenticated;
+
+create or replace function public.lookup_booking(p_ref text, p_phone text default null)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare r record; ad jsonb; ad_total numeric;
+begin
+  select b.booking_id, b.booking_ref, b.status, b.start_at, b.end_at, s.name as studio_name, s.description as studio_desc,
+         public.booking_total(b.booking_id) as total,
+         (select p.status from public.payment p where p.booking_id = b.booking_id order by p.payment_id desc limit 1) as payment_status,
+         c.number, c.auth_user_id, b.rejected_reason
+    into r
+  from public.booking b
+  join public.studio s on s.studio_id = b.studio_id
+  join public.customer c on c.customer_id = b.customer_id
+  where b.booking_ref = upper(regexp_replace(coalesce(p_ref, ''), '\s', '', 'g'));
+
+  if not found then return null; end if;
+
+  -- registered customers' bookings are private: only the owner of the account or staff may read them
+  if r.auth_user_id is not null and r.auth_user_id is distinct from auth.uid() and not public.is_staff() then
+    return null;
+  end if;
+  if p_phone is not null and public.digits(p_phone) <> public.digits(r.number) then return null; end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'equipment', e.name, 'quantity', d.quantity,
+           'price', d.unit_price_at_request * d.quantity, 'status', o.status) order by e.name), '[]'::jsonb),
+         coalesce(sum(d.unit_price_at_request * d.quantity), 0)
+    into ad, ad_total
+  from public.rental_order o
+  join public.rental_detail d on d.rental_order_id = o.rental_order_id
+  join public.equipment e on e.equipment_id = d.equipment_id
+  where o.booking_id = r.booking_id and o.rental_type = 'Add-on' and o.status not in ('Rejected', 'Cancelled');
+
+  return jsonb_build_object(
+    'booking_ref', r.booking_ref, 'status', r.status, 'start_at', r.start_at, 'end_at', r.end_at,
+    'studio', r.studio_name, 'studio_description', r.studio_desc,
+    'total', r.total,
+    'studio_total', r.total, 'addons', ad, 'addons_total', ad_total, 'grand_total', r.total + ad_total,
+    'payment_status', r.payment_status, 'rejected_reason', r.rejected_reason);
+end $$;
+
+
+-- =====================================================================
+-- 20_booking_down_payment.sql  (safe to re-run)
+-- Online studio bookings now need a 50% DOWN PAYMENT (GCash), the same way outside rentals do:
+--   * the customer pays 50% of the total (studio + add-on equipment) when booking; the server sets the
+--     amount, so it cannot be skipped or changed from the browser
+--   * the other 50% (the balance) is paid at the studio when the customer arrives
+--   * the down payment is non-refundable if the booking is cancelled (same as outside rentals)
+--   * anything added later (add-on equipment from the Rent page, session extensions) is paid at the
+--     studio as part of the balance: balance = total - down payment
+--   * walk-in (onsite) bookings recorded by staff are unchanged: paid in full, down_payment stays 0
+--   * bookings made BEFORE this file was run keep down_payment = 0 and behave exactly as before
+--   * the revenue report counts the down payment when staff verify it and the balance when the
+--     session starts (like the balance of an outside rental, which counts when the equipment is issued)
+-- Run once in the Supabase SQL Editor (after 18_booking_reject_reason.sql).
+-- =====================================================================
+
+-- 1. New column -------------------------------------------------------------------------------
+alter table public.booking add column if not exists down_payment numeric(10,2) not null default 0;
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'booking_down_payment_chk') then
+    alter table public.booking add constraint booking_down_payment_chk check (down_payment >= 0);
+  end if;
+end $$;
+
+-- 2. Total of the active add-on equipment on a booking (used by the revenue report) ------------
+create or replace function public.booking_addons_total(p_booking_id bigint) returns numeric
+language sql stable security definer set search_path = public as $$
+  select coalesce(sum(d.unit_price_at_request * d.quantity), 0)::numeric(10,2)
+    from public.rental_order o
+    join public.rental_detail d on d.rental_order_id = o.rental_order_id
+   where o.booking_id = p_booking_id and o.rental_type = 'Add-on' and o.status not in ('Rejected', 'Cancelled');
+$$;
+revoke all on function public.booking_addons_total(bigint) from public, anon, authenticated;
+grant execute on function public.booking_addons_total(bigint) to authenticated;
+
+-- 3. Insert a booking + its payment: online bookings pay 50% now -------------------------------
+create or replace function public.insert_booking_with_payment(
+  p_customer_id bigint, p_studio_id bigint, p_start timestamptz, p_end timestamptz,
+  p_method text, p_gcash text, p_source text, p_staff_id bigint, p_token text
+) returns public.booking
+language plpgsql security definer set search_path = public as $$
+declare b public.booking; st public.studio; total numeric; down numeric := 0;
+begin
+  perform pg_advisory_xact_lock(hashtextextended('studio:' || p_studio_id, 0));
+
+  select * into st from public.studio where studio_id = p_studio_id;
+  if not found then raise exception 'Studio not found.' using errcode = 'P0001'; end if;
+  if p_source = 'Online' and st.status <> 'Available' then
+    raise exception '% is not taking bookings right now.', st.name using errcode = 'P0001';
+  end if;
+
+  if public.slot_held_by_other(p_studio_id, p_start, p_end, p_token) then
+    raise exception 'Those hours were just taken by another customer.' using errcode = 'P0001';
+  end if;
+
+  total := round(st.hourly_rate * extract(epoch from (p_end - p_start)) / 3600.0, 2);
+  if p_source = 'Online' then down := round(total * 0.5, 2); end if;
+
+  begin
+    insert into public.booking (customer_id, studio_id, start_at, end_at, hourly_rate_at_booking,
+                                status, source, approved_by, created_by, down_payment)
+    values (p_customer_id, p_studio_id, p_start, p_end, st.hourly_rate,
+            case when p_source = 'Onsite' then 'Approved' else 'Pending' end,
+            p_source,
+            case when p_source = 'Onsite' then p_staff_id end,
+            case when p_source = 'Onsite' then p_staff_id end,
+            down)
+    returning * into b;
+  exception when exclusion_violation then
+    raise exception 'That time is no longer available. Please pick another slot.' using errcode = 'P0001';
+  end;
+
+  -- online: the payment is the 50% down payment; onsite: the full amount, already verified by staff
+  insert into public.payment (booking_id, method, gcash_reference, amount, status, verified_by, verified_at)
+  values (b.booking_id, p_method, nullif(trim(p_gcash), ''),
+          case when p_source = 'Online' then down else public.booking_total(b.booking_id) end,
+          case when p_source = 'Onsite' then 'Verified' else 'Pending' end,
+          case when p_source = 'Onsite' then p_staff_id end,
+          case when p_source = 'Onsite' then now() end);
+
+  if p_token is not null then
+    delete from public.slot_hold where token = p_token;
+  end if;
+  return b;
+end $$;
+
+-- 4. Book a studio plus add-on equipment: the down payment is 50% of studio + add-ons -----------
+drop function if exists public.create_booking_with_addons(bigint, timestamptz, timestamptz, text, text, text, text, text, text, jsonb);
+create function public.create_booking_with_addons(
+  p_studio_id bigint, p_start_at timestamptz, p_end_at timestamptz,
+  p_first_name text, p_last_name text, p_number text,
+  p_payment_method text, p_gcash_reference text default null, p_hold_token text default null,
+  p_items jsonb default '[]'::jsonb
+) returns table (
+  booking_ref text, status text, studio_total numeric, addons_total numeric, total_amount numeric, rental_ref text,
+  down_payment numeric, balance_due numeric
+)
+language plpgsql security definer set search_path = public as $$
+declare
+  bk record;
+  studio numeric := 0;
+  addons numeric := 0;
+  rref   text;
+  dp     numeric;
+begin
+  select * into bk from public.create_booking(
+    p_studio_id, p_start_at, p_end_at, p_first_name, p_last_name, p_number,
+    p_payment_method, p_gcash_reference, p_hold_token);
+  studio := bk.total_amount;
+
+  if p_items is not null and jsonb_typeof(p_items) = 'array' and jsonb_array_length(p_items) > 0 then
+    select o.rental_ref, o.total_amount into rref, addons
+      from public.request_rental('Add-on', p_items, bk.booking_ref) o;
+  end if;
+
+  -- 50% of everything booked now; the other 50% is the balance paid at the studio
+  dp := round((studio + coalesce(addons, 0)) * 0.5, 2);
+  update public.booking set down_payment = dp where booking_id = bk.booking_id;
+  update public.payment pay set amount = dp where pay.booking_id = bk.booking_id and pay.status <> 'Rejected';
+
+  return query select bk.booking_ref::text, bk.status::text, studio, coalesce(addons, 0),
+                      studio + coalesce(addons, 0), rref, dp, (studio + coalesce(addons, 0)) - dp;
+end $$;
+
+revoke all on function public.create_booking_with_addons(bigint, timestamptz, timestamptz, text, text, text, text, text, text, jsonb) from public, anon, authenticated;
+grant execute on function public.create_booking_with_addons(bigint, timestamptz, timestamptz, text, text, text, text, text, text, jsonb) to anon, authenticated;
+
+-- 5. A pending booking payment only follows the add-ons for bookings WITHOUT a down payment ------
+--    (with a down payment the amount is fixed when booking; later add-ons join the balance)
+create or replace function public.sync_booking_payment(p_booking_id bigint) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  update public.payment p
+     set amount = public.booking_total(p_booking_id) + coalesce((
+           select sum(d.unit_price_at_request * d.quantity)
+             from public.rental_order o
+             join public.rental_detail d on d.rental_order_id = o.rental_order_id
+            where o.booking_id = p_booking_id and o.rental_type = 'Add-on'
+              and o.status not in ('Rejected', 'Cancelled')), 0)
+   where p.booking_id = p_booking_id and p.status = 'Pending'
+     and not exists (select 1 from public.booking b where b.booking_id = p_booking_id and b.down_payment > 0);
+end $$;
+
+-- 6. Extending a session: the extra cost joins the balance when there is a down payment ---------
+create or replace function public.staff_extend_booking(p_booking_ref text, p_extra_hours integer, p_token text default null)
+returns table (booking_ref text, new_end_at timestamptz, extra_cost numeric, studio_total numeric, payment_method text, payment_status text)
+language plpgsql security definer set search_path = public as $$
+declare
+  b public.booking; info record; cost numeric; pay public.payment;
+begin
+  if p_extra_hours is null or p_extra_hours < 1 or p_extra_hours > 4 then
+    raise exception 'Choose 1 to 4 extra hours.' using errcode = 'P0001';
+  end if;
+
+  select * into b from public.booking bk where bk.booking_ref = upper(trim(p_booking_ref)) for update;
+  if not found then raise exception 'Booking not found.' using errcode = 'P0001'; end if;
+  if not public.is_staff() and b.customer_id is distinct from public.current_customer_id() then
+    raise exception 'That is not your booking.' using errcode = '42501';
+  end if;
+
+  -- same lock the booking functions use, so nobody can book the free hour while we extend
+  perform pg_advisory_xact_lock(hashtextextended('studio:' || b.studio_id, 0));
+
+  -- holds by other people block the extension; this staff member's own hold does not
+  select * into info from public.staff_extension_info(b.booking_ref, p_token);
+  if info.max_hours < info.min_hours then
+    raise exception '%', info.message using errcode = 'P0001';
+  end if;
+  if p_extra_hours > info.max_hours then
+    raise exception '%', coalesce(info.message, 'Cannot extend: that time is not free.') using errcode = 'P0001';
+  end if;
+  if p_extra_hours < info.min_hours then
+    raise exception 'The session is already past its end time. Extend by at least % hour(s).', info.min_hours using errcode = 'P0001';
+  end if;
+
+  cost := round(b.hourly_rate_at_booking * p_extra_hours, 2);
+
+  begin
+    update public.booking set end_at = end_at + make_interval(hours => p_extra_hours) where booking_id = b.booking_id;
+  exception when exclusion_violation then
+    raise exception 'Cannot extend: studio is booked for the next time slot.' using errcode = 'P0001';
+  end;
+
+  if p_token is not null then
+    delete from public.slot_hold where token = p_token;     -- the hold did its job
+  end if;
+
+  select * into pay from public.payment p
+   where p.booking_id = b.booking_id and p.status in ('Pending', 'Verified')
+   order by p.payment_id desc limit 1;
+  -- With a down payment the extra cost is NOT added to the payment: the customer already paid 50% of the
+  -- original total, and the extra hours are part of the balance paid at the studio (total - down payment).
+  -- Older bookings without a down payment keep the previous behaviour (cost added to the payment amount).
+  if found and coalesce(b.down_payment, 0) = 0 then
+    update public.payment set amount = amount + cost where payment_id = pay.payment_id;
+  end if;
+
+  return query
+    select b.booking_ref::text, x.end_at, cost, public.booking_total(b.booking_id), pay.method::text, pay.status::text
+      from public.booking x where x.booking_id = b.booking_id;
+end $$;
+
+-- 7. Dashboard / My bookings view: one extra column at the end (down_payment) ------------------
+create or replace view public.v_booking_summary with (security_invoker = true) as
+select
+  b.booking_id, b.booking_ref, b.status, b.source,
+  b.studio_id, s.name as studio_name,
+  b.customer_id, trim(c.first_name || ' ' || c.last_name) as customer_name, c.number as customer_number,
+  (c.auth_user_id is null) as is_guest,
+  b.start_at, b.end_at,
+  extract(epoch from (b.end_at - b.start_at)) / 3600.0 as hours,
+  b.actual_start_at, b.actual_end_at,
+  b.hourly_rate_at_booking,
+  round(b.hourly_rate_at_booking * extract(epoch from (b.end_at - b.start_at)) / 3600.0, 2) as total_amount,
+  p.payment_id, p.method as payment_method, p.gcash_reference, p.status as payment_status,
+  b.approved_by, b.created_at,
+  b.rejected_reason,
+  b.down_payment
+from public.booking b
+join public.studio s   on s.studio_id = b.studio_id
+join public.customer c on c.customer_id = b.customer_id
+left join lateral (
+  select * from public.payment p where p.booking_id = b.booking_id order by p.payment_id desc limit 1
+) p on true;
+grant select on public.v_booking_summary to authenticated;
+
+-- 8. Guest reference lookup: also returns the down payment and the balance --------------------
+create or replace function public.lookup_booking(p_ref text, p_phone text default null)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare r record; ad jsonb; ad_total numeric;
+begin
+  select b.booking_id, b.booking_ref, b.status, b.start_at, b.end_at, s.name as studio_name, s.description as studio_desc,
+         public.booking_total(b.booking_id) as total,
+         (select p.status from public.payment p where p.booking_id = b.booking_id order by p.payment_id desc limit 1) as payment_status,
+         c.number, c.auth_user_id, b.rejected_reason, b.down_payment
+    into r
+  from public.booking b
+  join public.studio s on s.studio_id = b.studio_id
+  join public.customer c on c.customer_id = b.customer_id
+  where b.booking_ref = upper(regexp_replace(coalesce(p_ref, ''), '\s', '', 'g'));
+
+  if not found then return null; end if;
+
+  -- registered customers' bookings are private: only the owner of the account or staff may read them
+  if r.auth_user_id is not null and r.auth_user_id is distinct from auth.uid() and not public.is_staff() then
+    return null;
+  end if;
+  if p_phone is not null and public.digits(p_phone) <> public.digits(r.number) then return null; end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'equipment', e.name, 'quantity', d.quantity,
+           'price', d.unit_price_at_request * d.quantity, 'status', o.status) order by e.name), '[]'::jsonb),
+         coalesce(sum(d.unit_price_at_request * d.quantity), 0)
+    into ad, ad_total
+  from public.rental_order o
+  join public.rental_detail d on d.rental_order_id = o.rental_order_id
+  join public.equipment e on e.equipment_id = d.equipment_id
+  where o.booking_id = r.booking_id and o.rental_type = 'Add-on' and o.status not in ('Rejected', 'Cancelled');
+
+  return jsonb_build_object(
+    'booking_ref', r.booking_ref, 'status', r.status, 'start_at', r.start_at, 'end_at', r.end_at,
+    'studio', r.studio_name, 'studio_description', r.studio_desc,
+    'total', r.total,
+    'studio_total', r.total, 'addons', ad, 'addons_total', ad_total, 'grand_total', r.total + ad_total,
+    'payment_status', r.payment_status, 'rejected_reason', r.rejected_reason,
+    'down_payment', r.down_payment, 'balance_due', greatest(0, r.total + ad_total - r.down_payment));
+end $$;
+
+
+-- 9. Revenue report ----------------------------------------------------------------------------
+--    Booking payments are counted when staff verify them (the down payment, or the full amount for
+--    older and walk-in bookings). The balance of a booking with a down payment is counted on the day
+--    its session starts. Everything else is the same as 08_outside_rental.sql.
+drop view if exists public.v_revenue_daily;
+create view public.v_revenue_daily with (security_invoker = true) as
+select day, kind, studio_name, sum(amount) as amount, count(*) as payments
+from (
+  -- studio part of a booking payment (the down payment, or the full payment of older/walk-in bookings)
+  select (coalesce(p.verified_at, p.created_at) at time zone 'Asia/Manila')::date as day,
+         'Studio'::text as kind, s.name::varchar(100) as studio_name,
+         least(p.amount, public.booking_total(b.booking_id)) as amount
+    from public.payment p
+    join public.booking b on b.booking_id = p.booking_id
+    join public.studio  s on s.studio_id  = b.studio_id
+   where p.status = 'Verified'
+  union all
+  -- add-on equipment paid together with the booking
+  select (coalesce(p.verified_at, p.created_at) at time zone 'Asia/Manila')::date,
+         'Equipment'::text, null::varchar(100),
+         p.amount - public.booking_total(b.booking_id)
+    from public.payment p
+    join public.booking b on b.booking_id = p.booking_id
+   where p.status = 'Verified' and p.amount > public.booking_total(b.booking_id)
+  union all
+  -- the studio balance of a booking with a down payment, collected when the session starts
+  select (b.actual_start_at at time zone 'Asia/Manila')::date,
+         'Studio'::text, s.name::varchar(100),
+         public.booking_total(b.booking_id) - least(b.down_payment, public.booking_total(b.booking_id))
+    from public.booking b
+    join public.studio s on s.studio_id = b.studio_id
+   where b.down_payment > 0 and b.status in ('In Progress', 'Completed') and b.actual_start_at is not null
+     and exists (select 1 from public.payment p where p.booking_id = b.booking_id and p.status = 'Verified')
+     and public.booking_total(b.booking_id) - least(b.down_payment, public.booking_total(b.booking_id)) > 0
+  union all
+  -- the add-on equipment balance of a booking with a down payment, collected when the session starts
+  select (b.actual_start_at at time zone 'Asia/Manila')::date,
+         'Equipment'::text, null::varchar(100),
+         public.booking_addons_total(b.booking_id) - greatest(b.down_payment - public.booking_total(b.booking_id), 0)
+    from public.booking b
+   where b.down_payment > 0 and b.status in ('In Progress', 'Completed') and b.actual_start_at is not null
+     and exists (select 1 from public.payment p where p.booking_id = b.booking_id and p.status = 'Verified')
+     and public.booking_addons_total(b.booking_id) - greatest(b.down_payment - public.booking_total(b.booking_id), 0) > 0
+  union all
+  -- rental payments (outside rental down payments, onsite rentals)
+  select (coalesce(p.verified_at, p.created_at) at time zone 'Asia/Manila')::date,
+         'Equipment'::text, null::varchar(100), p.amount
+    from public.payment p
+   where p.status = 'Verified' and p.rental_order_id is not null
+  union all
+  -- the other 50% of an online outside rental, collected when the equipment is issued
+  select (o.issued_at at time zone 'Asia/Manila')::date,
+         'Equipment'::text, null::varchar(100),
+         public.rental_order_total(o.rental_order_id) - o.down_payment
+    from public.rental_order o
+   where o.down_payment > 0 and o.status in ('Active', 'Returned') and o.issued_at is not null
+  union all
+  -- late fees collected when the equipment is returned
+  select (d.returned_at at time zone 'Asia/Manila')::date,
+         'Equipment'::text, null::varchar(100), d.late_fee
+    from public.rental_detail d
+   where d.late_fee > 0
+) x
+group by day, kind, studio_name;
+
+grant select on public.v_revenue_daily to authenticated;
+
+
+-- =====================================================================
+-- 21_fix_rental_total_8h.sql  (safe to re-run)
+-- Restores 8-hour billing for outside rentals, the same as the website:
+--   * the item price covers the first 8 hours
+--   * every extra hour adds price / 8 (rounded up to whole hours)
+-- Migration 19 had replaced this with per-24-hour-day billing, which made the
+-- server's total (and the 50% down payment) differ from what the site shows.
+-- Run once in the Supabase SQL Editor (after 20_booking_down_payment.sql).
+-- =====================================================================
+create or replace function public.rental_order_total(p_order_id bigint) returns numeric
+language sql stable security definer set search_path = public as $$
+  select coalesce(sum(
+    d.quantity * d.unit_price_at_request *
+    case when o.rental_type = 'Outside'
+         then greatest(8, ceil(coalesce(d.rental_hours, 8)))::numeric / 8
+         else 1 end
+  ), 0)::numeric(10,2)
+  from public.rental_order o
+  join public.rental_detail d on d.rental_order_id = o.rental_order_id
+  where o.rental_order_id = p_order_id;
+$$;
+
+
+-- =====================================================================
+-- (file 23_extension_payment.sql)
+-- =====================================================================
+-- =====================================================================
+-- 23_extension_payment.sql  (safe to re-run)
+-- Customers pay for a session extension the same way they pay for a booking:
+--
+--   1. My bookings > Extend: the customer picks the extra hours and pays a 50% DOWN PAYMENT by GCash
+--      (reference number). The database sets the amount; the browser cannot change it.
+--   2. The request is saved as Pending and the extra hours are RESERVED (nobody else can book them)
+--      until staff decide. Staff and the owner see it in the Payments tab (kind "Extension").
+--   3. Staff VERIFY the down payment  -> the booking's end time moves, so the studio total goes up by the
+--      extension cost, and the extension down payment is added to the booking's down payment
+--      (balance at the studio = total - down payment, as before).
+--      Staff REJECT it (with a reason) -> nothing changes and the hours are released.
+--   4. The extra hours are only added to the booking when the payment is verified.
+--
+--   * Only one pending extension per booking. Reschedule is blocked while one is pending; cancelling the
+--     booking closes it.
+--   * Customers can no longer call staff_extend_booking directly (it is staff only again).
+--   * Staff's own Extend button (extension paid at the studio) is unchanged.
+--   * Revenue report: the extension down payment counts when verified, the rest with the booking balance.
+-- Run once in the Supabase SQL Editor (after 21_fix_rental_total_8h.sql).
+-- =====================================================================
+
+-- 1. Extension requests -----------------------------------------------------------------------
+create table if not exists public.booking_extension (
+  extension_id     bigint generated always as identity primary key,
+  booking_id       bigint not null references public.booking (booking_id) on delete cascade,
+  customer_id      bigint not null references public.customer (customer_id),
+  extra_hours      integer not null,
+  hourly_rate      numeric(10,2) not null,
+  extra_cost       numeric(10,2) not null,
+  down_payment     numeric(10,2) not null,
+  old_end_at       timestamptz not null,
+  new_end_at       timestamptz not null,
+  status           varchar(10) not null default 'Pending',
+  rejected_reason  text,
+  hold_token       text,
+  approved_by      bigint references public.app_user (user_id) on delete set null,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now(),
+  constraint booking_extension_hours_chk  check (extra_hours between 1 and 4),
+  constraint booking_extension_amount_chk check (extra_cost >= 0 and down_payment >= 0),
+  constraint booking_extension_time_chk   check (new_end_at > old_end_at),
+  constraint booking_extension_status_chk check (status in ('Pending', 'Approved', 'Rejected'))
+);
+create unique index if not exists booking_extension_one_pending on public.booking_extension (booking_id) where status = 'Pending';
+create index if not exists booking_extension_booking_idx on public.booking_extension (booking_id);
+
+drop trigger if exists trg_touch on public.booking_extension;
+create trigger trg_touch before update on public.booking_extension
+  for each row execute function public.touch_updated_at();
+
+-- 2. A payment can now belong to an extension ---------------------------------------------------
+alter table public.payment add column if not exists extension_id bigint references public.booking_extension (extension_id) on delete cascade;
+alter table public.payment drop constraint if exists payment_target_chk;
+alter table public.payment add constraint payment_target_chk check (num_nonnulls(booking_id, rental_order_id, extension_id) = 1);
+create unique index if not exists payment_extension_uq on public.payment (extension_id) where extension_id is not null and status <> 'Rejected';
+
+-- 3. Privileges and Row Level Security -----------------------------------------------------------
+alter table public.booking_extension enable row level security;
+revoke all on public.booking_extension from anon, authenticated;
+grant select on public.booking_extension to authenticated;
+
+drop policy if exists booking_extension_select on public.booking_extension;
+create policy booking_extension_select on public.booking_extension for select to authenticated
+  using (public.is_staff() or customer_id = public.current_customer_id());
+
+-- customers can read the payment of their own extension (staff already read everything)
+drop policy if exists payment_extension_select on public.payment;
+create policy payment_extension_select on public.payment for select to authenticated
+  using (exists (select 1 from public.booking_extension x
+                  where x.extension_id = payment.extension_id and x.customer_id = public.current_customer_id()));
+
+-- 4. View for My bookings and the staff dashboard (no hold token) --------------------------------
+create or replace view public.v_booking_extension with (security_invoker = true) as
+select
+  x.extension_id, x.booking_id, b.booking_ref, x.customer_id,
+  x.extra_hours, x.hourly_rate, x.extra_cost, x.down_payment, (x.extra_cost - x.down_payment) as balance_due,
+  x.old_end_at, x.new_end_at, x.status, x.rejected_reason, x.created_at, x.updated_at,
+  p.payment_id, p.status as payment_status, p.method as payment_method, p.gcash_reference
+from public.booking_extension x
+join public.booking b on b.booking_id = x.booking_id
+left join lateral (
+  select * from public.payment p where p.extension_id = x.extension_id order by p.payment_id desc limit 1
+) p on true;
+grant select on public.v_booking_extension to authenticated;
+
+-- 5. Staff: a session extension request is checked before anything else ---------------------------
+create or replace function public.staff_extension_info(p_booking_ref text, p_token text default null)
+returns table (
+  min_hours integer, max_hours integer, message text,
+  current_end_at timestamptz, hourly_rate numeric, next_start timestamptz, booking_status text
+)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  b public.booking; st public.studio;
+  closing timestamptz; nxt timestamptz; held timestamptz; held_staff boolean := false;
+  free_until timestamptz; lo integer := 1; hi integer; msg text;
+begin
+
+  select * into b from public.booking bk where bk.booking_ref = upper(trim(p_booking_ref));
+  if not found then raise exception 'Booking not found.' using errcode = 'P0001'; end if;
+  if not public.is_staff() and b.customer_id is distinct from public.current_customer_id() then
+    raise exception 'That is not your booking.' using errcode = '42501';
+  end if;
+  select * into st from public.studio where studio_id = b.studio_id;
+
+  -- NEW: only one extension request at a time (it must be verified or rejected first)
+  if exists (select 1 from public.booking_extension e where e.booking_id = b.booking_id and e.status = 'Pending') then
+    return query select 1, 0, 'Cannot extend: an extension request for this booking is waiting for its down payment to be verified.'::text,
+                        b.end_at, b.hourly_rate_at_booking, null::timestamptz, b.status::text;
+    return;
+  end if;
+
+  if b.status not in ('Approved', 'In Progress') then
+    return query select 1, 0, 'Cannot extend: only Confirmed or Active bookings can be extended.'::text,
+                        b.end_at, b.hourly_rate_at_booking, null::timestamptz, b.status::text;
+    return;
+  end if;
+  if st.status <> 'Available' then
+    return query select 1, 0, ('Cannot extend: ' || st.name || ' is ' || lower(st.status) || '.')::text,
+                        b.end_at, b.hourly_rate_at_booking, null::timestamptz, b.status::text;
+    return;
+  end if;
+
+  -- 10:00 PM closing on the day the session ends (Manila time)
+  closing := (date_trunc('day', b.end_at at time zone 'Asia/Manila') + interval '22 hours') at time zone 'Asia/Manila';
+
+  select min(o.start_at) into nxt from public.booking o
+   where o.studio_id = b.studio_id and o.booking_id <> b.booking_id
+     and o.status in ('Pending', 'Approved', 'In Progress') and o.end_at > b.end_at;
+
+  -- the earliest hold by somebody else (a customer filling in the form, or another staff member extending)
+  select h.start_at, h.held_by_staff into held, held_staff from public.slot_hold h
+   where h.studio_id = b.studio_id and h.expires_at > now()
+     and h.token is distinct from p_token and h.end_at > b.end_at
+   order by h.start_at limit 1;
+
+  free_until := least(closing, coalesce(nxt, 'infinity'::timestamptz), coalesce(held, 'infinity'::timestamptz));
+  hi := least(4, greatest(0, floor(extract(epoch from (free_until - b.end_at)) / 3600.0)::integer));
+
+  -- a session already running past its end time must be extended far enough to cover the time used
+  if b.status = 'In Progress' and now() >= b.end_at then
+    lo := floor(extract(epoch from (now() - b.end_at)) / 3600.0)::integer + 1;
+  end if;
+
+  if hi < lo then
+    if nxt is not null and nxt <= b.end_at + make_interval(hours => lo) then
+      msg := 'Cannot extend: studio is booked for the next time slot.';
+    elsif held is not null and held <= b.end_at + make_interval(hours => lo) then
+      msg := case when held_staff
+               then 'Cannot extend: this time is Held by Staff. Another staff member is extending this session right now. Try again in a few minutes.'
+               else 'Cannot extend: someone is booking the next time slot right now. Try again in a couple of minutes.' end;
+    elsif closing <= b.end_at + make_interval(hours => lo) then
+      msg := 'Cannot extend: the studio closes at 10:00 PM.';
+    else
+      msg := 'Cannot extend: that time is not free.';
+    end if;
+  elsif hi < 4 then
+    if nxt is not null and nxt = free_until then
+      msg := 'The studio is booked from ' || to_char(nxt at time zone 'Asia/Manila', 'FMHH12:MI AM') || ', so it can be extended by up to ' || hi || ' hour' || case when hi > 1 then 's' else '' end || '.';
+    elsif held is not null and held = free_until then
+      msg := case when held_staff
+               then 'Held by Staff: another staff member is holding the time from '
+               else 'Someone is holding the time from ' end
+             || to_char(held at time zone 'Asia/Manila', 'FMHH12:MI AM') || case when held_staff then '' else ' in the booking form' end
+             || ', so the limit is ' || hi || ' hour' || case when hi > 1 then 's' else '' end || ' for now.';
+    else
+      msg := 'The studio closes at 10:00 PM, so it can be extended by up to ' || hi || ' hour' || case when hi > 1 then 's' else '' end || '.';
+    end if;
+  end if;
+
+  return query select lo, hi, msg, b.end_at, b.hourly_rate_at_booking, nxt, b.status::text;
+end $$;
+
+-- 6. staff_extend_booking is staff only again (customers use customer_request_extension) ------------
+create or replace function public.staff_extend_booking(p_booking_ref text, p_extra_hours integer, p_token text default null)
+returns table (booking_ref text, new_end_at timestamptz, extra_cost numeric, studio_total numeric, payment_method text, payment_status text)
+language plpgsql security definer set search_path = public as $$
+declare
+  b public.booking; info record; cost numeric; pay public.payment;
+begin
+  -- NEW: customers no longer extend directly; they pay a 50% down payment through customer_request_extension()
+  if not public.is_staff() then raise exception 'Staff only. Customers request an extension with a down payment.' using errcode = '42501'; end if;
+  if p_extra_hours is null or p_extra_hours < 1 or p_extra_hours > 4 then
+    raise exception 'Choose 1 to 4 extra hours.' using errcode = 'P0001';
+  end if;
+
+  select * into b from public.booking bk where bk.booking_ref = upper(trim(p_booking_ref)) for update;
+  if not found then raise exception 'Booking not found.' using errcode = 'P0001'; end if;
+
+  -- same lock the booking functions use, so nobody can book the free hour while we extend
+  perform pg_advisory_xact_lock(hashtextextended('studio:' || b.studio_id, 0));
+
+  -- holds by other people block the extension; this staff member's own hold does not
+  select * into info from public.staff_extension_info(b.booking_ref, p_token);
+  if info.max_hours < info.min_hours then
+    raise exception '%', info.message using errcode = 'P0001';
+  end if;
+  if p_extra_hours > info.max_hours then
+    raise exception '%', coalesce(info.message, 'Cannot extend: that time is not free.') using errcode = 'P0001';
+  end if;
+  if p_extra_hours < info.min_hours then
+    raise exception 'The session is already past its end time. Extend by at least % hour(s).', info.min_hours using errcode = 'P0001';
+  end if;
+
+  cost := round(b.hourly_rate_at_booking * p_extra_hours, 2);
+
+  begin
+    update public.booking set end_at = end_at + make_interval(hours => p_extra_hours) where booking_id = b.booking_id;
+  exception when exclusion_violation then
+    raise exception 'Cannot extend: studio is booked for the next time slot.' using errcode = 'P0001';
+  end;
+
+  if p_token is not null then
+    delete from public.slot_hold where token = p_token;     -- the hold did its job
+  end if;
+
+  select * into pay from public.payment p
+   where p.booking_id = b.booking_id and p.status in ('Pending', 'Verified')
+   order by p.payment_id desc limit 1;
+  -- With a down payment the extra cost is NOT added to the payment: the customer already paid 50% of the
+  -- original total, and the extra hours are part of the balance paid at the studio (total - down payment).
+  -- Older bookings without a down payment keep the previous behaviour (cost added to the payment amount).
+  if found and coalesce(b.down_payment, 0) = 0 then
+    update public.payment set amount = amount + cost where payment_id = pay.payment_id;
+  end if;
+
+  return query
+    select b.booking_ref::text, x.end_at, cost, public.booking_total(b.booking_id), pay.method::text, pay.status::text
+      from public.booking x where x.booking_id = b.booking_id;
+end $$;
+
+-- 7. Customer: request an extension with a 50% down payment ---------------------------------------
+create or replace function public.customer_request_extension(
+  p_booking_ref text, p_extra_hours integer, p_token text, p_gcash_reference text
+) returns table (extension_id bigint, booking_ref text, new_end_at timestamptz, extra_cost numeric, down_payment numeric, balance_due numeric)
+language plpgsql security definer set search_path = public as $$
+declare
+  cid bigint := public.current_customer_id();
+  b public.booking; info record; x public.booking_extension;
+  cost numeric; dp numeric; tok text;
+  gref text := regexp_replace(coalesce(p_gcash_reference, ''), '\s', '', 'g');
+begin
+  if cid is null then raise exception 'Please log in to extend your booking.' using errcode = 'P0001'; end if;
+  if p_extra_hours is null or p_extra_hours < 1 or p_extra_hours > 4 then
+    raise exception 'Choose 1 to 4 extra hours.' using errcode = 'P0001';
+  end if;
+  if gref !~ '^[0-9]{13}$' then
+    raise exception 'Enter the 13-digit GCash reference number of your down payment.' using errcode = 'P0001';
+  end if;
+
+  select * into b from public.booking bk where bk.booking_ref = upper(trim(p_booking_ref)) for update;
+  if not found or b.customer_id is distinct from cid then
+    raise exception 'That is not your booking.' using errcode = '42501';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended('studio:' || b.studio_id, 0));
+
+  if exists (select 1 from public.booking_extension e where e.booking_id = b.booking_id and e.status = 'Pending') then
+    raise exception 'You already have an extension request waiting for staff to verify its down payment.' using errcode = 'P0001';
+  end if;
+
+  -- the customer's own open Extend window (p_token) does not block the hours
+  select * into info from public.staff_extension_info(b.booking_ref, p_token);
+  if info.max_hours < info.min_hours then raise exception '%', info.message using errcode = 'P0001'; end if;
+  if p_extra_hours > info.max_hours then
+    raise exception '%', coalesce(info.message, 'Cannot extend: that time is not free.') using errcode = 'P0001';
+  end if;
+  if p_extra_hours < info.min_hours then
+    raise exception 'The session is already past its end time. Extend by at least % hour(s).', info.min_hours using errcode = 'P0001';
+  end if;
+
+  cost := round(b.hourly_rate_at_booking * p_extra_hours, 2);
+  dp   := round(cost * 0.5, 2);
+  tok  := 'e' || replace(gen_random_uuid()::text, '-', '');
+
+  insert into public.booking_extension (booking_id, customer_id, extra_hours, hourly_rate, extra_cost, down_payment,
+                                        old_end_at, new_end_at, hold_token)
+  values (b.booking_id, cid, p_extra_hours, b.hourly_rate_at_booking, cost, dp,
+          b.end_at, b.end_at + make_interval(hours => p_extra_hours), tok)
+  returning * into x;
+
+  insert into public.payment (extension_id, method, gcash_reference, amount, status)
+  values (x.extension_id, 'GCash', gref, dp, 'Pending');
+
+  -- reserve the extra hours until staff decide (an ordinary hold: nobody else can book or extend them)
+  delete from public.slot_hold where expires_at < now() or token = p_token;
+  insert into public.slot_hold (studio_id, start_at, end_at, token, expires_at, held_by_staff)
+  values (b.studio_id, x.old_end_at, x.new_end_at, tok, x.new_end_at, false);
+
+  return query select x.extension_id, b.booking_ref::text, x.new_end_at, cost, dp, cost - dp;
+exception when unique_violation then
+  raise exception 'That GCash reference number was already used.' using errcode = 'P0001';
+end $$;
+
+-- 8. Apply an approved extension to the booking (called by the payment trigger) -----------------------
+create or replace function public.apply_booking_extension(p_extension_id bigint) returns void
+language plpgsql security definer set search_path = public as $$
+declare x public.booking_extension; b public.booking; paid numeric := 0;
+begin
+  select * into x from public.booking_extension where extension_id = p_extension_id for update;
+  if not found or x.status <> 'Pending' then return; end if;
+
+  select * into b from public.booking where booking_id = x.booking_id for update;
+  perform pg_advisory_xact_lock(hashtextextended('studio:' || b.studio_id, 0));
+
+  if b.status not in ('Approved', 'In Progress') then
+    raise exception 'This booking is % now, so the extension cannot be applied. Reject the extension payment instead.', b.status using errcode = 'P0001';
+  end if;
+  if b.end_at is distinct from x.old_end_at then
+    raise exception 'The booking time changed after this request was made. Reject the extension payment and ask the customer to request it again.' using errcode = 'P0001';
+  end if;
+
+  -- an older booking paid in full has no down payment: what it already paid counts as paid
+  if coalesce(b.down_payment, 0) = 0 then
+    select coalesce(sum(p.amount), 0) into paid from public.payment p where p.booking_id = b.booking_id and p.status = 'Verified';
+  end if;
+
+  begin
+    update public.booking
+       set end_at = x.new_end_at,
+           down_payment = case when down_payment > 0 then down_payment else paid end + x.down_payment
+     where booking_id = b.booking_id;
+  exception when exclusion_violation then
+    raise exception 'Cannot verify: the extra time is no longer free (another booking took it). Reject the extension payment with the reason "Time slot is no longer available".' using errcode = 'P0001';
+  end;
+
+  delete from public.slot_hold where token = x.hold_token;
+  update public.booking_extension set status = 'Approved', approved_by = public.current_app_user_id() where extension_id = x.extension_id;
+end $$;
+
+-- 9. Verifying / rejecting the extension payment (same Payments tab as bookings) -----------------------
+create or replace function public.payment_effects() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare o record;
+begin
+  -- NEW: extension payments
+  if new.status is distinct from old.status and new.extension_id is not null then
+    if new.status = 'Verified' then
+      perform public.apply_booking_extension(new.extension_id);
+    elsif new.status = 'Rejected' then
+      update public.booking_extension
+         set status = 'Rejected', rejected_reason = coalesce(rejected_reason, 'Payment rejected')
+       where extension_id = new.extension_id and status = 'Pending';
+      delete from public.slot_hold where token in (select hold_token from public.booking_extension where extension_id = new.extension_id);
+    end if;
+    return null;
+  end if;
+
+  if new.status is distinct from old.status and new.booking_id is not null then
+    if new.status = 'Verified' then
+      update public.booking set status = 'Approved'
+       where booking_id = new.booking_id and status = 'Pending';
+
+      for o in select ro.rental_order_id from public.rental_order ro
+                where ro.booking_id = new.booking_id and ro.rental_type = 'Add-on' and ro.status = 'Pending' loop
+        begin
+          update public.rental_order set status = 'Approved' where rental_order_id = o.rental_order_id;
+        exception when others then
+          null;   -- for example not enough stock right now: leave it Pending
+        end;
+      end loop;
+
+    elsif new.status = 'Rejected' then
+      update public.booking set status = 'Rejected', rejected_reason = coalesce(rejected_reason, 'Payment rejected')
+       where booking_id = new.booking_id and status = 'Pending';
+
+      for o in select ro.rental_order_id from public.rental_order ro
+                where ro.booking_id = new.booking_id and ro.rental_type = 'Add-on' and ro.status = 'Pending' loop
+        begin
+          update public.rental_order set status = 'Rejected', rejected_reason = 'Booking payment was rejected'
+           where rental_order_id = o.rental_order_id;
+        exception when others then
+          null;
+        end;
+      end loop;
+    end if;
+  end if;
+  return null;
+end $$;
+
+-- 10. Staff reject an extension with a reason the customer sees ------------------------------------------
+create or replace function public.staff_reject_extension(p_extension_id bigint, p_reason text)
+returns void language plpgsql security definer set search_path = public as $$
+declare x public.booking_extension; why text := trim(coalesce(p_reason, ''));
+begin
+  if not public.is_staff() then raise exception 'Staff only.' using errcode = '42501'; end if;
+  if length(why) < 3 then raise exception 'Enter the reason for rejecting this extension.' using errcode = 'P0001'; end if;
+  if length(why) > 300 then raise exception 'Keep the reason under 300 characters.' using errcode = 'P0001'; end if;
+
+  select * into x from public.booking_extension where extension_id = p_extension_id for update;
+  if not found then raise exception 'Extension request not found.' using errcode = 'P0001'; end if;
+  if x.status <> 'Pending' then
+    raise exception 'Only a Pending extension can be rejected (this one is %).', x.status using errcode = 'P0001';
+  end if;
+
+  update public.booking_extension set rejected_reason = why where extension_id = x.extension_id;
+  update public.payment set status = 'Rejected' where extension_id = x.extension_id and status = 'Pending';   -- trigger closes the request
+end $$;
+
+-- 11. Reschedule is blocked and cancel closes a pending request -------------------------------------------
+create or replace function public.reschedule_booking(p_booking_ref text, p_start_at timestamptz, p_end_at timestamptz)
+returns void language plpgsql security definer set search_path = public as $$
+declare b public.booking; staff boolean := public.is_staff();
+begin
+  select * into b from public.booking where booking_ref = upper(trim(p_booking_ref)) for update;
+  if not found then raise exception 'Booking not found.' using errcode = 'P0001'; end if;
+  if not staff and b.customer_id is distinct from public.current_customer_id() then
+    raise exception 'That is not your booking.' using errcode = '42501';
+  end if;
+  if b.status not in ('Pending', 'Approved') then
+    raise exception 'A % booking cannot be rescheduled.', b.status using errcode = 'P0001';
+  end if;
+  if not staff and now() > b.start_at - interval '24 hours' then
+    raise exception 'Changes and cancellations close 24 hours before your session.' using errcode = 'P0001';
+  end if;
+  if exists (select 1 from public.booking_extension e where e.booking_id = b.booking_id and e.status = 'Pending') then
+    raise exception 'This booking has an extension request waiting for payment verification. Please wait until staff verify or reject it.' using errcode = 'P0001';
+  end if;
+  perform public.validate_slot(p_start_at, p_end_at, staff);
+
+  perform pg_advisory_xact_lock(hashtextextended('studio:' || b.studio_id, 0));
+  if public.slot_held_by_other(b.studio_id, p_start_at, p_end_at, null) then
+    raise exception 'Those hours were just taken by another customer.' using errcode = 'P0001';
+  end if;
+  begin
+    update public.booking
+       set start_at = p_start_at, end_at = p_end_at, reschedule_count = reschedule_count + 1
+     where booking_id = b.booking_id;
+  exception when exclusion_violation then
+    raise exception 'That time is no longer available. Please pick another slot.' using errcode = 'P0001';
+  end;
+end $$;
+
+create or replace function public.cancel_booking(p_booking_ref text, p_reason text default null)
+returns void language plpgsql security definer set search_path = public as $$
+declare b public.booking; staff boolean := public.is_staff();
+begin
+  select * into b from public.booking where booking_ref = upper(trim(p_booking_ref)) for update;
+  if not found then raise exception 'Booking not found.' using errcode = 'P0001'; end if;
+  if not staff and b.customer_id is distinct from public.current_customer_id() then
+    raise exception 'That is not your booking.' using errcode = '42501';
+  end if;
+  if b.status not in ('Pending', 'Approved') then
+    raise exception 'A % booking cannot be cancelled.', b.status using errcode = 'P0001';
+  end if;
+  if not staff and now() > b.start_at - interval '24 hours' then
+    raise exception 'Changes and cancellations close 24 hours before your session.' using errcode = 'P0001';
+  end if;
+
+  update public.booking set status = 'Cancelled', cancelled_reason = nullif(trim(p_reason), '')
+   where booking_id = b.booking_id;
+  update public.payment set status = 'Rejected' where booking_id = b.booking_id and status = 'Pending';
+  -- NEW: an extension request still waiting for verification is closed too (its unverified payment is rejected)
+  update public.booking_extension set rejected_reason = 'The booking was cancelled'
+   where booking_id = b.booking_id and status = 'Pending';
+  update public.payment set status = 'Rejected'
+   where status = 'Pending' and extension_id in (select e.extension_id from public.booking_extension e where e.booking_id = b.booking_id);
+end $$;
+
+-- 12. Payments tab, Customers tab ------------------------------------------------------------------------
+create or replace view public.v_payment_queue with (security_invoker = true) as
+select
+  p.payment_id, p.status, p.method, p.gcash_reference, p.amount, p.created_at, p.verified_at,
+  coalesce(b.booking_ref, o.rental_ref, xb.booking_ref) as reference,
+  case when p.booking_id is not null then 'Booking'
+       when p.extension_id is not null then 'Extension'
+       else 'Rental' end as kind,
+  trim(c.first_name || ' ' || c.last_name) as customer_name,
+  p.extension_id
+from public.payment p
+left join public.booking b on b.booking_id = p.booking_id
+left join public.rental_order o on o.rental_order_id = p.rental_order_id
+left join public.booking_extension x on x.extension_id = p.extension_id
+left join public.booking xb on xb.booking_id = x.booking_id
+join public.customer c on c.customer_id = coalesce(b.customer_id, o.customer_id, xb.customer_id);
+grant select on public.v_payment_queue to authenticated;
+
+create or replace view public.v_customer_spending with (security_invoker = true) as
+select
+  c.customer_id, trim(c.first_name || ' ' || c.last_name) as customer_name, c.number, c.status,
+  case when c.auth_user_id is null then 'Guest' else 'Registered' end as account_type,
+  (select count(*) from public.booking b where b.customer_id = c.customer_id and b.status <> 'Cancelled') as bookings,
+  (select count(*) from public.rental_order o where o.customer_id = c.customer_id and o.status not in ('Rejected', 'Cancelled')) as rentals,
+  coalesce((select sum(p.amount) from public.payment p
+            left join public.booking b on b.booking_id = p.booking_id
+            left join public.rental_order o on o.rental_order_id = p.rental_order_id
+            left join public.booking_extension x on x.extension_id = p.extension_id
+            where p.status = 'Verified' and coalesce(b.customer_id, o.customer_id, x.customer_id) = c.customer_id), 0) as total_spent
+from public.customer c;
+grant select on public.v_customer_spending to authenticated;
+
+-- 13. Revenue report: also counts verified extension down payments -------------------------------------------
+drop view if exists public.v_revenue_daily;
+create view public.v_revenue_daily with (security_invoker = true) as
+select day, kind, studio_name, sum(amount) as amount, count(*) as payments
+from (
+  -- studio part of a booking payment (the down payment, or the full payment of older/walk-in bookings)
+  select (coalesce(p.verified_at, p.created_at) at time zone 'Asia/Manila')::date as day,
+         'Studio'::text as kind, s.name::varchar(100) as studio_name,
+         least(p.amount, public.booking_total(b.booking_id)) as amount
+    from public.payment p
+    join public.booking b on b.booking_id = p.booking_id
+    join public.studio  s on s.studio_id  = b.studio_id
+   where p.status = 'Verified'
+  union all
+  -- add-on equipment paid together with the booking
+  select (coalesce(p.verified_at, p.created_at) at time zone 'Asia/Manila')::date,
+         'Equipment'::text, null::varchar(100),
+         p.amount - public.booking_total(b.booking_id)
+    from public.payment p
+    join public.booking b on b.booking_id = p.booking_id
+   where p.status = 'Verified' and p.amount > public.booking_total(b.booking_id)
+  union all
+  -- the studio balance of a booking with a down payment, collected when the session starts
+  select (b.actual_start_at at time zone 'Asia/Manila')::date,
+         'Studio'::text, s.name::varchar(100),
+         public.booking_total(b.booking_id) - least(b.down_payment, public.booking_total(b.booking_id))
+    from public.booking b
+    join public.studio s on s.studio_id = b.studio_id
+   where b.down_payment > 0 and b.status in ('In Progress', 'Completed') and b.actual_start_at is not null
+     and exists (select 1 from public.payment p where p.booking_id = b.booking_id and p.status = 'Verified')
+     and public.booking_total(b.booking_id) - least(b.down_payment, public.booking_total(b.booking_id)) > 0
+  union all
+  -- the add-on equipment balance of a booking with a down payment, collected when the session starts
+  select (b.actual_start_at at time zone 'Asia/Manila')::date,
+         'Equipment'::text, null::varchar(100),
+         public.booking_addons_total(b.booking_id) - greatest(b.down_payment - public.booking_total(b.booking_id), 0)
+    from public.booking b
+   where b.down_payment > 0 and b.status in ('In Progress', 'Completed') and b.actual_start_at is not null
+     and exists (select 1 from public.payment p where p.booking_id = b.booking_id and p.status = 'Verified')
+     and public.booking_addons_total(b.booking_id) - greatest(b.down_payment - public.booking_total(b.booking_id), 0) > 0
+  union all
+  -- NEW: down payments of verified session extensions (the extra cost itself is in the booking total)
+  select (coalesce(p.verified_at, p.created_at) at time zone 'Asia/Manila')::date,
+         'Studio'::text, s.name::varchar(100), p.amount
+    from public.payment p
+    join public.booking_extension x on x.extension_id = p.extension_id
+    join public.booking b on b.booking_id = x.booking_id
+    join public.studio  s on s.studio_id  = b.studio_id
+   where p.status = 'Verified'
+  union all
+  -- rental payments (outside rental down payments, onsite rentals)
+  select (coalesce(p.verified_at, p.created_at) at time zone 'Asia/Manila')::date,
+         'Equipment'::text, null::varchar(100), p.amount
+    from public.payment p
+   where p.status = 'Verified' and p.rental_order_id is not null
+  union all
+  -- the other 50% of an online outside rental, collected when the equipment is issued
+  select (o.issued_at at time zone 'Asia/Manila')::date,
+         'Equipment'::text, null::varchar(100),
+         public.rental_order_total(o.rental_order_id) - o.down_payment
+    from public.rental_order o
+   where o.down_payment > 0 and o.status in ('Active', 'Returned') and o.issued_at is not null
+  union all
+  -- late fees collected when the equipment is returned
+  select (d.returned_at at time zone 'Asia/Manila')::date,
+         'Equipment'::text, null::varchar(100), d.late_fee
+    from public.rental_detail d
+   where d.late_fee > 0
+) x
+group by day, kind, studio_name;
+
+grant select on public.v_revenue_daily to authenticated;
+
+
+-- 14. Function privileges ----------------------------------------------------------------------------------
+revoke all on function public.staff_extension_info(text, text) from public, anon, authenticated;
+revoke all on function public.staff_extend_booking(text, integer, text) from public, anon, authenticated;
+revoke all on function public.customer_request_extension(text, integer, text, text) from public, anon, authenticated;
+revoke all on function public.apply_booking_extension(bigint) from public, anon, authenticated;
+revoke all on function public.staff_reject_extension(bigint, text) from public, anon, authenticated;
+revoke all on function public.reschedule_booking(text, timestamptz, timestamptz) from public, anon, authenticated;
+revoke all on function public.cancel_booking(text, text) from public, anon, authenticated;
+grant execute on function public.staff_extension_info(text, text) to authenticated;
+grant execute on function public.staff_extend_booking(text, integer, text) to authenticated;
+grant execute on function public.customer_request_extension(text, integer, text, text) to authenticated;
+grant execute on function public.staff_reject_extension(bigint, text) to authenticated;
+grant execute on function public.reschedule_booking(text, timestamptz, timestamptz) to authenticated;
+grant execute on function public.cancel_booking(text, text) to authenticated;
+
+
+-- ======================================================================
+-- 24_onsite_gcash_optional.sql
+-- Onsite booking and onsite rental: the GCash reference number is now OPTIONAL.
+--   * the table check no longer demands a reference for staff-recorded (already verified) GCash payments
+--   * staff_create_onsite_booking / staff_create_onsite_rental accept a blank reference
+--   * ONLINE bookings, rentals and extensions still require the reference (enforced by their own functions
+--     and by the table check below, which only exempts payments verified by staff)
+-- Safe to re-run.
+
+-- 1. table check: a GCash payment needs a reference unless staff recorded it (verified_by is set)
+alter table public.payment drop constraint if exists payment_gcash_chk;
+alter table public.payment add constraint payment_gcash_chk
+  check (method <> 'GCash' or gcash_reference is not null or verified_by is not null);
+
+-- 2. onsite booking
+create or replace function public.staff_create_onsite_booking(
+  p_studio_id bigint, p_start_at timestamptz, p_end_at timestamptz,
+  p_first_name text, p_last_name text, p_number text,
+  p_payment_method text, p_gcash_reference text default null
+) returns table (booking_id bigint, booking_ref text, total_amount numeric)
+language plpgsql security definer set search_path = public as $$
+declare b public.booking; cid bigint;
+begin
+  if not public.is_staff() then raise exception 'Staff only.' using errcode = '42501'; end if;
+  perform public.validate_slot(p_start_at, p_end_at, true);
+  if p_payment_method not in ('GCash', 'Cash') then
+    raise exception 'Choose GCash or Cash.' using errcode = 'P0001';
+  end if;
+  -- the GCash reference is optional; if one is typed it must look real
+  if p_payment_method = 'GCash' and nullif(trim(coalesce(p_gcash_reference, '')), '') is not null
+     and length(trim(p_gcash_reference)) < 6 then
+    raise exception 'The GCash reference must be at least 6 characters, or leave it blank.' using errcode = 'P0001';
+  end if;
+
+  cid := public.resolve_customer(p_first_name, p_last_name, p_number, true);
+  b := public.insert_booking_with_payment(cid, p_studio_id, p_start_at, p_end_at,
+         p_payment_method, p_gcash_reference, 'Onsite', public.current_app_user_id(), null);
+  return query select b.booking_id, b.booking_ref::text, public.booking_total(b.booking_id);
+end $$;
+
+grant execute on function public.staff_create_onsite_booking(bigint, timestamptz, timestamptz, text, text, text, text, text) to authenticated;
+
+-- 3. onsite rental (same signature as 12_rental_base_hours_autostatus.sql)
+create or replace function public.staff_create_onsite_rental(
+  p_type text, p_items jsonb,
+  p_booking_ref text default null,
+  p_first_name text default null, p_last_name text default null, p_number text default null,
+  p_return_date timestamptz default null, p_id_type text default null, p_id_checked boolean default false,
+  p_payment_method text default 'Cash', p_gcash_reference text default null,
+  p_pickup_date timestamptz default null
+) returns table (rental_order_id bigint, rental_ref text, total_amount numeric)
+language plpgsql security definer set search_path = public as $$
+declare
+  o public.rental_order; bk public.booking; cid bigint; staff_id bigint := public.current_app_user_id();
+  it jsonb; eq public.equipment; qty int; rate numeric; hrs numeric; pick timestamptz := coalesce(p_pickup_date, now());
+  total numeric; st text := 'Approved';
+begin
+  if staff_id is null then raise exception 'Staff only.' using errcode = '42501'; end if;
+  if p_type not in ('Add-on', 'Outside') then raise exception 'Choose Add-on or Outside.' using errcode = 'P0001'; end if;
+  if p_items is null or jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then
+    raise exception 'Add at least one item.' using errcode = 'P0001';
+  end if;
+  if p_payment_method not in ('GCash', 'Cash') then raise exception 'Choose GCash or Cash.' using errcode = 'P0001'; end if;
+  -- the GCash reference is optional; if one is typed it must look real
+  if p_payment_method = 'GCash' and nullif(trim(coalesce(p_gcash_reference, '')), '') is not null
+     and length(trim(p_gcash_reference)) < 6 then
+    raise exception 'The GCash reference must be at least 6 characters, or leave it blank.' using errcode = 'P0001';
+  end if;
+
+  if p_type = 'Add-on' then
+    select * into bk from public.booking where booking_ref = upper(regexp_replace(coalesce(p_booking_ref, ''), '\s', '', 'g'));
+    if not found then raise exception 'Choose a confirmed booking.' using errcode = 'P0001'; end if;
+    if bk.status not in ('Approved', 'In Progress') then
+      raise exception 'Add-ons need a confirmed or active booking. This one is %.', bk.status using errcode = 'P0001';
+    end if;
+    cid := bk.customer_id;
+    if bk.status = 'In Progress' then st := 'Active'; end if;      -- the session is already running
+  else
+    if p_return_date is null or p_return_date <= pick then raise exception 'The return time must be after the start time.' using errcode = 'P0001'; end if;
+    if nullif(trim(coalesce(p_id_type, '')), '') is null then raise exception 'Choose the ID type.' using errcode = 'P0001'; end if;
+    if not coalesce(p_id_checked, false) then raise exception 'Confirm that you checked a valid ID in person.' using errcode = 'P0001'; end if;
+    cid := public.resolve_customer(p_first_name, p_last_name, p_number, true);
+  end if;
+
+  insert into public.rental_order (rental_ref, customer_id, rental_type, booking_id, status, source,
+                                   approved_by, created_by, pickup_date, return_date, contact_number, id_type)
+  values ('', cid, p_type, bk.booking_id, st, 'Onsite', staff_id, staff_id,
+          case when p_type = 'Outside' then pick end, p_return_date, nullif(trim(p_number), ''), nullif(trim(p_id_type), ''))
+  returning * into o;
+
+  for it in select * from jsonb_array_elements(p_items) loop
+    qty := (it ->> 'quantity')::int;
+    select * into eq from public.equipment where equipment_id = (it ->> 'equipment_id')::bigint;
+    if not found then raise exception 'Equipment not found.' using errcode = 'P0001'; end if;
+    if qty is null or qty < 1 then raise exception 'Quantity must be at least 1.' using errcode = 'P0001'; end if;
+
+    if p_type = 'Add-on' then
+      if not eq.allow_addon then raise exception '% cannot be rented as an add-on.', eq.name using errcode = 'P0001'; end if;
+      rate := eq.add_on_rate; hrs := null;
+    else
+      if not eq.allow_outside then raise exception '% cannot be rented outside the studio.', eq.name using errcode = 'P0001'; end if;
+      rate := eq.outside_rate; hrs := round(extract(epoch from (p_return_date - pick)) / 3600.0, 2);
+    end if;
+
+    -- the stock trigger runs here and rejects the row if there isn't enough
+    insert into public.rental_detail (rental_order_id, equipment_id, quantity, unit_price_at_request, rental_hours)
+    values (o.rental_order_id, eq.equipment_id, qty, rate, hrs);
+  end loop;
+
+  total := public.rental_order_total(o.rental_order_id);
+  insert into public.payment (rental_order_id, method, gcash_reference, amount, status, verified_by, verified_at)
+  values (o.rental_order_id, p_payment_method, nullif(trim(p_gcash_reference), ''), total, 'Verified', staff_id, now());
+
+  return query select o.rental_order_id, o.rental_ref::text, total;
+exception when unique_violation then
+  raise exception 'Each item can only be listed once, or that GCash reference was already used.' using errcode = 'P0001';
+end $$;
+revoke all on function public.staff_create_onsite_rental(text, jsonb, text, text, text, text, timestamptz, text, boolean, text, text, timestamptz) from public, anon;
+grant execute on function public.staff_create_onsite_rental(text, jsonb, text, text, text, text, timestamptz, text, boolean, text, text, timestamptz) to authenticated;
+
+
+-- ======================================================================
+-- 25_reschedule_slot_hold.sql
+-- Rescheduling now HOLDS the new hours (2 minutes, renewed by the page) while the customer is choosing,
+-- the same way booking a studio does.
+--   * hold_reschedule_slot(): like hold_slot, but the booking's own current hours do not block the hold
+--   * reschedule_booking() takes the customer's hold token, so their own hold never blocks the move,
+--     refuses the same start time, and frees the hold once the booking has moved
+-- Run once in the Supabase SQL Editor (after 24_onsite_gcash_optional.sql). Safe to re-run.
+
+-- 1. hold the new hours for a booking that is being rescheduled
+create or replace function public.hold_reschedule_slot(p_booking_ref text, p_start_at timestamptz, p_end_at timestamptz, p_token text)
+returns boolean language plpgsql security definer set search_path = public as $$
+declare b public.booking; staff boolean := public.is_staff();
+begin
+  if p_token is null or length(p_token) < 8 or length(p_token) > 80 then
+    raise exception 'Missing hold token.' using errcode = 'P0001';
+  end if;
+  select * into b from public.booking where booking_ref = upper(trim(p_booking_ref));
+  if not found then raise exception 'Booking not found.' using errcode = 'P0001'; end if;
+  if not staff and b.customer_id is distinct from public.current_customer_id() then
+    raise exception 'That is not your booking.' using errcode = '42501';
+  end if;
+  if b.status not in ('Pending', 'Approved') then
+    raise exception 'A % booking cannot be rescheduled.', b.status using errcode = 'P0001';
+  end if;
+  perform public.validate_slot(p_start_at, p_end_at, false);
+  perform pg_advisory_xact_lock(hashtextextended('studio:' || b.studio_id, 0));
+
+  delete from public.slot_hold where expires_at < now() or token = p_token;
+
+  if exists (select 1 from public.studio where studio_id = b.studio_id and status <> 'Available') then
+    return false;
+  end if;
+  if exists (
+    select 1 from public.booking o
+    where o.studio_id = b.studio_id and o.booking_id <> b.booking_id
+      and o.status in ('Pending', 'Approved', 'In Progress')
+      and tstzrange(o.start_at, o.end_at, '[)') && tstzrange(p_start_at, p_end_at, '[)')
+  ) then
+    return false;
+  end if;
+  if public.slot_held_by_other(b.studio_id, p_start_at, p_end_at, p_token) then
+    return false;
+  end if;
+
+  insert into public.slot_hold (studio_id, start_at, end_at, token, expires_at)
+  values (b.studio_id, p_start_at, p_end_at, p_token, now() + interval '2 minutes');
+  return true;
+end $$;
+revoke all on function public.hold_reschedule_slot(text, timestamptz, timestamptz, text) from public, anon;
+grant execute on function public.hold_reschedule_slot(text, timestamptz, timestamptz, text) to authenticated;
+
+-- 2. reschedule_booking with the hold token (replaces the 3-argument version from file 23)
+drop function if exists public.reschedule_booking(text, timestamptz, timestamptz);
+create or replace function public.reschedule_booking(p_booking_ref text, p_start_at timestamptz, p_end_at timestamptz, p_token text default null)
+returns void language plpgsql security definer set search_path = public as $$
+declare b public.booking; staff boolean := public.is_staff();
+begin
+  select * into b from public.booking where booking_ref = upper(trim(p_booking_ref)) for update;
+  if not found then raise exception 'Booking not found.' using errcode = 'P0001'; end if;
+  if not staff and b.customer_id is distinct from public.current_customer_id() then
+    raise exception 'That is not your booking.' using errcode = '42501';
+  end if;
+  if b.status not in ('Pending', 'Approved') then
+    raise exception 'A % booking cannot be rescheduled.', b.status using errcode = 'P0001';
+  end if;
+  if not staff and now() > b.start_at - interval '24 hours' then
+    raise exception 'Changes and cancellations close 24 hours before your session.' using errcode = 'P0001';
+  end if;
+  if exists (select 1 from public.booking_extension e where e.booking_id = b.booking_id and e.status = 'Pending') then
+    raise exception 'This booking has an extension request waiting for payment verification. Please wait until staff verify or reject it.' using errcode = 'P0001';
+  end if;
+  if p_start_at = b.start_at and p_end_at = b.end_at then
+    raise exception 'That is your current time. Pick a different start time.' using errcode = 'P0001';
+  end if;
+  perform public.validate_slot(p_start_at, p_end_at, staff);
+
+  perform pg_advisory_xact_lock(hashtextextended('studio:' || b.studio_id, 0));
+  -- the customer's own hold (same token) does not count as "someone else"
+  if public.slot_held_by_other(b.studio_id, p_start_at, p_end_at, p_token) then
+    raise exception 'Those hours were just taken by another customer.' using errcode = 'P0001';
+  end if;
+  begin
+    update public.booking
+       set start_at = p_start_at, end_at = p_end_at, reschedule_count = reschedule_count + 1
+     where booking_id = b.booking_id;
+  exception when exclusion_violation then
+    raise exception 'That time is no longer available. Please pick another slot.' using errcode = 'P0001';
+  end;
+
+  if p_token is not null then
+    delete from public.slot_hold where token = p_token;
+  end if;
+end $$;
+revoke all on function public.reschedule_booking(text, timestamptz, timestamptz, text) from public, anon;
+grant execute on function public.reschedule_booking(text, timestamptz, timestamptz, text) to authenticated;
+
+
+-- =====================================================================
+-- 27_allow_username_change.sql  (safe to re-run)
+-- Relaxes the protect_user_columns trigger on app_user so that a
+-- logged-in user can update their OWN username (was previously
+-- restricted to the owner only).  All other protections stay in place:
+--   • role, status, auth_user_id  → still owner-only
+--   • username uniqueness         → enforced by the unique index
+--   • username format             → enforced by the check constraint
+--     (3-30 username characters; existing email usernames remain supported)
+-- The customer table already allowed username self-updates (only
+-- status and auth_user_id were protected there).
+-- Run once in the Supabase SQL Editor.
+-- =====================================================================
+
+create or replace function public.protect_user_columns() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  -- auth.uid() is NULL for the dashboard SQL editor and the service_role key
+  if auth.uid() is not null and not public.is_owner() then
+    if new.role      is distinct from old.role
+       or new.status      is distinct from old.status
+       or new.auth_user_id is distinct from old.auth_user_id then
+      raise exception 'Only the owner can change role, status or the linked login.' using errcode = '42501';
+    end if;
+    -- A user may only change their own username, not someone else's
+    if new.username is distinct from old.username
+       and old.auth_user_id is distinct from auth.uid() then
+      raise exception 'Only the owner can change another user''s username.' using errcode = '42501';
+    end if;
+  end if;
+  return new;
+end $$;
+
+-- The trigger already exists; recreating the function above is enough.
+-- Re-create the trigger anyway so this script is fully self-contained.
+drop trigger if exists trg_protect on public.app_user;
+create trigger trg_protect before update on public.app_user
+  for each row execute function public.protect_user_columns();
+
+-- Keep existing email usernames valid for registration and existing accounts.
+alter table public.app_user drop constraint if exists app_user_username_chk;
+alter table public.customer drop constraint if exists customer_username_chk;
+alter table public.app_user add constraint app_user_username_chk
+  check (username ~ '^[a-z0-9_.]{3,30}$'
+    or username ~* '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]{2,}$') not valid;
+alter table public.customer add constraint customer_username_chk
+  check (username is null or username ~ '^[a-z0-9_.]{3,30}$'
+    or username ~* '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]{2,}$') not valid;
+
+-- Also replace the email-sync function on installations that already ran migration 26.
+-- =====================================================================
+-- 26_profile_management.sql  (safe to re-run)
+-- Profile management: when a person confirms a new login email (Supabase Auth sends the link),
+-- copy the new address into their profile row so the dashboard and booking records stay correct.
+--   * usernames remain independent of the login email
+--   * customer.email     = new email, but only if it still equalled the old login email
+--                          (a different contact email chosen by staff is left alone)
+--   * app_user (owner/staff): same contact email rule
+-- Name and password changes need nothing here: the app updates its own row (RLS policies
+-- customer_update / app_user_update_self) and calls auth.updateUser.
+-- Run once in the Supabase SQL Editor.
+-- =====================================================================
+
+create or replace function public.sync_profile_email() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.email is distinct from old.email and new.email is not null then
+    update public.customer
+       set email = case when lower(coalesce(email, '')) = lower(coalesce(old.email, '')) then lower(new.email) else email end
+     where auth_user_id = new.id;
+
+    update public.app_user
+       set email = case when lower(coalesce(email, '')) = lower(coalesce(old.email, '')) then lower(new.email) else email end
+     where auth_user_id = new.id;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists on_auth_user_email_changed on auth.users;
+create trigger on_auth_user_email_changed after update of email on auth.users
+  for each row execute function public.sync_profile_email();
+
+-- =====================================================================
+-- 28_default_username_first_name.sql  (safe to re-run)
+-- New accounts now get their FIRST NAME as the default username (shown in the sidebar and
+-- editable in Account settings) instead of their email address.
+--   * letters/numbers only, lower case, "Mary Ann" -> maryann
+--   * if the name is already taken, a number is added: maria, maria2, maria3 ...
+--   * names shorter than 3 characters get "user" added (Al -> aluser), the minimum length is 3
+-- Login still uses the email address. Existing usernames are NOT changed by this file.
+-- Run once in the Supabase SQL Editor.
+-- =====================================================================
+
+-- 1. helper that builds a free username --------------------------------------------------------
+create or replace function public.make_username(p_first text, p_table text default 'customer')
+returns text
+language plpgsql security definer set search_path = public as $$
+declare
+  base text := lower(regexp_replace(coalesce(p_first, ''), '[^A-Za-z0-9]', '', 'g'));
+  cand text;
+  n    integer := 1;
+  used boolean;
+begin
+  if base = '' then base := 'user'; end if;
+  if length(base) < 3 then base := base || 'user'; end if;
+  base := left(base, 24);                     -- leaves room for a number, 30 characters max
+  cand := base;
+  loop
+    if p_table = 'app_user' then
+      select exists (select 1 from public.app_user where lower(username) = cand) into used;
+    else
+      select exists (select 1 from public.customer where lower(username) = cand) into used;
+    end if;
+    exit when not used;
+    n := n + 1;
+    cand := base || n::text;
+  end loop;
+  return cand;
+end $$;
+
+-- only the database itself and the create-staff Edge Function (service_role) may call it
+revoke all on function public.make_username(text, text) from public, anon, authenticated;
+grant execute on function public.make_username(text, text) to service_role;
+
+-- 2. sign-up trigger: username = first name instead of the email ---------------------------------
+create or replace function public.handle_new_auth_user() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  m jsonb := coalesce(new.raw_user_meta_data, '{}'::jsonb);
+  full_name text := trim(coalesce(m ->> 'full_name', ''));
+  fn text; ln text;
+begin
+  if m ->> 'kind' is distinct from 'customer' then
+    return new;
+  end if;
+
+  if coalesce(m ->> 'first_name', '') <> '' then
+    fn := trim(m ->> 'first_name');
+    ln := trim(coalesce(m ->> 'last_name', ''));
+  elsif position(' ' in full_name) > 0 then
+    fn := regexp_replace(full_name, '\s+\S+$', '');
+    ln := substring(full_name from '\S+$');
+  else
+    fn := nullif(full_name, '');
+    ln := '';
+  end if;
+
+  insert into public.customer (auth_user_id, first_name, last_name, username, number, email)
+  values (
+    new.id,
+    coalesce(fn, 'Customer'),
+    coalesce(ln, ''),
+    public.make_username(coalesce(fn, 'Customer'), 'customer'),
+    nullif(trim(m ->> 'number'), ''),
+    coalesce(nullif(trim(coalesce(m ->> 'contact_email', '')), ''), lower(new.email))
+  );
+  return new;
+end $$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created after insert on auth.users
+  for each row execute function public.handle_new_auth_user();
+
+
+-- =====================================================================
+-- 30_claim_guest_bookings.sql  (safe to re-run)
+-- A customer who booked as a guest and then registers (or logs in) can move those
+-- bookings onto their account, so they show up under My Bookings / My Rental.
+--
+-- The website calls claim_guest_bookings() right after the customer logs in, with the booking
+-- code and the phone number used for each guest booking (the same two things the guest
+-- "find my booking" lookup asks for). A booking is moved only when
+--   * it was made online without an account (its customer row has no login), and
+--   * the booking code exists and the phone number matches the one on the booking.
+-- Its add-on equipment and extension requests move with it. Payments follow the booking.
+-- Run this once in the Supabase SQL Editor.
+-- =====================================================================
+
+create or replace function public.claim_guest_bookings(p_items jsonb)
+returns text[]
+language plpgsql security definer set search_path = public as $$
+declare
+  cid     bigint := public.current_customer_id();
+  it      jsonb;
+  v_ref   text;
+  v_phone text;
+  b       record;
+  claimed text[] := '{}';
+begin
+  if cid is null then
+    raise exception 'Log in to save your bookings to your account.' using errcode = 'P0001';
+  end if;
+  if p_items is null or jsonb_typeof(p_items) <> 'array' then
+    return claimed;
+  end if;
+
+  for it in select value from jsonb_array_elements(p_items) limit 25 loop
+    v_ref   := upper(regexp_replace(coalesce(it ->> 'ref', ''), '\s', '', 'g'));
+    v_phone := public.digits(it ->> 'phone');
+    continue when v_ref = '' or length(v_phone) < 7;
+
+    select bk.booking_id, bk.booking_ref into b
+      from public.booking bk
+      join public.customer c on c.customer_id = bk.customer_id
+     where bk.booking_ref = v_ref
+       and bk.source = 'Online'
+       and c.auth_user_id is null
+       and public.digits(c.number) = v_phone
+     for update of bk;
+    if not found then
+      continue;
+    end if;
+
+    update public.booking           set customer_id = cid where booking_id = b.booking_id;
+    update public.rental_order      set customer_id = cid where booking_id = b.booking_id;
+    update public.booking_extension set customer_id = cid where booking_id = b.booking_id;
+    claimed := claimed || b.booking_ref::text;
+  end loop;
+
+  return claimed;
+end $$;
+
+revoke all on function public.claim_guest_bookings(jsonb) from public, anon;
+grant execute on function public.claim_guest_bookings(jsonb) to authenticated;
+
+
+-- =====================================================================
+-- 38_gcash_screenshots.sql
+-- =====================================================================
+-- Safe to re-run.
+-- =====================================================================
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('gcash-screenshots', 'gcash-screenshots', false, 5242880, array['image/jpeg', 'image/png', 'image/webp'])
+on conflict (id) do update
+  set public = excluded.public,
+      file_size_limit = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists tod_gcash_shot_upload     on storage.objects;
+drop policy if exists tod_gcash_shot_staff_read on storage.objects;
+
+-- customers and guests: upload only, and only into a folder named after a 13-digit reference
+create policy tod_gcash_shot_upload on storage.objects for insert to anon, authenticated
+  with check (bucket_id = 'gcash-screenshots' and name ~ '^[0-9]{13}/[^/]+$');
+
+-- staff (owner and staff accounts): list and open
+create policy tod_gcash_shot_staff_read on storage.objects for select to authenticated
+  using (bucket_id = 'gcash-screenshots' and public.is_staff());
+
+
+-- =====================================================================
+-- 39_addon_auto_issue_return.sql  (safe to re-run)
+-- Add-on equipment follows its studio session, even when it was added LATER (Rent equipment page):
+--   * session starts (Start session)  -> add-on is issued by itself (Approved -> In Use)
+--   * session completed               -> add-on is returned by itself (In Use -> Returned)
+-- Why this file: the old triggers only handled add-ons that were already Approved, and they ignored
+-- any error without trying again. Now one function (sync_addon_orders) does the work, it runs
+--   - right when the booking changes to In Progress / Completed,
+--   - and again every time the dashboard checks for due sessions (every 30 seconds),
+-- so an add-on that was missed (for example it was verified a moment after the session started) is caught up.
+-- Also:
+--   * an add-on whose own payment is already Verified but is still Pending is approved
+--   * a still-Pending add-on (its payment was never verified) of a booking that ended is Cancelled,
+--     so it does not stay in the Rentals list forever
+-- Run this once in the Supabase SQL Editor (after 38_gcash_screenshots.sql).
+-- =====================================================================
+
+-- 1. The one function that keeps add-ons in step with their booking -----------------------------------
+create or replace function public.sync_addon_orders(p_booking_id bigint default null) returns integer
+language plpgsql security definer set search_path = public as $$
+declare o record; n integer := 0;
+begin
+  -- a. a Pending add-on whose own payment was verified is approved (booking must still be Confirmed or Active)
+  for o in
+    select ro.rental_order_id from public.rental_order ro
+      join public.booking b on b.booking_id = ro.booking_id
+     where ro.rental_type = 'Add-on' and ro.status = 'Pending'
+       and b.status in ('Approved', 'In Progress')
+       and (p_booking_id is null or ro.booking_id = p_booking_id)
+       and exists (select 1 from public.payment p where p.rental_order_id = ro.rental_order_id and p.status = 'Verified')
+  loop
+    begin
+      update public.rental_order set status = 'Approved' where rental_order_id = o.rental_order_id;
+      n := n + 1;
+    exception when others then null;   -- for example not enough stock: it is tried again on the next check
+    end;
+  end loop;
+
+  -- b. the session is running: approved add-ons are issued (In Use)
+  for o in
+    select ro.rental_order_id from public.rental_order ro
+      join public.booking b on b.booking_id = ro.booking_id
+     where ro.rental_type = 'Add-on' and ro.status = 'Approved' and b.status = 'In Progress'
+       and (p_booking_id is null or ro.booking_id = p_booking_id)
+  loop
+    begin
+      update public.rental_order set status = 'Active' where rental_order_id = o.rental_order_id;
+      n := n + 1;
+    exception when others then null;
+    end;
+  end loop;
+
+  -- c. the session is completed: add-ons that were issued (or approved) are returned; every item comes back to stock
+  update public.rental_order ro set status = 'Returned'
+    from public.booking b
+   where b.booking_id = ro.booking_id and b.status = 'Completed'
+     and ro.rental_type = 'Add-on' and ro.status in ('Approved', 'Active')
+     and (p_booking_id is null or ro.booking_id = p_booking_id);
+
+  -- d. an add-on that was never verified, on a booking that is over, is closed
+  update public.rental_order ro set status = 'Cancelled'
+    from public.booking b
+   where b.booking_id = ro.booking_id and b.status in ('Completed', 'Cancelled', 'Rejected')
+     and ro.rental_type = 'Add-on' and ro.status = 'Pending'
+     and (p_booking_id is null or ro.booking_id = p_booking_id);
+
+  return n;
+end $$;
+revoke all on function public.sync_addon_orders(bigint) from public, anon;
+grant execute on function public.sync_addon_orders(bigint) to authenticated;
+
+-- 2. The booking triggers use it -----------------------------------------------------------------------
+create or replace function public.booking_started_addons() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.status = 'In Progress' and old.status is distinct from 'In Progress' then
+    perform public.sync_addon_orders(new.booking_id);
+  end if;
+  return null;
+end $$;
+drop trigger if exists trg_booking_started_addons on public.booking;
+create trigger trg_booking_started_addons after update of status on public.booking
+  for each row execute function public.booking_started_addons();
+
+create or replace function public.booking_completed_addons() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.status = 'Completed' and old.status is distinct from 'Completed' then
+    perform public.sync_addon_orders(new.booking_id);
+  end if;
+  return null;
+end $$;
+drop trigger if exists trg_booking_completed_addons on public.booking;
+create trigger trg_booking_completed_addons after update of status on public.booking
+  for each row execute function public.booking_completed_addons();
+
+-- 3. The dashboard check (every 30 seconds) also catches up add-ons ---------------------------------------
+create or replace function public.start_due_sessions() returns integer
+language plpgsql security definer set search_path = public as $$
+declare n integer := 0; k integer; o record;
+begin
+  -- confirmed studio sessions whose time has begun and that have no balance left to collect
+  update public.booking set status = 'In Progress'
+   where status = 'Approved' and start_at <= now() and end_at > now()
+     and public.booking_balance_due(booking_id) <= 0.005;
+  get diagnostics k = row_count; n := n + k;
+
+  -- outside rentals: In Use as soon as the pick-up time arrives, unless a balance is still due
+  for o in select rental_order_id from public.rental_order
+            where rental_type = 'Outside' and status = 'Approved' and pickup_date <= now()
+              and public.rental_balance_due(rental_order_id) <= 0.005 loop
+    begin
+      update public.rental_order set status = 'Active' where rental_order_id = o.rental_order_id;
+      n := n + 1;
+    exception when others then null;   -- for example the stock check failed: leave it for staff
+    end;
+  end loop;
+
+  -- NEW: add-ons follow their session (issued while it runs, returned when it is completed)
+  perform public.sync_addon_orders(null);
+  return n;
+end $$;
+revoke all on function public.start_due_sessions() from public, anon;
+grant execute on function public.start_due_sessions() to authenticated;
+
+-- 4. One-time catch-up for what is already in the database ----------------------------------------------------
+select public.sync_addon_orders(null);
+
+
+-- =====================================================================
+-- 40_addon_balance_collection.sql  (safe to re-run)
+-- Add-on equipment added LATER and paid with a 50% down payment:
+--   * its payment stays a DOWN PAYMENT (not fully paid) until staff collect the rest at the studio
+--   * the add-on is NOT issued (In Use) until that balance is collected, also when the session is already running
+--   * staff collect it with "Collect balance & issue" (Rentals tab); the payment then becomes fully paid
+--   * starting the studio session collects it too, in one step with the booking balance (each payment is marked fully paid)
+-- Run this once in the Supabase SQL Editor (after 39_addon_auto_issue_return.sql).
+-- =====================================================================
+
+-- 1. What was paid for the later add-ons: the online payment PLUS the balance staff collected ---------------
+create or replace function public.booking_addon_paid(p_booking_id bigint) returns numeric
+language sql stable security definer set search_path = public as $$
+  select coalesce(sum(p.amount + p.balance_paid_amount), 0)::numeric(10,2)
+    from public.rental_order o
+    join public.payment p on p.rental_order_id = o.rental_order_id and p.status <> 'Rejected'
+   where o.booking_id = p_booking_id and o.rental_type = 'Add-on' and o.status not in ('Rejected', 'Cancelled');
+$$;
+revoke all on function public.booking_addon_paid(bigint) from public, anon, authenticated;
+grant execute on function public.booking_addon_paid(bigint) to authenticated;
+
+-- 2. The balance of ONE order: outside rentals, and add-ons that have their own down payment ---------------------
+--    (add-ons ordered together with the booking are paid with the booking, so their balance is the booking's)
+create or replace function public.rental_balance_due(p_rental_order_id bigint) returns numeric
+language sql stable security definer set search_path = public as $$
+  select case
+    when coalesce(o.down_payment, 0) <= 0 then 0::numeric
+    else greatest(0, public.rental_order_total(o.rental_order_id) - o.down_payment
+                     - coalesce((select p.balance_paid_amount from public.payment p
+                                  where p.rental_order_id = o.rental_order_id and p.status <> 'Rejected'
+                                  order by p.payment_id desc limit 1), 0))::numeric(10,2)
+  end
+  from public.rental_order o where o.rental_order_id = p_rental_order_id;
+$$;
+revoke all on function public.rental_balance_due(bigint) from public, anon;
+grant execute on function public.rental_balance_due(bigint) to authenticated;
+
+-- 3. Collect the balance (booking: studio + add-on rests, each recorded on its own payment; rental / add-on: its own) --
+drop function if exists public.staff_collect_balance(text, text, text, numeric, boolean);
+create function public.staff_collect_balance(
+  p_kind text, p_ref text, p_method text default 'Cash', p_expected numeric default null, p_start boolean default true
+) returns table (kind text, ref text, collected numeric, new_status text)
+language plpgsql security definer set search_path = public as $$
+declare
+  k   text := lower(coalesce(trim(p_kind), ''));
+  m   text := case lower(coalesce(trim(p_method), 'cash')) when 'gcash' then 'GCash' when 'cash' then 'Cash' else null end;
+  b   public.booking;
+  o   public.rental_order;
+  pay public.payment;
+  bal numeric := 0;
+  addon_part numeric := 0;
+  ap  record;
+  r   text := upper(regexp_replace(coalesce(p_ref, ''), '\s', '', 'g'));
+begin
+  if not public.is_staff() then raise exception 'Staff only.' using errcode = '42501'; end if;
+  if m is null then raise exception 'Choose how the balance was paid: Cash or GCash.' using errcode = 'P0001'; end if;
+
+  if k = 'booking' then
+    select * into b from public.booking where booking_ref = r for update;
+    if not found then raise exception 'Booking % was not found.', r using errcode = 'P0001'; end if;
+    if b.status <> 'Approved' then
+      raise exception 'Booking % is % now. Only a Confirmed booking can be started.', r, b.status using errcode = 'P0001';
+    end if;
+    select * into pay from public.payment where booking_id = b.booking_id and status <> 'Rejected' order by payment_id desc limit 1 for update;
+    if coalesce(b.down_payment, 0) > 0 and (not found or pay.status <> 'Verified') then
+      raise exception 'Verify the customer''s down payment first.' using errcode = 'P0001';
+    end if;
+
+    bal := public.booking_balance_due(b.booking_id);
+    if p_expected is not null and abs(bal - p_expected) > 0.005 then
+      raise exception 'The balance changed to PHP %. Close this window and open it again.', to_char(bal, 'FM999,999,990.00') using errcode = 'P0001';
+    end if;
+
+    -- the add-on orders the customer paid 50% for later: their rest is recorded on THEIR payment (it becomes fully paid)
+    for ap in
+      select p2.payment_id, greatest(0, public.rental_order_total(o2.rental_order_id) - coalesce(o2.down_payment, 0) - p2.balance_paid_amount) as rest
+        from public.rental_order o2
+        join public.payment p2 on p2.rental_order_id = o2.rental_order_id and p2.status <> 'Rejected'
+       where o2.booking_id = b.booking_id and o2.rental_type = 'Add-on' and o2.status not in ('Rejected', 'Cancelled')
+         and coalesce(o2.down_payment, 0) > 0
+    loop
+      if ap.rest > 0.005 then
+        update public.payment
+           set balance_paid_amount = balance_paid_amount + ap.rest,
+               balance_paid_at     = now(),
+               balance_paid_by     = public.current_app_user_id(),
+               balance_paid_method = m,
+               payment_option      = 'full'
+         where payment_id = ap.payment_id;
+        addon_part := addon_part + ap.rest;
+      end if;
+    end loop;
+
+    -- what is left is the studio session (and add-ons ordered with the booking): recorded on the booking's payment
+    if bal - addon_part > 0.005 then
+      update public.payment
+         set balance_paid_amount = balance_paid_amount + (bal - addon_part),
+             balance_paid_at     = now(),
+             balance_paid_by     = public.current_app_user_id(),
+             balance_paid_method = m,
+             payment_option      = 'full'
+       where payment_id = pay.payment_id;
+    end if;
+
+    if p_start then
+      update public.booking set status = 'In Progress' where booking_id = b.booking_id;   -- stamps actual_start_at, starts the add-ons
+    end if;
+    return query select 'booking'::text, b.booking_ref::text, bal, case when p_start then 'In Progress' else b.status end::text;
+
+  elsif k = 'rental' then
+    select * into o from public.rental_order where rental_ref = r for update;
+    if not found then raise exception 'Rental % was not found.', r using errcode = 'P0001'; end if;
+    if o.status <> 'Approved' then
+      raise exception 'Rental % is % now. Only a verified rental can be issued.', r, o.status using errcode = 'P0001';
+    end if;
+    select * into pay from public.payment where rental_order_id = o.rental_order_id and status <> 'Rejected' order by payment_id desc limit 1 for update;
+    if coalesce(o.down_payment, 0) > 0 and (not found or pay.status <> 'Verified') then
+      raise exception 'Verify the customer''s down payment first.' using errcode = 'P0001';
+    end if;
+
+    bal := public.rental_balance_due(o.rental_order_id);
+    if p_expected is not null and abs(bal - p_expected) > 0.005 then
+      raise exception 'The balance changed to PHP %. Close this window and open it again.', to_char(bal, 'FM999,999,990.00') using errcode = 'P0001';
+    end if;
+
+    if bal > 0.005 then
+      update public.payment
+         set balance_paid_amount = balance_paid_amount + bal,
+             balance_paid_at     = now(),
+             balance_paid_by     = public.current_app_user_id(),
+             balance_paid_method = m,
+             payment_option      = 'full'
+       where payment_id = pay.payment_id;
+    end if;
+
+    update public.rental_order set status = 'Active' where rental_order_id = o.rental_order_id;   -- stock is checked here; stamps issued_at
+    return query select 'rental'::text, o.rental_ref::text, bal, 'Active'::text;
+
+  else
+    raise exception 'Unknown kind. Use booking or rental.' using errcode = 'P0001';
+  end if;
+end $$;
+revoke all on function public.staff_collect_balance(text, text, text, numeric, boolean) from public, anon;
+grant execute on function public.staff_collect_balance(text, text, text, numeric, boolean) to authenticated;
+
+-- 4. Guard: an add-on with a balance cannot be issued without collecting it (like outside rentals) ----------------
+create or replace function public.guard_rental_balance() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare bal numeric;
+begin
+  if new.status = 'Active' and old.status is distinct from 'Active' and coalesce(new.down_payment, 0) > 0 then
+    bal := public.rental_balance_due(new.rental_order_id);
+    if bal > 0.005 then
+      raise exception 'The remaining balance of PHP % has not been collected yet. Use Collect balance & issue on the admin page and confirm the payment first.',
+        to_char(bal, 'FM999,999,990.00') using errcode = 'P0001';
+    end if;
+  end if;
+  return new;
+end $$;
+drop trigger if exists trg_rental_balance_guard on public.rental_order;
+create trigger trg_rental_balance_guard before update of status on public.rental_order
+  for each row execute function public.guard_rental_balance();
+
+-- 5. An add-on approved while the session is running is issued by itself ONLY when nothing is left to collect ------
+create or replace function public.rental_addon_inprogress() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.status = 'Approved' and old.status is distinct from 'Approved' and new.rental_type = 'Add-on' and new.booking_id is not null
+     and exists (select 1 from public.booking b where b.booking_id = new.booking_id and b.status = 'In Progress')
+     and public.rental_balance_due(new.rental_order_id) <= 0.005 then
+    new.status := 'Active';
+  end if;
+  return new;
+end $$;
+drop trigger if exists aa_rental_addon_inprogress on public.rental_order;
+create trigger aa_rental_addon_inprogress before update of status on public.rental_order
+  for each row execute function public.rental_addon_inprogress();
+
+-- 6. sync_addon_orders (from 39): issue only add-ons without a balance left -----------------------------------------
+create or replace function public.sync_addon_orders(p_booking_id bigint default null) returns integer
+language plpgsql security definer set search_path = public as $$
+declare o record; n integer := 0;
+begin
+  -- a. a Pending add-on whose own payment was verified is approved (booking must still be Confirmed or Active)
+  for o in
+    select ro.rental_order_id from public.rental_order ro
+      join public.booking b on b.booking_id = ro.booking_id
+     where ro.rental_type = 'Add-on' and ro.status = 'Pending'
+       and b.status in ('Approved', 'In Progress')
+       and (p_booking_id is null or ro.booking_id = p_booking_id)
+       and exists (select 1 from public.payment p where p.rental_order_id = ro.rental_order_id and p.status = 'Verified')
+  loop
+    begin
+      update public.rental_order set status = 'Approved' where rental_order_id = o.rental_order_id;
+      n := n + 1;
+    exception when others then null;
+    end;
+  end loop;
+
+  -- b. the session is running: approved add-ons with nothing left to collect are issued (In Use)
+  for o in
+    select ro.rental_order_id from public.rental_order ro
+      join public.booking b on b.booking_id = ro.booking_id
+     where ro.rental_type = 'Add-on' and ro.status = 'Approved' and b.status = 'In Progress'
+       and (p_booking_id is null or ro.booking_id = p_booking_id)
+       and public.rental_balance_due(ro.rental_order_id) <= 0.005
+  loop
+    begin
+      update public.rental_order set status = 'Active' where rental_order_id = o.rental_order_id;
+      n := n + 1;
+    exception when others then null;
+    end;
+  end loop;
+
+  -- c. the session is completed: add-ons that were issued (or approved) are returned
+  update public.rental_order ro set status = 'Returned'
+    from public.booking b
+   where b.booking_id = ro.booking_id and b.status = 'Completed'
+     and ro.rental_type = 'Add-on' and ro.status in ('Approved', 'Active')
+     and (p_booking_id is null or ro.booking_id = p_booking_id);
+
+  -- d. an add-on that was never verified, on a booking that is over, is closed
+  update public.rental_order ro set status = 'Cancelled'
+    from public.booking b
+   where b.booking_id = ro.booking_id and b.status in ('Completed', 'Cancelled', 'Rejected')
+     and ro.rental_type = 'Add-on' and ro.status = 'Pending'
+     and (p_booking_id is null or ro.booking_id = p_booking_id);
+
+  return n;
+end $$;
+revoke all on function public.sync_addon_orders(bigint) from public, anon;
+grant execute on function public.sync_addon_orders(bigint) to authenticated;
+
+-- 7. Catch-up --------------------------------------------------------------------------------------------------------
+select public.sync_addon_orders(null);
+
+
+-- =====================================================================
+-- 41_auto_complete_sessions.sql  (safe to re-run)
+-- A studio session that reaches its end time is marked Completed by itself.
+--   * runs in start_due_sessions(), which the admin / staff page already calls every 30 seconds
+--     (and when the page is opened), so the status changes within about 30 seconds of the end time
+--   * completing a session also returns its add-on equipment (file 39 / 40) and releases the studio
+--   * a session with an extension request still waiting for verification is NOT completed yet:
+--     staff verify or reject the extension first (the end time may move)
+-- Run this once in the Supabase SQL Editor (after 40_addon_balance_collection.sql).
+-- =====================================================================
+
+create or replace function public.start_due_sessions() returns integer
+language plpgsql security definer set search_path = public as $$
+declare n integer := 0; k integer; o record;
+begin
+  -- confirmed studio sessions whose time has begun and that have no balance left to collect
+  update public.booking set status = 'In Progress'
+   where status = 'Approved' and start_at <= now() and end_at > now()
+     and public.booking_balance_due(booking_id) <= 0.005;
+  get diagnostics k = row_count; n := n + k;
+
+  -- NEW: sessions that reached their end time are completed (not while an extension is waiting to be verified)
+  update public.booking b set status = 'Completed'
+   where b.status = 'In Progress' and b.end_at <= now()
+     and not exists (select 1 from public.booking_extension x where x.booking_id = b.booking_id and x.status = 'Pending');
+  get diagnostics k = row_count; n := n + k;
+
+  -- outside rentals: In Use as soon as the pick-up time arrives, unless a balance is still due
+  for o in select rental_order_id from public.rental_order
+            where rental_type = 'Outside' and status = 'Approved' and pickup_date <= now()
+              and public.rental_balance_due(rental_order_id) <= 0.005 loop
+    begin
+      update public.rental_order set status = 'Active' where rental_order_id = o.rental_order_id;
+      n := n + 1;
+    exception when others then null;   -- for example the stock check failed: leave it for staff
+    end;
+  end loop;
+
+  -- add-ons follow their session (issued while it runs, returned when it is completed)
+  perform public.sync_addon_orders(null);
+  return n;
+end $$;
+revoke all on function public.start_due_sessions() from public, anon;
+grant execute on function public.start_due_sessions() to authenticated;
+
+-- One-time catch-up: sessions that already ended but are still In Progress are completed now
+select public.start_due_sessions();
+
+
+-- =====================================================================
+-- 42_onsite_receipt_email.sql  (safe to re-run)
+-- Onsite bookings and onsite rentals can now email a receipt to the customer.
+--   * the onsite forms have an optional "Email for the receipt" box
+--   * staff_set_receipt_email() saves that address on the onsite booking / rental (staff only, onsite records only)
+--     and returns the id of the verified payment, so the admin page can ask the existing `send-receipt`
+--     Edge Function for the "verified" receipt (the same email staff already send after verifying a payment).
+--   * an onsite add-on with no typed address uses the address saved with its onsite booking, if there is one
+-- The recipient is still never chosen by the browser at send time: the Edge Function reads it from the database.
+-- Needs: 34_receipt_emails.sql, 35_verified_emails.sql and the send-receipt Edge Function (already set up for the website).
+-- Run this once in the Supabase SQL Editor (after 41_auto_complete_sessions.sql).
+-- =====================================================================
+
+create or replace function public.staff_set_receipt_email(p_kind text, p_ref text, p_email text default null)
+returns bigint
+language plpgsql security definer set search_path = public as $$
+declare
+  mail text := lower(nullif(trim(coalesce(p_email, '')), ''));
+  ref  text := upper(regexp_replace(coalesce(p_ref, ''), '\s', '', 'g'));
+  b public.booking; o public.rental_order; pid bigint;
+begin
+  if not public.is_staff() then raise exception 'Staff only.' using errcode = '42501'; end if;
+  if mail is not null and (length(mail) > 254 or mail !~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$') then
+    raise exception 'Enter a valid email address, like name@gmail.com.' using errcode = 'P0001';
+  end if;
+
+  if p_kind = 'booking' then
+    select * into b from public.booking where booking_ref = ref and source = 'Onsite';
+    if not found then raise exception 'Onsite booking not found.' using errcode = 'P0001'; end if;
+    if mail is null then return null; end if;
+    update public.booking set receipt_email = mail where booking_id = b.booking_id;
+    select p.payment_id into pid from public.payment p
+     where p.booking_id = b.booking_id and p.status = 'Verified' and p.verified_email_sent_at is null
+     order by p.payment_id desc limit 1;
+
+  elsif p_kind = 'rental' then
+    select * into o from public.rental_order where rental_ref = ref and source = 'Onsite';
+    if not found then raise exception 'Onsite rental not found.' using errcode = 'P0001'; end if;
+    if mail is null and o.booking_id is not null then
+      select receipt_email into mail from public.booking where booking_id = o.booking_id;   -- the add-on's booking
+    end if;
+    if mail is null then return null; end if;
+    update public.rental_order set receipt_email = mail where rental_order_id = o.rental_order_id;
+    select p.payment_id into pid from public.payment p
+     where p.rental_order_id = o.rental_order_id and p.status = 'Verified' and p.verified_email_sent_at is null
+     order by p.payment_id desc limit 1;
+
+  else
+    raise exception 'Choose booking or rental.' using errcode = 'P0001';
+  end if;
+  return pid;
+end $$;
+revoke all on function public.staff_set_receipt_email(text, text, text) from public, anon;
+grant execute on function public.staff_set_receipt_email(text, text, text) to authenticated;
+
+
+-- =====================================================================
+-- 43_onsite_outside_down_payment.sql  (safe to re-run)
+-- Onsite OUTSIDE rental picked up on a later day: staff can record a 50% down payment instead of the full payment.
+--   * today's rentals and onsite add-ons stay full payment (the server refuses a down payment for them)
+--   * the order keeps its down payment, so it shows "Balance PHP x" in Rentals and is NOT issued until staff press
+--     "Collect balance & issue" and collect the rest at pick-up (same as an online outside rental paid 50%)
+--   * the payment is recorded as a Verified down payment (Payments tab: "down payment"), then fully paid once the rest is collected
+-- Run this once in the Supabase SQL Editor (after 42_onsite_receipt_email.sql).
+-- =====================================================================
+
+drop function if exists public.staff_create_onsite_rental(text, jsonb, text, text, text, text, timestamptz, text, boolean, text, text, timestamptz);
+
+create or replace function public.staff_create_onsite_rental(
+  p_type text, p_items jsonb,
+  p_booking_ref text default null,
+  p_first_name text default null, p_last_name text default null, p_number text default null,
+  p_return_date timestamptz default null, p_id_type text default null, p_id_checked boolean default false,
+  p_payment_method text default 'Cash', p_gcash_reference text default null,
+  p_pickup_date timestamptz default null,
+  p_pay_option text default 'full'
+) returns table (rental_order_id bigint, rental_ref text, total_amount numeric)
+language plpgsql security definer set search_path = public as $$
+declare
+  o public.rental_order; bk public.booking; cid bigint; staff_id bigint := public.current_app_user_id();
+  it jsonb; eq public.equipment; qty int; rate numeric; hrs numeric; pick timestamptz := coalesce(p_pickup_date, now());
+  total numeric; st text := 'Approved'; dp numeric := 0; paid numeric;
+begin
+  if staff_id is null then raise exception 'Staff only.' using errcode = '42501'; end if;
+  if p_type not in ('Add-on', 'Outside') then raise exception 'Choose Add-on or Outside.' using errcode = 'P0001'; end if;
+  if p_items is null or jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then
+    raise exception 'Add at least one item.' using errcode = 'P0001';
+  end if;
+  if p_payment_method not in ('GCash', 'Cash') then raise exception 'Choose GCash or Cash.' using errcode = 'P0001'; end if;
+  if p_pay_option not in ('full', 'down') then raise exception 'Choose full payment or 50%% down payment.' using errcode = 'P0001'; end if;
+  -- a 50% down payment is only for an OUTSIDE rental that is picked up on a later day (the rest is collected at pick-up)
+  if p_pay_option = 'down' then
+    if p_type <> 'Outside' then raise exception 'A down payment is only for outside rentals.' using errcode = 'P0001'; end if;
+    if (pick at time zone 'Asia/Manila')::date <= (now() at time zone 'Asia/Manila')::date then
+      raise exception 'A 50%% down payment is only for a pick-up on a later day. Today''s rentals are paid in full.' using errcode = 'P0001';
+    end if;
+  end if;
+  -- the GCash reference is optional; if one is typed it must look real
+  if p_payment_method = 'GCash' and nullif(trim(coalesce(p_gcash_reference, '')), '') is not null
+     and length(trim(p_gcash_reference)) < 6 then
+    raise exception 'The GCash reference must be at least 6 characters, or leave it blank.' using errcode = 'P0001';
+  end if;
+
+  if p_type = 'Add-on' then
+    select * into bk from public.booking where booking_ref = upper(regexp_replace(coalesce(p_booking_ref, ''), '\s', '', 'g'));
+    if not found then raise exception 'Choose a confirmed booking.' using errcode = 'P0001'; end if;
+    if bk.status not in ('Approved', 'In Progress') then
+      raise exception 'Add-ons need a confirmed or active booking. This one is %.', bk.status using errcode = 'P0001';
+    end if;
+    cid := bk.customer_id;
+    if bk.status = 'In Progress' then st := 'Active'; end if;      -- the session is already running
+  else
+    if p_return_date is null or p_return_date <= pick then raise exception 'The return time must be after the start time.' using errcode = 'P0001'; end if;
+    if nullif(trim(coalesce(p_id_type, '')), '') is null then raise exception 'Choose the ID type.' using errcode = 'P0001'; end if;
+    if not coalesce(p_id_checked, false) then raise exception 'Confirm that you checked a valid ID in person.' using errcode = 'P0001'; end if;
+    cid := public.resolve_customer(p_first_name, p_last_name, p_number, true);
+  end if;
+
+  insert into public.rental_order (rental_ref, customer_id, rental_type, booking_id, status, source,
+                                   approved_by, created_by, pickup_date, return_date, contact_number, id_type)
+  values ('', cid, p_type, bk.booking_id, st, 'Onsite', staff_id, staff_id,
+          case when p_type = 'Outside' then pick end, p_return_date, nullif(trim(p_number), ''), nullif(trim(p_id_type), ''))
+  returning * into o;
+
+  for it in select * from jsonb_array_elements(p_items) loop
+    qty := (it ->> 'quantity')::int;
+    select * into eq from public.equipment where equipment_id = (it ->> 'equipment_id')::bigint;
+    if not found then raise exception 'Equipment not found.' using errcode = 'P0001'; end if;
+    if qty is null or qty < 1 then raise exception 'Quantity must be at least 1.' using errcode = 'P0001'; end if;
+
+    if p_type = 'Add-on' then
+      if not eq.allow_addon then raise exception '% cannot be rented as an add-on.', eq.name using errcode = 'P0001'; end if;
+      rate := eq.add_on_rate; hrs := null;
+    else
+      if not eq.allow_outside then raise exception '% cannot be rented outside the studio.', eq.name using errcode = 'P0001'; end if;
+      rate := eq.outside_rate; hrs := round(extract(epoch from (p_return_date - pick)) / 3600.0, 2);
+    end if;
+
+    -- the stock trigger runs here and rejects the row if there isn't enough
+    insert into public.rental_detail (rental_order_id, equipment_id, quantity, unit_price_at_request, rental_hours)
+    values (o.rental_order_id, eq.equipment_id, qty, rate, hrs);
+  end loop;
+
+  total := public.rental_order_total(o.rental_order_id);
+  paid := total;
+  if p_pay_option = 'down' then
+    dp := public.pay_option_amount(total, 'down');
+    paid := dp;
+    update public.rental_order ro set down_payment = dp where ro.rental_order_id = o.rental_order_id;   -- the balance is collected at pick-up
+  end if;
+  insert into public.payment (rental_order_id, method, gcash_reference, amount, status, verified_by, verified_at, payment_option)
+  values (o.rental_order_id, p_payment_method, nullif(trim(p_gcash_reference), ''), paid, 'Verified', staff_id, now(), p_pay_option);
+
+  return query select o.rental_order_id, o.rental_ref::text, total;
+exception when unique_violation then
+  raise exception 'Each item can only be listed once, or that GCash reference was already used.' using errcode = 'P0001';
+end $$;
+revoke all on function public.staff_create_onsite_rental(text, jsonb, text, text, text, text, timestamptz, text, boolean, text, text, timestamptz, text) from public, anon;
+grant execute on function public.staff_create_onsite_rental(text, jsonb, text, text, text, text, timestamptz, text, boolean, text, text, timestamptz, text) to authenticated;
+
+
+-- =====================================================================
+-- 44_onsite_booking_down_payment.sql  (safe to re-run)
+-- Onsite STUDIO booking for a later day: staff can record a 50% down payment instead of the full payment.
+--   * a booking for today stays full payment (the server refuses a down payment for today)
+--   * the booking keeps its down payment, so Bookings shows "Balance PHP x" and its Start button reads
+--     "Collect balance & start" (staff collect the rest at the studio before the session), exactly like an online booking paid at 50%
+--   * the payment is a Verified down payment (Payments tab: "down payment"), then fully paid once the balance is collected
+-- Run this once in the Supabase SQL Editor (after 43_onsite_outside_down_payment.sql).
+-- =====================================================================
+
+drop function if exists public.staff_create_onsite_booking(bigint, timestamptz, timestamptz, text, text, text, text, text, text);
+
+create or replace function public.staff_create_onsite_booking(
+  p_studio_id bigint, p_start_at timestamptz, p_end_at timestamptz,
+  p_first_name text, p_last_name text, p_number text,
+  p_payment_method text, p_gcash_reference text default null,
+  p_token text default null,
+  p_pay_option text default 'full'
+) returns table (booking_id bigint, booking_ref text, total_amount numeric)
+language plpgsql security definer set search_path = public as $$
+declare b public.booking; cid bigint; total numeric; dp numeric;
+begin
+  if not public.is_staff() then raise exception 'Staff only.' using errcode = '42501'; end if;
+  perform public.validate_slot(p_start_at, p_end_at, true);
+  if p_payment_method not in ('GCash', 'Cash') then
+    raise exception 'Choose GCash or Cash.' using errcode = 'P0001';
+  end if;
+  if p_pay_option not in ('full', 'down') then
+    raise exception 'Choose full payment or 50%% down payment.' using errcode = 'P0001';
+  end if;
+  -- a 50% down payment is only for a booking on a later day (a booking for today is paid in full)
+  if p_pay_option = 'down' and (p_start_at at time zone 'Asia/Manila')::date <= (now() at time zone 'Asia/Manila')::date then
+    raise exception 'A 50%% down payment is only for a booking on a later day. Today''s bookings are paid in full.' using errcode = 'P0001';
+  end if;
+  -- the GCash reference is optional; if one is typed it must look real
+  if p_payment_method = 'GCash' and nullif(trim(coalesce(p_gcash_reference, '')), '') is not null
+     and length(trim(p_gcash_reference)) < 6 then
+    raise exception 'The GCash reference must be at least 6 characters, or leave it blank.' using errcode = 'P0001';
+  end if;
+
+  cid := public.resolve_customer(p_first_name, p_last_name, p_number, true);
+  b := public.insert_booking_with_payment(cid, p_studio_id, p_start_at, p_end_at,
+         p_payment_method, p_gcash_reference, 'Onsite', public.current_app_user_id(), p_token);
+  total := public.booking_total(b.booking_id);
+
+  if p_pay_option = 'down' then
+    dp := public.pay_option_amount(total, 'down');
+    update public.booking bk set down_payment = dp where bk.booking_id = b.booking_id;      -- the balance is collected at the studio
+    update public.payment pay set amount = dp, payment_option = 'down'
+     where pay.booking_id = b.booking_id and pay.status <> 'Rejected';
+  else
+    update public.payment pay set payment_option = 'full'
+     where pay.booking_id = b.booking_id and pay.status <> 'Rejected';
+  end if;
+  return query select b.booking_id, b.booking_ref::text, total;
+end $$;
+
+revoke all on function public.staff_create_onsite_booking(bigint, timestamptz, timestamptz, text, text, text, text, text, text, text) from public, anon;
+grant execute on function public.staff_create_onsite_booking(bigint, timestamptz, timestamptz, text, text, text, text, text, text, text) to authenticated;
+
+-- =====================================================================
+-- 45_addon_balance_on_booking.sql  (safe to re-run)
+-- A booking must show the balance of its add-on equipment.
+--   Problem: a booking paid IN FULL at the studio (down_payment = 0) kept showing "Fully Paid" even after the
+--            customer added equipment later with a 50% payment (guest or account) and staff verified it.
+--   Now:     * booking_balance_due() also counts the balance of add-on orders that have their own down payment,
+--              so v_booking_summary.balance_due, the Bookings tab ("Balance PHP x") and Studio sessions agree
+--              with the Rentals tab
+--            * starting the session ("Collect balance & start") collects it, together with any booking balance
+--            * staff_collect_balance(): only add-ons whose payment staff VERIFIED are collected
+--            * the "balance not collected" guard on starting a session now also covers this balance
+--            * lookup_booking() also returns 'addon_balance', so the customer (guest lookup / receipt) sees what is left to pay
+-- Run this once in the Supabase SQL Editor (after 44_onsite_booking_down_payment.sql).
+-- =====================================================================
+
+-- 1. The balance of a booking: its own balance + the balance of add-ons that have their own down payment ----------
+create or replace function public.booking_balance_due(p_booking_id bigint) returns numeric
+language sql stable security definer set search_path = public as $$
+  select case
+    when coalesce(b.down_payment, 0) <= 0 then
+      -- booking paid in full: only add-ons added later with their own (verified) down payment can leave a balance
+      coalesce((select sum(public.rental_balance_due(o.rental_order_id))
+                  from public.rental_order o
+                 where o.booking_id = b.booking_id and o.rental_type = 'Add-on'
+                   and o.status not in ('Rejected', 'Cancelled') and coalesce(o.down_payment, 0) > 0
+                   and exists (select 1 from public.payment q
+                                where q.rental_order_id = o.rental_order_id and q.status = 'Verified')), 0)::numeric(10,2)
+    else greatest(0, public.booking_total(b.booking_id) + public.booking_addons_total(b.booking_id)
+                     - b.down_payment - public.booking_addon_paid(b.booking_id)
+                     - coalesce((select p.balance_paid_amount from public.payment p
+                                  where p.booking_id = b.booking_id and p.status <> 'Rejected'
+                                  order by p.payment_id desc limit 1), 0))::numeric(10,2)
+  end
+  from public.booking b where b.booking_id = p_booking_id;
+$$;
+revoke all on function public.booking_balance_due(bigint) from public, anon;
+grant execute on function public.booking_balance_due(bigint) to authenticated;
+
+-- 2. Collect the balance (same as 40, but a booking collects only VERIFIED add-on payments) -----------------------
+drop function if exists public.staff_collect_balance(text, text, text, numeric, boolean);
+create function public.staff_collect_balance(
+  p_kind text, p_ref text, p_method text default 'Cash', p_expected numeric default null, p_start boolean default true
+) returns table (kind text, ref text, collected numeric, new_status text)
+language plpgsql security definer set search_path = public as $$
+declare
+  k   text := lower(coalesce(trim(p_kind), ''));
+  m   text := case lower(coalesce(trim(p_method), 'cash')) when 'gcash' then 'GCash' when 'cash' then 'Cash' else null end;
+  b   public.booking;
+  o   public.rental_order;
+  pay public.payment;
+  bal numeric := 0;
+  addon_part numeric := 0;
+  ap  record;
+  r   text := upper(regexp_replace(coalesce(p_ref, ''), '\s', '', 'g'));
+begin
+  if not public.is_staff() then raise exception 'Staff only.' using errcode = '42501'; end if;
+  if m is null then raise exception 'Choose how the balance was paid: Cash or GCash.' using errcode = 'P0001'; end if;
+
+  if k = 'booking' then
+    select * into b from public.booking where booking_ref = r for update;
+    if not found then raise exception 'Booking % was not found.', r using errcode = 'P0001'; end if;
+    if b.status <> 'Approved' then
+      raise exception 'Booking % is % now. Only a Confirmed booking can be started.', r, b.status using errcode = 'P0001';
+    end if;
+    select * into pay from public.payment where booking_id = b.booking_id and status <> 'Rejected' order by payment_id desc limit 1 for update;
+    if coalesce(b.down_payment, 0) > 0 and (not found or pay.status <> 'Verified') then
+      raise exception 'Verify the customer''s down payment first.' using errcode = 'P0001';
+    end if;
+
+    bal := public.booking_balance_due(b.booking_id);
+    if p_expected is not null and abs(bal - p_expected) > 0.005 then
+      raise exception 'The balance changed to PHP %. Close this window and open it again.', to_char(bal, 'FM999,999,990.00') using errcode = 'P0001';
+    end if;
+
+    -- add-on orders the customer paid 50% for later: their rest is recorded on THEIR payment (it becomes fully paid)
+    for ap in
+      select p2.payment_id, greatest(0, public.rental_order_total(o2.rental_order_id) - coalesce(o2.down_payment, 0) - p2.balance_paid_amount) as rest
+        from public.rental_order o2
+        join public.payment p2 on p2.rental_order_id = o2.rental_order_id and p2.status = 'Verified'
+       where o2.booking_id = b.booking_id and o2.rental_type = 'Add-on' and o2.status not in ('Rejected', 'Cancelled')
+         and coalesce(o2.down_payment, 0) > 0
+    loop
+      if ap.rest > 0.005 then
+        update public.payment
+           set balance_paid_amount = balance_paid_amount + ap.rest,
+               balance_paid_at     = now(),
+               balance_paid_by     = public.current_app_user_id(),
+               balance_paid_method = m,
+               payment_option      = 'full'
+         where payment_id = ap.payment_id;
+        addon_part := addon_part + ap.rest;
+      end if;
+    end loop;
+
+    -- what is left is the studio session (and add-ons ordered with the booking): recorded on the booking's payment
+    if bal - addon_part > 0.005 and pay.payment_id is not null then
+      update public.payment
+         set balance_paid_amount = balance_paid_amount + (bal - addon_part),
+             balance_paid_at     = now(),
+             balance_paid_by     = public.current_app_user_id(),
+             balance_paid_method = m,
+             payment_option      = 'full'
+       where payment_id = pay.payment_id;
+    end if;
+
+    if p_start then
+      update public.booking set status = 'In Progress' where booking_id = b.booking_id;   -- stamps actual_start_at, starts the add-ons
+    end if;
+    return query select 'booking'::text, b.booking_ref::text, bal, case when p_start then 'In Progress' else b.status end::text;
+
+  elsif k = 'rental' then
+    select * into o from public.rental_order where rental_ref = r for update;
+    if not found then raise exception 'Rental % was not found.', r using errcode = 'P0001'; end if;
+    if o.status <> 'Approved' then
+      raise exception 'Rental % is % now. Only a verified rental can be issued.', r, o.status using errcode = 'P0001';
+    end if;
+    select * into pay from public.payment where rental_order_id = o.rental_order_id and status <> 'Rejected' order by payment_id desc limit 1 for update;
+    if coalesce(o.down_payment, 0) > 0 and (not found or pay.status <> 'Verified') then
+      raise exception 'Verify the customer''s down payment first.' using errcode = 'P0001';
+    end if;
+
+    bal := public.rental_balance_due(o.rental_order_id);
+    if p_expected is not null and abs(bal - p_expected) > 0.005 then
+      raise exception 'The balance changed to PHP %. Close this window and open it again.', to_char(bal, 'FM999,999,990.00') using errcode = 'P0001';
+    end if;
+
+    if bal > 0.005 then
+      update public.payment
+         set balance_paid_amount = balance_paid_amount + bal,
+             balance_paid_at     = now(),
+             balance_paid_by     = public.current_app_user_id(),
+             balance_paid_method = m,
+             payment_option      = 'full'
+       where payment_id = pay.payment_id;
+    end if;
+
+    update public.rental_order set status = 'Active' where rental_order_id = o.rental_order_id;   -- stock is checked here; stamps issued_at
+    return query select 'rental'::text, o.rental_ref::text, bal, 'Active'::text;
+
+  else
+    raise exception 'Unknown kind. Use booking or rental.' using errcode = 'P0001';
+  end if;
+end $$;
+revoke all on function public.staff_collect_balance(text, text, text, numeric, boolean) from public, anon;
+grant execute on function public.staff_collect_balance(text, text, text, numeric, boolean) to authenticated;
+
+-- 3. Guard: a session cannot start while ANY balance of the booking (also a later add-on's) is uncollected ----------
+create or replace function public.guard_booking_balance() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare bal numeric;
+begin
+  if new.status = 'In Progress' and old.status is distinct from 'In Progress' then
+    bal := public.booking_balance_due(new.booking_id);
+    if bal > 0.005 then
+      raise exception 'The remaining balance of PHP % has not been collected yet. Use Start session on the admin page and confirm the payment first.',
+        to_char(bal, 'FM999,999,990.00') using errcode = 'P0001';
+    end if;
+  end if;
+  return new;
+end $$;
+drop trigger if exists trg_booking_balance_guard on public.booking;
+create trigger trg_booking_balance_guard before update of status on public.booking
+  for each row execute function public.guard_booking_balance();
+
+-- 4. Booking lookup (guests and My Bookings): also returns the balance of add-ons added later ------------------------
+-- (same as 32, plus the key 'addon_balance'; it is 0 unless the booking was paid in full and an add-on still has a balance)
+create or replace function public.lookup_booking(p_ref text, p_phone text default null)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare r record; ad jsonb; ad_total numeric;
+begin
+  select b.booking_id, b.booking_ref, b.status, b.start_at, b.end_at, s.name as studio_name, s.description as studio_desc,
+         public.booking_total(b.booking_id) as total,
+         (select p.status from public.payment p where p.booking_id = b.booking_id order by p.payment_id desc limit 1) as payment_status,
+         c.number, c.auth_user_id, b.rejected_reason, b.down_payment,
+         (select p.balance_paid_amount from public.payment p where p.booking_id = b.booking_id and p.status <> 'Rejected' order by p.payment_id desc limit 1) as balance_paid,
+         (select p.payment_option from public.payment p where p.booking_id = b.booking_id order by p.payment_id desc limit 1) as payment_option
+    into r
+  from public.booking b
+  join public.studio s on s.studio_id = b.studio_id
+  join public.customer c on c.customer_id = b.customer_id
+  where b.booking_ref = upper(regexp_replace(coalesce(p_ref, ''), '\s', '', 'g'));
+
+  if not found then return null; end if;
+
+  -- registered customers' bookings are private: only the owner of the account or staff may read them
+  if r.auth_user_id is not null and r.auth_user_id is distinct from auth.uid() and not public.is_staff() then
+    return null;
+  end if;
+  if p_phone is not null and public.digits(p_phone) <> public.digits(r.number) then return null; end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'equipment', e.name, 'quantity', d.quantity,
+           'price', d.unit_price_at_request * d.quantity, 'status', o.status) order by e.name), '[]'::jsonb),
+         coalesce(sum(d.unit_price_at_request * d.quantity), 0)
+    into ad, ad_total
+  from public.rental_order o
+  join public.rental_detail d on d.rental_order_id = o.rental_order_id
+  join public.equipment e on e.equipment_id = d.equipment_id
+  where o.booking_id = r.booking_id and o.rental_type = 'Add-on' and o.status not in ('Rejected', 'Cancelled');
+
+  return jsonb_build_object(
+    'booking_ref', r.booking_ref, 'status', r.status, 'start_at', r.start_at, 'end_at', r.end_at,
+    'studio', r.studio_name, 'studio_description', r.studio_desc,
+    'total', r.total,
+    'studio_total', r.total, 'addons', ad, 'addons_total', ad_total, 'grand_total', r.total + ad_total,
+    'payment_status', r.payment_status, 'rejected_reason', r.rejected_reason,
+    'down_payment', r.down_payment,
+    -- once staff collected the balance the payment record says 'full'; the customer still sees the original online payment + the balance paid at the studio
+    'payment_option', case when coalesce(r.balance_paid, 0) > 0 then 'down' else coalesce(r.payment_option, 'down') end,
+    'balance_paid', coalesce(r.balance_paid, 0),
+    'addons_paid', public.booking_addon_paid(r.booking_id),
+    'balance_due', greatest(0, r.total + ad_total - r.down_payment - public.booking_addon_paid(r.booking_id) - coalesce(r.balance_paid, 0)),
+    -- NEW (45): booking paid in full, but equipment added later still has a balance to pay at the studio
+    'addon_balance', case when coalesce(r.down_payment, 0) <= 0 then public.booking_balance_due(r.booking_id) else 0 end);
+end $$;
+
+-- 5. Catch-up ---------------------------------------------------------------------------------------------------------
+select public.sync_addon_orders(null);
+
+-- end of 45_addon_balance_on_booking.sql

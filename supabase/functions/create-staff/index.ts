@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
       if (password.length < 8) return json({ error: 'The password must be at least 8 characters.' }, 400);
       if (number && !/^[0-9+()\s-]{7,20}$/.test(number)) return json({ error: 'Enter a valid phone number or leave it empty.' }, 400);
 
-      const { data: taken } = await admin.from('app_user').select('user_id').eq('username', email).maybeSingle();
+      const { data: taken } = await admin.from('app_user').select('user_id').ilike('email', email).maybeSingle();
       if (taken) return json({ error: 'That email address is already used by another staff account.' }, 409);
 
       // Auth account: the staff member signs in with this e-mail address.
@@ -68,9 +68,12 @@ Deno.serve(async (req) => {
         return json({ error: taken2 ? 'That email address is already registered.' : (e1?.message ?? 'Could not create the account.') }, taken2 ? 409 : 400);
       }
 
+      // Default username = first name (maria, maria2, ...), made by the database helper from 28_default_username_first_name.sql.
+      const { data: uname } = await admin.rpc('make_username', { p_first: first, p_table: 'app_user' });
+
       // Profile row that makes the account staff.
       const { error: e2 } = await admin.from('app_user').insert({
-        auth_user_id: created.user.id, first_name: first, last_name: last, username: email, email, number, role: 'Staff',
+        auth_user_id: created.user.id, first_name: first, last_name: last, username: uname || email, email, number, role: 'Staff',
       });
       if (e2) {
         await admin.auth.admin.deleteUser(created.user.id);   // undo, so no half-created account is left

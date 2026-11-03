@@ -13,7 +13,7 @@ ES modules do not load from `file://`. Serve the folder with any static server, 
 ```
 tower-of-dove-system/
 ├─ index.html                 landing page
-├─ pages/  login.html  customer.html  admin.html
+├─ pages/  login.html  customer.html  admin.html  account.html
 ├─ css/
 │  ├─ base.css                palette variables, reset, typography
 │  ├─ components.css          cards, buttons, badges, forms, tables, tabs, alerts
@@ -24,10 +24,11 @@ tower-of-dove-system/
 │  ├─ config/    supabaseClient.js  paths.js
 │  ├─ shared/    utils  catalog  cards  availability  holds  session  navigation  layout
 │  ├─ auth/      index  authService  passwordToggle
+│  ├─ account/   index  profilePanel  profileService
 │  ├─ home/      index  render  carousel  availability
 │  ├─ customer/  index  state  ui  book  bookingForm  data  rent  myBookings  myRentals
 │  └─ admin/     index  state  helpers  data  overview  bookings  payments  sessions
-│                studios  equipment  rentals  verify  customers  settings  onsite  reports
+│                studios  equipment  rentals  verify  customers  settings  profile  onsite  reports
 ├─ assets/   supabase/
 ```
 Each HTML page links the 4 shared stylesheets + its own, and loads ONE script: `js/<feature>/index.js`.
@@ -46,6 +47,7 @@ That entry file imports the other modules. The supabase-js library is still load
 | shared/session.js | who is logged in, logout, admin guard | auth session, customer, app_user |
 | shared/layout.js, navigation.js | sidebar, mobile bar, page links | - |
 | shared/cards.js | studio/equipment picture blocks | - |
+| account/profileService.js, profilePanel.js, index.js | change username (shown in the sidebar) and first/last name, email and password through Supabase email links (customer account page; Owner/Staff profile view) | auth.updateUser (email), auth.resetPasswordForEmail, customer, app_user; run supabase/27_allow_username_change.sql |
 | auth/authService.js | log in, register | auth sign-in / sign-up, app_user, customer |
 | auth/index.js, passwordToggle.js | login/register forms, eye button | - |
 | home/* | hero slider, cards, availability bar | via shared/catalog + availability |
@@ -67,3 +69,20 @@ That entry file imports the other modules. The supabase-js library is still load
 * **Shared variables**: a module cannot reassign a variable it imported, so variables several modules change live in `state.js` (`state.selStudio`). Admin lists such as `BK` are loaded in `admin/data.js` and exported as live bindings.
 * **CSS order matters**: keep the link order base, components, layout, modals, page file.
 * Every function and rule was moved, not rewritten. The original `style.css` / `js/*.js` are intentionally gone.
+
+## Update: shared equipment cart (customer page)
+- `js/customer/cart.js` (new): one cart for Studio Add-ons + Outside Rent, combined stock rules, allocation message.
+- `state.cart` is now `{ addon: {}, out: {} }` keyed by equipment id; switching modes no longer clears it.
+- The booking form's "Browse equipment" window has its own cart (`state.cart.book`); it is not copied from the Rent tab, but all carts share the same stock.
+- `ui.js`: new `showStockAlert()` popup. No Supabase changes are needed.
+
+## Update: payment options (50% down payment or full payment)
+- `supabase/31_payment_options.sql` (run once): `payment.payment_option`, new RPC parameters, `request_addon_rental`, updated views and revenue report.
+- `js/shared/payOption.js`: the shared chooser and amount helper used by the booking form, Rent equipment page and Extend window.
+
+## Update: verify the remaining balance before starting a session / issuing equipment
+- `supabase/32_balance_collection.sql` (run once, after 31): `payment.balance_paid_*` columns, `booking_balance_due()`, `rental_balance_due()`, RPC `staff_collect_balance`, guard triggers, `start_due_sessions()` no longer auto-starts while a balance is due, extra view columns, `lookup_booking`.
+- `js/admin/balance.js` (new): the verification window. Start session / Issue equipment open it when a 50% down payment still has a balance. Confirming turns the payment into a full payment and moves the booking to Active / the rental to In Use in one database call.
+
+## Update: 4-week booking window
+- Customers can book studios and pick up outside rentals only up to 28 days ahead (`lastBookableDate()` in `js/shared/availability.js`). `supabase/33_booking_window.sql` (run once) makes the database enforce it too.

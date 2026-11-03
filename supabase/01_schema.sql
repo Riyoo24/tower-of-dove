@@ -64,7 +64,7 @@ create table if not exists public.customer (
   updated_at    timestamptz  not null default now(),
   constraint customer_status_chk   check (status in ('Active', 'Inactive')),
   constraint customer_username_chk check (username is null or username ~ '^[a-z0-9_.]{3,30}$'),
-  constraint customer_number_chk   check (number is null or number ~ '^[0-9+()\s-]{7,20}$'),
+  constraint customer_number_chk   check (number is null or number ~ '^[0-9+()\\s-]{7,20}$'),
   constraint customer_guest_chk    check (auth_user_id is not null or username is null)
 );
 create unique index if not exists customer_username_uq on public.customer (lower(username)) where username is not null;
@@ -79,12 +79,10 @@ create table if not exists public.studio (
   name         varchar(100) not null,
   image        text,
   description  text,
-  capacity     integer      not null default 5,
   hourly_rate  numeric(10,2) not null,
   status       varchar(20)  not null default 'Available',   -- "Occupied" is derived from an In Progress booking
   created_at   timestamptz  not null default now(),
   updated_at   timestamptz  not null default now(),
-  constraint studio_capacity_chk check (capacity > 0),
   constraint studio_rate_chk     check (hourly_rate >= 0),
   constraint studio_status_chk   check (status in ('Available', 'Unavailable', 'Maintenance'))
 );
@@ -102,10 +100,9 @@ create table if not exists public.equipment_category (
 
 -- ---------------------------------------------------------------------
 -- 5. equipment
---    Added vs the doc: min_hours, is_drum_set, drum_kit, is_vip, updated_at.
 --    Rates: add_on_rate is per session; outside_rate is per day.
---    Drum sets are priced per rental (both rates hold the rental price).
 --    min_hours is the minimum length of an OUTSIDE rental.
+--    Use name and description to record drum models and configurations.
 -- ---------------------------------------------------------------------
 create table if not exists public.equipment (
   equipment_id    bigint generated always as identity primary key,
@@ -119,9 +116,6 @@ create table if not exists public.equipment (
   allow_addon     boolean not null default true,
   allow_outside   boolean not null default false,
   min_hours       integer not null default 0,
-  is_drum_set     boolean not null default false,
-  drum_kit        varchar(100),
-  is_vip          boolean not null default false,
   status          varchar(20) not null default 'Available',
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now(),
@@ -131,8 +125,7 @@ create table if not exists public.equipment (
   constraint equipment_min_chk      check (min_hours >= 0),
   constraint equipment_status_chk   check (status in ('Available', 'Unavailable')),
   constraint equipment_addon_rate_required   check (not allow_addon   or add_on_rate  is not null),
-  constraint equipment_outside_rate_required check (not allow_outside or outside_rate is not null),
-  constraint equipment_drum_chk     check (not is_drum_set or drum_kit is not null)
+  constraint equipment_outside_rate_required check (not allow_outside or outside_rate is not null)
 );
 create unique index if not exists equipment_name_uq on public.equipment (lower(name));
 create index if not exists equipment_category_idx on public.equipment (category_id);
@@ -332,19 +325,17 @@ returns integer language sql stable security definer set search_path = public as
     and (p_exclude_order is null or o.rental_order_id <> p_exclude_order);
 $$;
 
--- Order total: add-ons and drum sets are per rental/session, other outside
--- items are per day (rounded up from the pickup and return times).
+-- Order total: add-ons are per session; outside items are per day (rounded up from hours).
 create or replace function public.rental_order_total(p_order_id bigint) returns numeric
 language sql stable security definer set search_path = public as $$
   select coalesce(sum(
     d.quantity * d.unit_price_at_request *
-    case when o.rental_type = 'Outside' and not e.is_drum_set
+    case when o.rental_type = 'Outside'
          then greatest(1, ceil(coalesce(d.rental_hours, 24) / 24.0))
          else 1 end
   ), 0)::numeric(10,2)
   from public.rental_order o
   join public.rental_detail d on d.rental_order_id = o.rental_order_id
-  join public.equipment e on e.equipment_id = d.equipment_id
   where o.rental_order_id = p_order_id;
 $$;
 

@@ -18,6 +18,11 @@ export const num = n => Number(n) || 0;
 
 export const money = n => peso(Math.round(num(n) * 100) / 100);
 
+/* how the customer paid online: 'full' = full payment (100%), anything else = 50% down payment */
+export const isFull = opt => opt === 'full';
+export const payLabel = opt => isFull(opt) ? 'Full payment' : 'Down payment (50%)';
+export const payWord = opt => isFull(opt) ? 'full payment' : 'down payment';
+
 const P = ts => manilaParts(ts);
 
 export const dOf = ts => P(ts).date;
@@ -26,21 +31,60 @@ export const tlabel = h => (h % 12 || 12) + ':00 ' + (h < 12 ? 'AM' : 'PM');
 
 export const tOf = ts => tlabel(P(ts).hour);
 
-export const stampLabel = ts => new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+export const stampLabel = ts => new Date(ts).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+});
 
 export const dayDiff = (a, b) => Math.round((new Date(a + 'T00:00') - new Date(b + 'T00:00')) / 864e5);
 
 // database status -> label shown on screen
-export const bkStatus = s => ({ 'Approved': 'Confirmed', 'In Progress': 'Active' }[s] || s);
+export const bkStatus = s => ({
+    'Approved': 'Confirmed',
+    'In Progress': 'Active'
+}[s] || s);
 
-export const rnStatus = s => ({ 'Active': 'In Use', 'Approved': 'Verified' }[s] || s);   // a rental that staff verified shows as Verified
+export const rnStatus = s => ({
+    'Active': 'In Use',
+    'Approved': 'Verified'
+}[s] || s);   // a rental that staff verified shows as Verified
 
-export const tbl = (head, rows) =>
-  `<table><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>` +
-  (rows.length ? rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')
-               : `<tr><td colspan="${head.length}" class="mut">Nothing to show.</td></tr>`) + '</tbody></table>';
+/* Every table is returned inside a .tw box. On a narrow screen the box scrolls sideways
+   instead of the table squeezing its text or pushing the whole page wider.
+   cls (optional) adds a class to the <table>, e.g. "bk-tbl" for the Bookings table. */
+export const tbl = (head, rows, cls) =>
+    `<div class="tw"><table${cls ? ` class="${cls}"` : ''}><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>` +
+    (rows.length ? rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')
+        : `<tr><td colspan="${head.length}" class="mut">Nothing to show.</td></tr>`)
+    + '</tbody></table></div>';
 
-export const tb = (id, head, rows) => { $('#' + id).innerHTML = tbl(head, rows); };
+/* Like tbl(), but the rows are split into titled groups, the same way the customer's My bookings / My rental tables work.
+   groups = [{ title, toggle, collapsed, rows, dimmed }]. rows = arrays of cells (like tbl).
+   A group with a toggle name gets a button (data-toggle) that shows or hides its rows; a collapsed group
+   shows only its heading and how many rows it holds. dimmed = (row index) => true greys that row out. */
+export const tblGrouped = (head, groups, cls) => {
+    const n = head.length, shown = groups.filter(g => g.rows.length);
+    const body = shown.map(g => {
+        const label = `<span class="grp-t">${g.title}</span><span class="grp-n">${g.rows.length}</span>`;
+        const top = `<tr class="grp-row"><td colspan="${n}">${g.toggle
+            ? `<button type="button" class="grp-btn" data-toggle="${g.toggle}" aria-expanded="${!g.collapsed}">${label}<span class="grp-chev" aria-hidden="true">${g.collapsed ? '&#9656;' : '&#9662;'}</span></button>`
+            : `<span class="grp-btn">${label}</span>`}</td></tr>`;
+        if (g.collapsed)
+            return top;
+        return top + g.rows.map((r, i) => `<tr${g.dimmed && g.dimmed(i) ? ' class="dim"' : ''}>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('');
+    }).join('');
+    // while a "Past and closed" group is open the box gets a height limit and scrolls inside itself (the page stays put)
+    const scroll = shown.some(g => g.toggle && !g.collapsed);
+    return `<div class="tw${scroll ? ' tw-scroll' : ''}"><table class="grouped${cls ? ' ' + cls : ''}"><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>` +
+        (shown.length ? body : `<tr><td colspan="${n}" class="mut">Nothing to show.</td></tr>`)
+        + '</tbody></table></div>';
+};
+
+export const tb = (id, head, rows) => {
+    $('#' + id).innerHTML = tbl(head, rows);
+};
 
 export const dbtn = (act, id, text) => `<button class="btn sm bad" data-act="${act}" data-id="${esc(id)}">${text}</button>`;
 
@@ -48,31 +92,61 @@ export const btn = (act, id, text, line) => `<button class="btn sm ${line ? 'lin
 
 export const tabsHtml = (list, cur, key) => `<div class="tabs">${list.map(x => `<button data-${key}="${x}" class="${x === cur ? 'on' : ''}">${x}</button>`).join('')}</div>`;
 
-export const KPI = (l, v, color, sub) => `<div class="card kpi"><span class="mut">${l}</span><div class="num" ${color ? `style="color:${color}"` : ''}>${v}</div>${sub ? `<span class="mut">${sub}</span>` : ''}</div>`;
+export const KPI = (l, v, color, sub, go) => `<div class="card kpi${go ? ' go' : ''}"${go ? ` data-go="${esc(go)}" role="link" tabindex="0" aria-label="${esc(l)}: ${v}. Click to view"` : ''}><span class="mut">${l}</span><div class="num" ${color ? `style="color:${color}"` : ''}>${v}</div>${sub ? `<span class="mut">${sub}</span>` : ''}</div>`;
 
 export const hbs = (id, rows) => {
-  const m = Math.max(...rows.map(r => r[2]), 1);
-  $('#' + id).innerHTML = rows.map(r => `<div class="hb"><div class="row" style="background:none;height:auto;margin:0"><span>${esc(r[0])}</span><b>${r[1]}</b></div><div><i style="width:${Math.round(r[2] / m * 100)}%"></i></div></div>`).join('') || '<p class="mut">Nothing in this period.</p>';
+    const m = Math.max(...rows.map(r => r[2]), 1);
+    $('#' + id).innerHTML = rows.map(r => `<div class="hb"><div class="row" style="background:none;height:auto;margin:0"><span>${esc(r[0])}</span><b>${r[1]}</b></div><div><i style="width:${Math.round(r[2] / m * 100)}%"></i></div></div>`).join('')
+        || '<p class="mut">Nothing in this period.</p>';
 };
 
 export const setOpts = (sel, html) => {
-  const cur = sel.value; sel.innerHTML = html;
-  if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
+    const cur = sel.value;
+    sel.innerHTML = html;
+    if ([...sel.options].some(o => o.value === cur))
+        sel.value = cur;
 };
 
 /* run a Supabase call; show the error as a message and return null if it failed */
 export async function run(p) {
-  const r = await p;
-  if (r.error) { toast(r.error.message); console.error(r.error); return null; }
-  return r;
+    const r = await p;
+    if (r.error) {
+        toast(r.error.message);
+        console.error(r.error);
+        return null;
+    }
+    return r;
+}
+
+/* After staff verify a payment: ask the send-receipt Edge Function to email the customer that their booking,
+   rental or extension is verified. The function checks that the caller is staff, finds the customer's address in
+   the database and sends once per payment. A failed email never undoes the verification. */
+export async function notifyVerified(paymentId, quiet) {
+    if (!paymentId)
+        return false;
+    try {
+        const { data, error } = await sb.functions.invoke('send-receipt', { body: { kind: 'verified', paymentId: +paymentId } });
+        if (error)
+            throw error;
+        if (data && data.ok === false && data.reason === 'no_email' && !quiet)
+            toast('Payment verified. This customer has no email on file, so no email was sent.');
+        return !!(data && data.ok);   // true when the email went out
+    }
+    catch (err) {
+        console.warn('Verified email failed:', err);
+        if (!quiet)
+            toast('Payment verified, but the email to the customer could not be sent.');
+        return false;
+    }
 }
 
 export async function uploadPublic(bucket, file) {
-  const ext = ((file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '')) || 'jpg';
-  const path = `${crypto.randomUUID()}.${ext}`;
-  const up = await sb.storage.from(bucket).upload(path, file, { contentType: file.type });
-  if (up.error) throw new Error(up.error.message);
-  return sb.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+    const ext = ((file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '')) || 'jpg';
+    const path = `${crypto.randomUUID()}.${ext}`;
+    const up = await sb.storage.from(bucket).upload(path, file, { contentType: file.type });
+    if (up.error)
+        throw new Error(up.error.message);
+    return sb.storage.from(bucket).getPublicUrl(path).data.publicUrl;
 }
 
 export const PHICON = '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8 8"/></svg>';
@@ -80,11 +154,20 @@ export const PHICON = '<svg width="34" height="34" viewBox="0 0 24 24" fill="non
 /* shared dialog */
 export const dlg = $('#rdlg');
 
-export function showDlg(html) { dlg.innerHTML = `<div class="in">${html}</div>`; dlg.showModal(); }
+export function showDlg(html) {
+    dlg.innerHTML = `<div class="in">${html}</div>`;
+    dlg.showModal();
+}
 
-dlg.addEventListener('click', e => { if (e.target === dlg || e.target.closest('[data-close]')) dlg.close(); });
+dlg.addEventListener('click', e => {
+    if (e.target === dlg || e.target.closest('[data-close]'))
+        dlg.close();
+});
 
-$('#eqdlg').addEventListener('click', e => { if (e.target.id === 'eqdlg') $('#eqdlg').close(); });
+$('#eqdlg').addEventListener('click', e => {
+    if (e.target.id === 'eqdlg')
+        $('#eqdlg').close();
+});
 
 /* ---- "Are you sure?" window ----
    askConfirm({ title, message, ok, cancel, danger }) resolves true (confirmed) or false (cancelled, Esc or click outside).
@@ -97,25 +180,38 @@ document.body.appendChild(cf);
 
 let cfDone = null;
 
-const cfClose = v => { if (!cfDone) return; const d = cfDone; cfDone = null; if (cf.open) cf.close(); d(v); };
+const cfClose = v => {
+    if (!cfDone)
+        return;
+    const d = cfDone;
+    cfDone = null;
+    if (cf.open)
+        cf.close();
+    d(v);
+};
 
 cf.addEventListener('click', e => {
-  if (e.target === cf) return cfClose(false);
-  const b = e.target.closest('[data-cf]');
-  if (b) cfClose(b.dataset.cf === 'yes');
+    if (e.target === cf)
+        return cfClose(false);
+    const b = e.target.closest('[data-cf]');
+    if (b)
+        cfClose(b.dataset.cf === 'yes');
 });
 
-cf.addEventListener('cancel', e => { e.preventDefault(); cfClose(false); });   // Esc key
+cf.addEventListener('cancel', e => {
+    e.preventDefault();
+    cfClose(false);
+});   // Esc key
 
 export function askConfirm({ title = 'Are you sure?', message = '', ok = 'Yes, confirm', cancel = 'Cancel', danger = false } = {}) {
-  cfClose(false);
-  return new Promise(resolve => {
-    cfDone = resolve;
-    cf.innerHTML = `<div class="in"><h2 style="margin:0 0 8px">${esc(title)}</h2>${message ? `<p class="mut">${esc(message)}</p>` : ''}
+    cfClose(false);
+    return new Promise(resolve => {
+        cfDone = resolve;
+        cf.innerHTML = `<div class="in"><h2 style="margin:0 0 8px">${esc(title)}</h2>${message ? `<p class="mut">${esc(message)}</p>` : ''}
       <div class="acts"><button type="button" class="btn line" data-cf="no">${esc(cancel)}</button><button type="button" class="btn ${danger ? 'bad' : 'gold'}" data-cf="yes">${esc(ok)}</button></div></div>`;
-    cf.showModal();
-    cf.querySelector('[data-cf="no"]').focus();   // Cancel has the focus, so Enter never confirms by accident
-  });
+        cf.showModal();
+        cf.querySelector('[data-cf="no"]').focus();   // Cancel has the focus, so Enter never confirms by accident
+    });
 }
 
 /* every button with data-act runs ACT[name](id).
@@ -126,12 +222,21 @@ export const ACT = {};
 export const CONFIRM = {};
 
 document.addEventListener('click', e => {
-  const b = e.target.closest('[data-act]');
-  if (!b || !ACT[b.dataset.act] || b.dataset.busy) return;
-  b.dataset.busy = '1';
-  Promise.resolve()
-    .then(() => { const spec = CONFIRM[b.dataset.act] && CONFIRM[b.dataset.act](b.dataset.id, b); return spec ? askConfirm(spec) : true; })
-    .then(yes => yes ? ACT[b.dataset.act](b.dataset.id, b) : null)
-    .catch(err => { console.error(err); toast(err.message); })
-    .finally(() => { delete b.dataset.busy; });
+    const b = e.target.closest('[data-act]');
+    if (!b || !ACT[b.dataset.act] || b.dataset.busy)
+        return;
+    b.dataset.busy = '1';
+    Promise.resolve()
+        .then(() => {
+            const spec = CONFIRM[b.dataset.act] && CONFIRM[b.dataset.act](b.dataset.id, b);
+            return spec ? askConfirm(spec) : true;
+        })
+        .then(yes => yes ? ACT[b.dataset.act](b.dataset.id, b) : null)
+        .catch(err => {
+            console.error(err);
+            toast(err.message);
+        })
+        .finally(() => {
+            delete b.dataset.busy;
+        });
 });

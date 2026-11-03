@@ -92,13 +92,13 @@
       </div>
     </section>
 
-    <footer class="foot">Tower of Dove Music Studio. Bookings are paid with GCash and confirmed after staff verify your payment.</footer>
+    <footer class="foot">Tower of Dove Music Studio. Online bookings need a 50% GCash down payment (the balance is paid at the studio) and are confirmed after staff verify it.</footer>
   </main>
 
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
   <!-- All site code is ES modules; this one entry file imports the rest -->
-  <script type="module" src="js/home/index.js"></script>
+  <script src="js/shared/boot.js" data-entry="js/home/index.js"></script>
 </body>
 </html>

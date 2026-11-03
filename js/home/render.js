@@ -10,15 +10,16 @@ import { $, badge, esc, peso } from '../shared/utils.js';
 /* ============================ RENDERING ============================ */
 
 export function renderStudioOptions() {
-  $('#qs').innerHTML = STUDIOS
-    .map((s, i) => `<option value="${i}">Studio ${s.id}, ${peso(s.rate)}/hr</option>`)
-    .join('');
+    // "All studios" checks every studio at the chosen time (home/availability.js); Studio A stays the default pick
+    $('#qs').innerHTML = '<option value="all">All studios</option>' + STUDIOS
+        .map((s, i) => `<option value="${i}" ${i === 0 ? 'selected' : ''}>Studio ${s.id}, ${peso(s.rate)}/hr</option>`)
+        .join('');
 }
 
 export function renderStudios() {
-  $('#studio-grid').innerHTML = STUDIOS.map((s, i) => {
-    const closed = isClosed(s);
-    return `
+    $('#studio-grid').innerHTML = STUDIOS.map((s, i) => {
+        const closed = isClosed(s);
+        return `
       <div class="card">
         ${studioThumb(s)}
         <div class="row"><h3>Studio ${s.id}</h3>${badge(s.status)}</div>
@@ -28,28 +29,26 @@ export function renderStudios() {
           <button class="btn gold" data-book-studio="${i}" ${closed ? 'disabled' : ''}>${closed ? 'Closed' : 'Book now'}</button>
         </div>
       </div>`;
-  }).join('');
+    }).join('');
 }
 
 export function renderEquipment() {
-  $('#equipment-grid').innerHTML = EQUIPMENT.map((e, i) => {
-    const lines = [];
-    if (e.addon)   lines.push(`<div><span class="b addon">Add-on</span> ${peso(e.addonPrice)} ${e.drum ? 'per rental' : 'per session'}</div>`);
-    if (e.outside) lines.push(`<div><span class="b out">Outside</span> ${peso(e.outsidePrice)} per 8 hours (1/8 per extra hour)</div>`);
+    $('#equipment-grid').innerHTML = EQUIPMENT.map((e, i) => {
+        const lines = [];
+        if (e.addon)
+            lines.push(`<div><span class="b addon">Add-on</span> ${peso(e.addonPrice)} per session</div>`);
+        if (e.outside)
+            lines.push(`<div><span class="b out">Outside</span> ${peso(e.outsidePrice)} per 8 hours (1/8 per extra hour)</div>`);
 
-    const sub = e.drum
-      ? `${e.drum.kit}, ${e.drum.vip ? 'VIP' : 'Basic'} set-up. 8-hour base rental, no service.`
-      : `${e.stock} available`;
-
-    return `
+        return `
       <div class="card">
         ${equipmentImage(e)}
         <p class="cat">${esc(e.category || '')}</p>
         <h3>${esc(e.name)}</h3>
         ${e.desc ? `<p class="mut" style="margin-top:4px">${esc(e.desc)}</p>` : ''}
-        <p class="mut">${esc(sub)}</p>
+        <p class="mut">${e.stock} available</p>
         <div class="price-lines">${lines.join('')}</div>
         <button class="btn gold full" data-rent-item="${i}">Rent</button>
       </div>`;
-  }).join('');
+    }).join('');
 }

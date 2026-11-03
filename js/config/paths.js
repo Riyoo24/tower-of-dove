@@ -15,13 +15,16 @@ export const ASSETS = ROOT + 'assets/';
    book -> pages/customer.html?studio=A&date=2026-10-15&time=3:00 PM#book
    A route set to null shows a short "connect this page" message. */
 export const ROUTES = {
-  home:     'index.html#home',
-  book:     'pages/customer.html#book',
-  rent:     'pages/customer.html#rent',
-  mybook:   'pages/customer.html#my-bookings',
-  myrent:   'pages/customer.html#my-rentals',
-  contact:  'index.html#contact',
-  login:    'pages/login.html#login',
-  register: 'pages/login.html#register',
-  admin:    'pages/admin.html#a-over'   // owner and staff dashboard
+    home: 'index.html#home',
+    book: 'pages/customer.html#book',
+    rent: 'pages/customer.html#rent',
+    mybook: 'pages/customer.html#my-bookings',
+    myrent: 'pages/customer.html#my-rentals',
+    contact: 'index.html#contact',
+    login: 'pages/login.html#login',
+    register: 'pages/login.html#register',
+    account: 'pages/account.html',
+    // customer profile (name, email, password)
+    admin: 'pages/admin.html#a-over'
+    // owner and staff dashboard
 };
