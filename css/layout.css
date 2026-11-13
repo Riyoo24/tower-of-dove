@@ -378,6 +378,23 @@ body.hastop .page {
 html:has(body.hastop) {
     scroll-padding-top: 96px;
 }
+/* Before layout.js injects the top bar, keep its space free so nothing shifts when it appears.
+   (:has(.topnav) stops matching the moment the bar exists, and the bar takes over the same height.) */
+body.hastop:not(:has(.topnav)) {
+    padding-top: 72px;
+}
+
+@media (max-width: 900px) {
+    body.hastop:not(:has(.topnav)) {
+        padding-top: 64px;
+    }
+}
+
+@media (max-width: 820px) {
+    body.hastop:not(:has(.topnav)) {
+        padding-top: 62px;
+    }
+}
 
 .topnav {
     position: sticky;
