@@ -1,0 +1,270 @@
+/* =====================================================================
+   signal.css - two small UX pieces
+   ---------------------------------------------------------------------
+   1) "How booking works" (js/shared/path.js): one slim strip with three
+      steps. When it scrolls into view node 1 lights, a red line travels to
+      node 2, which lights as it arrives, and so on to node 3. It plays once
+      and rests. On a phone the steps stack with a short vertical line.
+   2) Rolling totals (js/shared/rollup.js): the number being counted only
+      gets a tabular look and a brief tint while it rolls.
+   Everything that moves sits behind prefers-reduced-motion: no-preference.
+   Delete this file, path.js, rollup.js and their tags to remove both.
+   ===================================================================== */
+
+/* ---------- 1) how it works ---------- */
+.hx-how {
+    display: block;              /* home.css made this a 3-column grid of cards */
+    padding-top: 40px;
+}
+
+.hx-steps {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 0;
+    padding: 16px 24px;
+    list-style: none;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+}
+
+.hx-st {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.hx-st:last-child {
+    flex: none;
+}
+
+/* the step marker: a round node. Resting (finished) look = red and lit; the grey ring underneath shows while it waits */
+.hx-num {
+    position: relative;
+    isolation: isolate;
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--surface);
+    box-shadow: inset 0 0 0 1px var(--line-strong);
+    color: #fff;
+    font: 700 14px/1 'Bricolage Grotesque', serif;
+}
+
+.hx-num::before,
+.hx-num::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: 50%;
+}
+
+.hx-num::before {
+    background: linear-gradient(135deg, var(--brand-hi), var(--brand-lo));
+    box-shadow: 0 4px 14px #b3202f55;
+}
+
+.hx-st h3 {
+    flex: none;
+    font-size: 16px;
+}
+
+/* the line to the next step: a grey track with a red fill that is slid out to the left while it waits */
+.hx-ln {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 24px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--line);
+    overflow: hidden;
+}
+
+.hx-ln i {
+    position: absolute;
+    inset: 0;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--brand-lo), var(--brand-hi));
+}
+
+/* a soft bright tip on the leading edge while the line is travelling (gone once it arrives) */
+.hx-ln i::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 36px;
+    background: linear-gradient(90deg, transparent, #ff9fa8);
+    opacity: 0;
+}
+
+@media (max-width: 700px) {
+    .hx-how {
+        padding-top: 32px;
+    }
+
+    /* phone: the steps stack and the line becomes a short rail under each node */
+    .hx-steps {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0;
+        padding: 16px 18px;
+    }
+
+    .hx-st {
+        display: grid;
+        grid-template-columns: 30px 1fr;
+        column-gap: 12px;
+        align-items: center;
+        flex: none;
+    }
+
+    .hx-st .hx-ln {
+        grid-column: 1;
+        grid-row: 2;
+        justify-self: center;
+        width: 2px;
+        height: 18px;
+        min-width: 0;
+        margin: 4px 0;
+    }
+
+    .hx-ln i {
+        background: linear-gradient(180deg, var(--brand-lo), var(--brand-hi));
+    }
+
+    .hx-ln i::after {
+        top: auto;
+        left: 0;
+        width: auto;
+        height: 14px;
+        background: linear-gradient(180deg, transparent, #ff9fa8);
+    }
+}
+
+/* One pass when path.js adds .is-seen, then it rests (about 3.2 s):
+   node 1 lights, line 1 travels, node 2 lights as it arrives, line 2 travels, node 3 lights.
+   Only colours, opacity and the line's position change; no text moves. */
+@media (prefers-reduced-motion: no-preference) {
+    .hx-armed .hx-num {
+        color: var(--mut);
+    }
+
+    .hx-armed .hx-num::before {
+        opacity: 0;
+    }
+
+    .hx-armed .hx-st h3 {
+        color: var(--mut);
+    }
+
+    .hx-armed .hx-ln i {
+        transform: translateX(-101%);
+    }
+
+    .hx-armed .hx-ln i::after {
+        opacity: 1;
+    }
+
+    .hx-armed.is-seen .hx-num {
+        color: #fff;
+    }
+
+    .hx-armed.is-seen .hx-st h3 {
+        color: var(--ink);
+    }
+
+    .hx-armed.is-seen .hx-num,
+    .hx-armed.is-seen .hx-num::before,
+    .hx-armed.is-seen .hx-st h3 {
+        transition: opacity .45s ease, color .45s ease;
+        transition-delay: var(--d, 0s);
+    }
+
+    .hx-armed.is-seen .hx-num::before {
+        opacity: 1;
+    }
+
+    .hx-armed.is-seen .hx-num::after {
+        animation: hxRing .9s ease-out both;
+        animation-delay: var(--d, 0s);
+    }
+
+    .hx-armed.is-seen .hx-ln i {
+        transform: none;
+        transition: transform 1.1s cubic-bezier(.4, 0, .2, 1);
+        transition-delay: var(--l, 0s);
+    }
+
+    .hx-armed.is-seen .hx-ln i::after {
+        opacity: 0;
+        transition: opacity .5s ease;
+        transition-delay: calc(var(--l, 0s) + 1s);
+    }
+
+    .hx-armed .hx-st:nth-child(1) {
+        --d: .15s;
+        --l: .45s;
+    }
+
+    .hx-armed .hx-st:nth-child(2) {
+        --d: 1.45s;
+        --l: 1.8s;
+    }
+
+    .hx-armed .hx-st:nth-child(3) {
+        --d: 2.8s;
+    }
+
+    @media (max-width: 700px) {
+        .hx-armed .hx-ln i {
+            transform: translateY(-101%);
+        }
+
+        .hx-armed.is-seen .hx-ln i {
+            transform: none;
+        }
+    }
+}
+
+/* a single soft ring when a node lights */
+@keyframes hxRing {
+    0% {
+        opacity: 0;
+        box-shadow: 0 0 0 0 #cf3e4d99;
+    }
+
+    15% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0;
+        box-shadow: 0 0 0 12px #cf3e4d00;
+    }
+}
+
+/* ---------- 2) rolling totals ---------- */
+.ru-roll {
+    font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .ru-roll {
+        animation: ruTint .6s ease-out;
+    }
+}
+
+@keyframes ruTint {
+    from {
+        color: var(--link);
+    }
+}

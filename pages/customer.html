@@ -44,8 +44,10 @@
   <link rel="stylesheet" href="../css/customer.css">
   <link rel="stylesheet" href="../css/motion.css">
   <link rel="stylesheet" href="../css/refresh.css">
+  <link rel="stylesheet" href="../css/signal.css">
   <link rel="stylesheet" href="../css/mobile.css">
   <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/depth.css">
   <link rel="stylesheet" href="../css/print.css" media="print">
   <script src="../js/shared/modalTop.js"></script>
 </head>
@@ -68,6 +70,21 @@
               <div class="hx-cta">
                 <button type="button" class="btn gold lg" data-route="book">Book a studio</button>
                 <button type="button" class="btn line lg" data-route="rent">Rent gear</button>
+                <!-- Review badge: opens the studio's Google Maps reviews in a new tab.
+                     Type the real numbers from the Google Maps listing into data-rating (for example 4.8) and data-count (for example 120).
+                     While data-rating is empty, the badge only says "Google reviews" (no made-up number). -->
+                <a class="hx-reviews" id="hx-reviews" data-rating="" data-count="" target="_blank" rel="noopener noreferrer" aria-label="Read Tower of Dove reviews on Google Maps (opens in a new tab)"
+                   href="https://www.google.com/maps/place/Tower+Of+Dove+Music+Studio/@14.6960174,121.0716265,17z/data=!4m8!3m7!1s0x3397b0a15a8c454d:0x55a9bef78689e3e2!8m2!3d14.6960122!4d121.0742068!9m1!1b1!16s%2Fg%2F11gg9kssmy?entry=ttu&g_ep=EgoyMDI2MTExMC4wIKXMDSoASAFQAw%3D%3D">
+                  <span class="hx-rv-faces" aria-hidden="true">
+                    <img src="../assets/img/reviewers/reviewer-1.jpg" alt="" width="36" height="36" loading="lazy">
+                    <img src="../assets/img/reviewers/reviewer-2.jpg" alt="" width="36" height="36" loading="lazy">
+                    <img src="../assets/img/reviewers/reviewer-3.jpg" alt="" width="36" height="36" loading="lazy">
+                  </span>
+                  <span class="hx-rv-text">
+                    <b><span class="hx-rv-star" aria-hidden="true">&#9733;</span> <span id="hx-rv-main">Google reviews</span></b>
+                    <small id="hx-rv-sub">See what bands say</small>
+                  </span>
+                </a>
               </div>
             </div>
 
@@ -118,10 +135,14 @@
         </section>
       </div>
 
+      <!-- How booking works: one slim strip, three steps joined by a line. js/shared/path.js starts the one-time
+           animation when it scrolls into view; css/signal.css styles it. Without the script it is simply shown finished. -->
       <section class="sec hx-how" aria-label="How booking works">
-        <div class="hx-step"><b>1</b><div><h3>Pick a time</h3><p>Choose a room and an open slot. Your hour is held while you book.</p></div></div>
-        <div class="hx-step"><b>2</b><div><h3>Pay 50% by GCash</h3><p>Scan the QR, then upload your screenshot to confirm.</p></div></div>
-        <div class="hx-step"><b>3</b><div><h3>Show up and play</h3><p>Plug in, jam, and pay the balance at the studio.</p></div></div>
+        <ol class="hx-steps" role="list">
+          <li class="hx-st"><span class="hx-num" aria-hidden="true">1</span><h3>Pick a time</h3><span class="hx-ln" aria-hidden="true"><i></i></span></li>
+          <li class="hx-st"><span class="hx-num" aria-hidden="true">2</span><h3>Pay 50% by GCash</h3><span class="hx-ln" aria-hidden="true"><i></i></span></li>
+          <li class="hx-st"><span class="hx-num" aria-hidden="true">3</span><h3>Show up and play</h3></li>
+        </ol>
       </section>
 
       <section class="sec hx-rules" id="before-you-book" aria-labelledby="byb-h">
@@ -606,5 +627,7 @@
   <script src="../js/shared/motion.js" defer></script>
   <script src="../js/shared/datepicker.js" defer></script>
   <script src="../js/shared/flair.js" defer></script>
+  <script src="../js/shared/path.js" defer></script>
+  <script src="../js/shared/rollup.js" defer></script>
 </body>
 </html>

@@ -1,0 +1,126 @@
+/* =====================================================================
+   depth.css - one depth system for the whole site
+   ---------------------------------------------------------------------
+   Loaded LAST on every page, so it only needs to override. Delete this
+   file and its <link> tags to go back to the old look.
+
+   Three levels, nothing else:
+     1  flat      the page itself
+     2  raised    cards and panels inside a page or a modal
+     3  floating  modals, drawers and the QR zoom (solid, light edge, blurred dim layer behind)
+
+   Plus: a soft red glow on the things that matter (the amount due, the
+   chosen payment option, the main button) and tabular numbers for every
+   price so columns line up and digits do not jitter.
+   ===================================================================== */
+
+:root {
+    --r-raised: 12px;            /* every card and panel */
+    --r-float: 16px;             /* every modal and drawer */
+    --edge: #ffffff1f;           /* the thin light border on floating glass */
+    --glass: #17171B;            /* modal body: solid, never see-through */
+    --glass-bar: #131317;        /* header / footer strips inside a modal: solid, so scrolling content never shows through */
+    --glow-soft: #FF2D3638;
+    --glow-mid: #FF2D3661;
+}
+
+/* ---------- 4) tabular numbers everywhere ---------- */
+body {
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 2) raised: one radius, one border colour ---------- */
+.card,
+.co-sum,
+.acct-opt,
+.co-due,
+:is(.checkout, .bk-pay) .gq {
+    border-radius: var(--r-raised);
+}
+
+.card,
+.co-sum,
+.acct-opt,
+:is(.checkout, .bk-pay) .gq {
+    border-color: var(--line);
+}
+
+.co-sum {
+    box-shadow: 0 1px 0 #ffffff08 inset;   /* same top highlight the cards have */
+}
+
+/* ---------- 3) floating: solid modals with a light edge ---------- */
+.dlg,
+dialog.drawer,
+dialog.qr-zoom {
+    background: var(--glass);
+    border: 1px solid var(--edge);
+    box-shadow: 0 30px 80px #000000b0, 0 0 0 1px #00000066, 0 1px 0 #ffffff14 inset;
+}
+
+.dlg,
+dialog.qr-zoom {
+    border-radius: var(--r-float);
+}
+
+dialog.drawer {
+    border-radius: var(--r-float) 0 0 var(--r-float);
+    border-right: 0;
+}
+
+/* the dim layer behind the modal: a little darker and blurred, so the page recedes */
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+
+    .dlg::backdrop,
+    dialog.drawer::backdrop,
+    dialog.qr-zoom::backdrop {
+        background: #0B0B0D8C;
+        -webkit-backdrop-filter: blur(6px);
+        backdrop-filter: blur(6px);
+    }
+}
+
+/* header / footer strips: solid, a shade apart from the body */
+.dlg .co-foot,
+.dlg .bk-foot,
+.dlg .co-head {
+    background: var(--glass-bar);
+}
+
+.dlg .co-head,
+.dlg .co-foot,
+.dlg .bk-foot {
+    border-color: var(--edge);
+}
+
+/* ---------- 1) soft red glow ---------- */
+/* the amount due (checkout, booking, extend) */
+.co-due {
+    border-color: var(--brand-hi);
+    background: #B3202F24;
+    box-shadow: 0 0 0 1px #CF3E4D26, 0 0 26px -6px var(--glow-mid), inset 0 0 22px -8px var(--glow-soft);
+}
+
+/* the chosen payment option */
+:is(.checkout, .bk-pay) .acct-opt:has(input:checked),
+.acct-opt:has(input:checked) {
+    border-color: var(--brand-hi);
+    background: #B3202F24;
+    box-shadow: 0 0 0 1px #CF3E4D26, 0 0 20px -6px var(--glow-mid), inset 0 0 16px -8px var(--glow-soft);
+}
+
+/* the main button: glow appears on hover / keyboard focus */
+.btn.gold {
+    transition: box-shadow .25s ease, background-color .2s ease, border-color .2s ease;
+}
+
+.btn.gold:hover:not(:disabled),
+.btn.gold:focus-visible:not(:disabled) {
+    box-shadow: 0 0 0 1px #FF6B7866, 0 0 22px -2px var(--glow-mid), 0 6px 18px -6px #FF2D3680;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .btn.gold {
+        transition: none;
+    }
+}

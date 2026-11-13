@@ -7,6 +7,7 @@
 import { initAvailability, initCardButtons } from './availability.js';
 import { initContact } from './contact.js';
 import { initInfo } from './info.js';
+import { initReviews } from './reviews.js';
 import { SLIDES, initCarousel } from './carousel.js';
 import { renderEquipment, renderStudioOptions, renderStudios } from './render.js';
 import { initBackToTop } from '../shared/backToTop.js';
@@ -16,6 +17,7 @@ export function initHome() {
     initContact();    // Contact Us section
     initInfo();       // Before you book + FAQ
     initBackToTop();  // floating back-to-top button
+    initReviews();    // Google rating in the review badge
 
     dataReady.then(() => {
         // studio photos, descriptions and rates from the dashboard fill in the slides

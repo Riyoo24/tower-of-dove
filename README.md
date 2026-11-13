@@ -119,6 +119,8 @@ No database changes. Browsers without the Popover API keep the normal date field
 - Images: equipment / studio / admin thumbnails and ID / GCash / inspection photos use `loading="lazy"`, `decoding="async"` and `width` / `height`. The first carousel slide loads right away.
 - Supabase reads go through `js/shared/query.js`: only the columns the site uses, and capped lists (newest 1000 bookings / payments, 1500 rental lines, 300 per customer). If a column is missing in an older database the read repeats once with `select('*')`.
 - Fonts: Bricolage Grotesque is requested only at weight 700 (the only weight used).
+- `path.js` + `css/signal.css`: the "How booking works" strip on the Home tab: round step nodes joined by a line; once, when it scrolls into view, node 1 lights, a red line travels to node 2, and so on to node 3, then it rests (no looping motion; stacks with a vertical line on phones; shown finished with reduced motion or without the script) (markup is in `pages/customer.html`, class `hx-how`).
+- `rollup.js`: totals count up or down to their new peso value. The ids it watches are listed at the top of the file; add an id there to roll another total.
 - Scripts: `flair.js` is only on `index.html`; `datepicker.js` only on the pages with date fields.
 - Optional SQL: `supabase/48_performance_indexes.sql`.
 

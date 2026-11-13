@@ -132,9 +132,15 @@ function renderSummary() {
     box.hidden = !rows;
     // what is paid now, and what is left (shown under the total)
     const dueLbl = full ? 'Pay now (full payment)' : 'Pay now (50% down payment)';
-    due.innerHTML =
-        `<div class="co-due-main"><span>${dueLbl}</span><b>${peso(m.down)}</b></div>` +
-        (full ? '' : `<div class="co-due-rest"><span>Balance to pay ${out ? 'at pick-up' : 'at the studio'}</span><span>${peso(m.balance)}</span></div>`);
+    if (!due.querySelector('#co-due-amt'))   // built once, so the amounts keep the same elements and can roll
+        due.innerHTML =
+            '<div class="co-due-main"><span id="co-due-lbl"></span><b id="co-due-amt"></b></div>' +
+            '<div class="co-due-rest" id="co-due-rest"><span id="co-due-rl"></span><span id="co-due-bal"></span></div>';
+    $('#co-due-lbl').textContent = dueLbl;
+    $('#co-due-amt').textContent = peso(m.down);
+    $('#co-due-rest').hidden = full;
+    $('#co-due-rl').textContent = `Balance to pay ${out ? 'at pick-up' : 'at the studio'}`;
+    $('#co-due-bal').textContent = peso(m.balance);
     due.hidden = false;
     $('#co-foot-lbl').textContent = full ? 'Pay now' : 'Pay now (50%)';
     $('#co-foot-amt').textContent = peso(m.down);
