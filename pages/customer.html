@@ -2,72 +2,306 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>Customer | Tower of Dove Music Studio</title>
   <link rel="icon" type="image/png" href="../assets/img/logo.png">
+  <meta name="theme-color" content="#0B0B0D">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Book a rehearsal room and rent studio gear. Four rooms, open daily 10 AM to 10 PM. No account needed to book.">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/img/favicon-32.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Tower of Dove">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <!-- Link previews (Facebook, Messenger, Viber...): og:image must be a full web address.
+       Replace https://tidings-unreal-gratuity.ngrok-free.dev with the real domain once the site is hosted. -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Tower of Dove Music Studio">
+  <meta property="og:title" content="Tower of Dove Music Studio">
+  <meta property="og:description" content="Book a rehearsal room and rent studio gear. Four rooms, open daily 10 AM to 10 PM. No account needed to book.">
+  <meta property="og:image" content="https://tidings-unreal-gratuity.ngrok-free.dev/assets/img/og-cover.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Tower of Dove Music Studio">
+  <meta name="twitter:card" content="summary_large_image">
+  <script src="../js/shared/themeInit.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <!-- Stylesheets: shared first, then this page's own file -->
   <link rel="stylesheet" href="../css/base.css">
   <link rel="stylesheet" href="../css/components.css">
   <link rel="stylesheet" href="../css/layout.css">
   <link rel="stylesheet" href="../css/modals.css">
+  <link rel="stylesheet" href="../css/home.css">
   <link rel="stylesheet" href="../css/customer.css">
+  <link rel="stylesheet" href="../css/motion.css">
+  <link rel="stylesheet" href="../css/refresh.css">
+  <link rel="stylesheet" href="../css/mobile.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/print.css" media="print">
+  <script src="../js/shared/modalTop.js"></script>
 </head>
-<body data-active="book">
+<body data-active="home">
 
-  <!-- The sidebar and mobile bar are injected by shared.js -->
+  <!-- The top navigation bar is injected by layout.js -->
   <main class="page" id="customer">
+
+    <!-- ============ Home + Contact Us (they are tabs of this page, so nothing reloads when you move between tabs) ============ -->
+    <div id="home" class="pg on">
+      <!-- First screen: hero + availability results + carousel fill the window; "Our rooms" starts below the fold -->
+      <div class="fold">
+        <section class="hero hx">
+          <div class="hx-art" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="hi1 hx-grid">
+            <div class="hx-copy">
+              <span class="hx-pill"><i></i> Open daily &middot; 10 AM &ndash; 10 PM</span>
+              <h1>Book a room.<br><span class="hl">Plug in. Play.</span></h1>
+              <p>Four rehearsal rooms and studio-owned gear to rent. No account needed to book, and you can log in any time to see your bookings.</p>
+              <div class="hx-cta">
+                <button type="button" class="btn gold lg" data-route="book">Book a studio</button>
+                <button type="button" class="btn line lg" data-route="rent">Rent gear</button>
+              </div>
+            </div>
+
+            <!-- Quick availability check (ids used by js/home/availability.js) -->
+            <div class="hx-card">
+              <h3 aria-level="2">Check a time</h3>
+              <div><label for="qs">Studio</label><select id="qs"></select></div>
+              <div class="hx-two">
+                <div><label for="qd">Date</label><input id="qd" type="date" data-today-label></div>
+                <div>
+                  <label for="qt">Start time</label>
+                  <select id="qt">
+                    <option>10:00 AM</option>
+                    <option>12:00 PM</option>
+                    <option selected>3:00 PM</option>
+                    <option>6:00 PM</option>
+                    <option>8:00 PM</option>
+                  </select>
+                </div>
+              </div>
+              <button class="btn gold lg" id="qb-check">Check availability</button>
+              <small>No account needed. Your hours are held while you book.</small>
+            </div>
+          </div>
+        </section>
+        <section class="avail" id="avail" hidden aria-live="polite"></section>
+
+        <!-- Showcase carousel (slides are built in js/home/carousel.js; photos come from the studio dashboard) -->
+        <section class="slider-container" aria-roledescription="carousel" aria-label="Studio showcase">
+          <div class="sc-head">
+            <div>
+              <span class="sc-eyebrow">Inside the studio</span>
+              <h2>Find your room</h2>
+              <p class="sub">Swipe through our rooms and gear, then book the one that fits your band.</p>
+            </div>
+            <div class="sc-arrows">
+              <button type="button" id="sprev" aria-label="Previous slide">&#8249;</button>
+              <button type="button" id="snext" aria-label="Next slide">&#8250;</button>
+            </div>
+          </div>
+          <div class="slider-wrapper" id="sw">
+            <div class="slider" id="slider" tabindex="0" aria-live="off"></div>
+          </div>
+          <div class="sc-foot">
+            <div class="slider-nav" id="sdots"></div>
+            <span class="sc-count" id="scount" aria-hidden="true"></span>
+          </div>
+        </section>
+      </div>
+
+      <section class="sec hx-how" aria-label="How booking works">
+        <div class="hx-step"><b>1</b><div><h3>Pick a time</h3><p>Choose a room and an open slot. Your hour is held while you book.</p></div></div>
+        <div class="hx-step"><b>2</b><div><h3>Pay 50% by GCash</h3><p>Scan the QR, then upload your screenshot to confirm.</p></div></div>
+        <div class="hx-step"><b>3</b><div><h3>Show up and play</h3><p>Plug in, jam, and pay the balance at the studio.</p></div></div>
+      </section>
+
+      <section class="sec hx-rules" id="before-you-book" aria-labelledby="byb-h">
+        <h2 id="byb-h">Before you book</h2>
+        <p class="sub">Four things worth knowing, so nothing surprises you at the door.</p>
+        <ul class="byb-list" id="byb-list"></ul>
+      </section>
+
+      <section class="sec" id="studios">
+        <span class="eyebrow">The rooms</span>
+        <h2>Our rooms</h2>
+        <p class="sub">Pick a room, then choose a date and time.</p>
+        <div class="grid g4" id="studio-grid"></div>
+      </section>
+
+
+      <section class="sec" id="equipment">
+        <span class="eyebrow">The gear</span>
+        <h2>Equipment to rent</h2>
+        <p class="sub">Add gear to a studio booking, or rent it to take outside the studio.</p>
+        <div class="grid g4" id="equipment-grid"></div>
+        <div class="more-wrap" id="equipment-more" hidden>
+          <p class="more-note" id="equipment-more-note"></p>
+          <button type="button" class="btn gold lg more-btn" data-route="rent">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>
+            <span>View more equipment</span>
+            <svg class="more-arrow" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </button>
+        </div>
+      </section>
+
+      <section class="sec hx-faq" id="faq" aria-labelledby="faq-h">
+        <div class="faq-side">
+          <h2 id="faq-h">Questions people ask</h2>
+          <p class="sub">Can&rsquo;t find your answer? Reach the studio directly.</p>
+          <div class="faq-help" id="faq-help"></div>
+        </div>
+        <div class="faq-list" id="faq-list"></div>
+      </section>
+
+      <section class="sec cta-band" aria-label="Book now">
+        <div class="cta-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="cta-copy">
+          <span class="eyebrow">Ready when you are</span>
+          <h2>Your next rehearsal starts here.</h2>
+          <p>Pick a room, choose a time, and hold your slot in minutes. No account needed.</p>
+        </div>
+        <div class="cta-btns">
+          <button type="button" class="btn gold lg" data-route="book">Book a studio</button>
+          <button type="button" class="btn line lg" data-route="rent">Browse gear</button>
+        </div>
+      </section>
+
+      <section class="sec" id="contact">
+        <div class="card ct-card">
+          <header class="ct-head">
+            <span class="eyebrow">We're here to help</span>
+            <h2 class="ct-title">Contact Us</h2>
+            <p class="sub ct-sub">Questions about a booking or rental? Reach out any time.</p>
+          </header>
+
+          <div class="ct-layout">
+            <div class="ct-info">
+              <div class="ct-group">
+                <h3>Get in Touch</h3>
+                <ul class="ct-list" id="ct-touch"></ul>
+              </div>
+              <div class="ct-group">
+                <h3>Follow Us On</h3>
+                <ul class="ct-list ct-two" id="ct-follow"></ul>
+              </div>
+              <div class="ct-group">
+                <h3>Visit Us</h3>
+                <ul class="ct-list" id="ct-visit"></ul>
+              </div>
+            </div>
+
+            <div class="ct-mapcol">
+              <div class="ct-maptools">
+                <div class="ct-seg" role="group" aria-label="Map type">
+                  <button type="button" class="on" data-ct-map="m" aria-pressed="true">Map</button>
+                  <button type="button" data-ct-map="k" aria-pressed="false">Satellite</button>
+                </div>
+                <a class="btn gold sm" id="ct-dir" target="_blank" rel="noopener noreferrer">Get directions</a>
+              </div>
+              <div class="ct-map" id="ct-map"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
     <div class="wrap">
 
       <!-- ============ Book a studio ============ -->
-      <section id="c-book" class="pg on">
-        <h1>Book a studio</h1>
-        <p class="sub">Pick a room and check the calendar for occupied times. Your slot is held while you fill in the form and released after 2 minutes of inactivity.</p>
+      <section id="c-book" class="pg">
+        <header class="pghead">
+          <div>
+            <span class="eyebrow">Rehearsal rooms</span>
+            <h1>Book a studio</h1>
+            <p class="sub">Pick a room and check the calendar for occupied times. Your slot is held while you fill in the form and released after 2 minutes of inactivity.</p>
+          </div>
+          <div class="pg-chips" aria-hidden="true"><span>Open daily 10 AM &ndash; 10 PM</span><span>50% GCash down payment</span></div>
+        </header>
+        <div class="blockbar-slot"></div>
 
         <div class="grid ge" id="cs"></div>
 
-        <div class="card" style="margin-top:16px">
-          <div class="row">
-            <button class="btn sm line" id="cal-p" aria-label="Previous month">&lsaquo;</button>
-            <h3 id="cal-t"></h3>
-            <button class="btn sm line" id="cal-n" aria-label="Next month">&rsaquo;</button>
+        <div class="quick" id="bk-quick" role="group" aria-label="Quick date picks"></div>
+
+        <div class="card cal-card">
+          <!-- Phones only: switch room right at the calendar (sticks under the top bar while the calendar is on screen) -->
+          <div class="cal-rooms" id="cal-rooms" role="group" aria-label="Choose a studio"></div>
+          <div class="cal-main">
+            <div class="cal-head">
+              <button class="btn line cal-nav" id="cal-p" aria-label="Previous month">&lsaquo;</button>
+              <h3 id="cal-t"></h3>
+              <button class="btn line cal-nav" id="cal-n" aria-label="Next month">&rsaquo;</button>
+            </div>
+            <div class="cal" id="cal"></div>
+            <ul class="cal-legend" aria-label="Calendar key">
+              <li><i class="lg-sel"></i>Selected</li>
+              <li><i class="lg-part"></i>Partly booked</li>
+              <li><i class="lg-full"></i>Fully booked</li>
+            </ul>
           </div>
-          <div class="cal" id="cal" style="margin-top:10px"></div>
-          <p class="mut" style="margin-top:10px">Shaded days have occupied hours (shown under the date). Red days are fully booked.</p>
-          <div id="dayocc" style="margin-top:10px"></div>
+          <aside class="cal-side">
+            <span class="cal-eyebrow">Your selected day</span>
+            <h3 class="cal-date" id="cal-date"></h3>
+            <div id="dayocc"></div>
+            <div id="bk-est" class="est"></div>
+            <p class="mut cal-hint">Choose a date on the calendar, then continue to pick your start time and session length.</p>
+            <button class="btn gold lg full" id="bk-now">Book Now &rarr;</button>
+          </aside>
         </div>
 
-        <div class="row" style="margin-top:16px;justify-content:flex-end">
-          <button class="btn gold lg" id="bk-now">Book Now</button>
+        <!-- Phones only: stays at the bottom while the customer scrolls the studios and the calendar -->
+        <div class="stickybar" id="bk-sticky" role="region" aria-label="Selected studio">
+          <div class="sb-info">
+            <span class="sb-main" id="sb-studio">Studio</span>
+            <span class="sb-sub" id="sb-sub"></span>
+          </div>
+          <button type="button" class="btn gold" id="bk-now-m">Book now</button>
         </div>
       </section>
 
       <!-- ============ Rent equipment ============ -->
       <section id="c-rent" class="pg">
-        <h1>Rent equipment</h1>
-        <p class="sub">Add gear to a studio you booked, or rent it to take outside the studio.</p>
+        <header class="pghead">
+          <div>
+            <span class="eyebrow">Gear</span>
+            <h1>Rent equipment</h1>
+            <p class="sub">Add gear to a studio you booked, or rent it to take outside the studio.</p>
+          </div>
+          <div class="pg-chips" aria-hidden="true"><span>Add-on to a booking</span><span>Or take it outside</span></div>
+        </header>
+        <div class="blockbar-slot"></div>
 
         <div class="grid g2">
           <div>
+            <!-- Phones only: the same switch as "How will you use it?" in the Rental summary, shown at the top of the list (not sticky) -->
+            <div class="rm-top" id="rm-top-wrap">
+              <p class="rm-top-lbl" id="rm-top-lbl">How will you use it?</p>
+              <div class="seg" id="rm-top" role="group" aria-labelledby="rm-top-lbl">
+                <button type="button" class="on" data-m="addon" aria-pressed="true">Studio add-on</button>
+                <button type="button" data-m="out" aria-pressed="false">Outside rent</button>
+              </div>
+              <p class="rm-top-note" id="rm-top-note" role="note" hidden>Outside rental is for registered customers. <a href="login.html#login" data-route="login">Log in</a> or <a href="login.html#register" data-route="register">register</a> to use it.</p>
+            </div>
+            <div id="eq-toolbar"></div>
             <div class="tabs" id="eq-cats" style="margin-bottom:14px"></div>
-            <div class="grid ge" id="eq" style="align-items:start"></div>
+            <p class="mut" id="eq-note" style="margin:-4px 0 14px" role="status"></p>
+            <div id="eq-sugg"></div>
+            <div class="grid ge" id="eq"></div>
           </div>
 
-          <aside class="card">
+          <aside class="card rsum-card">
             <h2>Rental summary</h2>
-            <label style="margin-top:0">How will you use it?</label>
+            <label class="rs-lbl">How will you use it?</label>
             <div class="seg" id="rm">
               <button class="on" data-m="addon">Add-on to my studio booking</button>
               <button data-m="out">Outside rent</button>
             </div>
-            <p class="mut" id="rmh"></p>
-            <div id="bundle-tag-wrap"></div>
-            <ul class="list" id="cart" style="margin-top:8px"></ul>
-            <div class="tot"><span>Total</span><span id="ctt">₱0</span></div>
-            <div class="bkt" id="rsum" hidden></div>
-
+            <div class="alert" id="rm-guest" role="note" hidden><b>Guests can't book an outside rental.</b> Please <a href="login.html#register">register</a> or <a href="login.html#login" data-route="login">log in</a> first. Guests can still add equipment to a studio booking using "Add-on to my studio booking".</div>
+            <!-- Which booking the equipment is added to: chosen here on the page, not inside the checkout pop-up -->
             <div id="fa">
               <div id="fa-member">
                 <label for="lb">Attach to booking</label>
@@ -81,18 +315,157 @@
                 </div>
                 <p class="mut" id="lb-info" style="margin-top:6px">Enter the reference code from your booking confirmation. The equipment is added to that booking and its total is updated.</p>
               </div>
-              <div id="apay">
-                <div id="apay-opt"></div>
-                <div class="gq">
-                  <img id="aq-img" alt="GCash QR code to scan" hidden>
-                  <p class="mut" id="aq-note">Scan this QR code with GCash and pay the <span id="aq-kind">down payment</span> of <b id="aq-amt"></b>. Then enter the reference number from your GCash receipt below.</p>
-                </div>
-                <div id="ag-proof"></div>
-                <label for="ag" id="ag-l">GCash reference number (down payment) <span class="req" aria-hidden="true">*</span></label>
-                <input id="ag" placeholder="13-digit reference" inputmode="numeric" autocomplete="off">
-              </div>
             </div>
+            <div id="rs-when" hidden>
+              <p class="rs-when-h">When do you need it?</p>
+              <div class="fg2">
+                <div><label for="pd">Pick-up date</label><input id="pd" type="date"></div>
+                <div><label for="pt">Pick-up time</label><select id="pt"></select></div>
+              </div>
+              <div class="fg2">
+                <div><label for="rd">Return date</label><input id="rd" type="date"></div>
+                <div><label for="rt">Return time</label><select id="rt"></select></div>
+              </div>
+              <p class="mut" id="rdur" style="margin-top:6px"></p>
+              <p class="mut" style="margin-top:4px">The equipment list shows how many of each item are free from your pick-up to your return time.</p>
+            </div>
+            <div id="bundle-tag-wrap"></div>
+            <ul class="list" id="cart"></ul>
+            <div class="tot"><span>Total</span><span id="ctt">₱0</span></div>
+            <button class="btn gold full" id="rco" type="button">Proceed to Checkout</button>
+          </aside>
+        </div>
+      
+        <!-- Phones only: cart total + checkout stay in view while the customer scrolls the equipment list -->
+        <div class="stickybar" id="rent-sticky" role="region" aria-label="Rental total" hidden>
+          <div class="sb-info">
+            <span class="sb-main" id="rs-total">&#8369;0</span>
+            <span class="sb-sub" id="rs-count"></span>
+          </div>
+          <button type="button" class="btn gold" id="rco-m">Checkout</button>
+        </div>
+</section>
 
+      <!-- ============ My bookings ============ -->
+      <section id="c-bk" class="pg">
+        <header class="pghead">
+          <div>
+            <span class="eyebrow">Your sessions</span>
+            <h1>My bookings</h1>
+            <p class="sub">Changes and cancellations close 24 hours before your session.</p>
+          </div>
+          <div class="pg-chips" aria-hidden="true"><span>Changes close 24 h before</span></div>
+        </header>
+        <!-- Signed in: the customer's own bookings -->
+        <div class="card" id="bk-member"><div class="tw" id="mybk"></div></div>
+
+        <!-- Guest: reference code only -->
+        <div class="lk-row">
+        <div class="card lookup" id="bk-guest" hidden>
+          <div class="lk-grid">
+            <div class="lk-intro">
+              <div class="lk-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+              <span class="lk-ico"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9a2 2 0 0 0 0 6v3a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-3a2 2 0 0 1 0-6V6a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1z"/><path d="M14 5v3M14 11v2M14 16v3"/></svg></span>
+              <h2>Find your booking</h2>
+              <p>No account needed. Enter the reference code from your confirmation to see your session details.</p>
+              <ul class="lk-tips">
+                <li>Codes look like <b>TOD-9F3A21C7</b></li>
+                <li>Changes and cancellations close 24 hours before</li>
+              </ul>
+            </div>
+            <div class="lk-main">
+              <form id="gb-form">
+                <label for="gb-ref">Reference code</label>
+                <div class="lk-field">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                  <input id="gb-ref" placeholder="e.g. TOD-9F3A21C7" autocomplete="off" required>
+                </div>
+                <button class="btn gold full" type="submit">Find booking</button>
+              </form>
+              <p class="lk-help">Lost your code? Email <a href="mailto:Dovepangilinan@gmail.com">Dovepangilinan@gmail.com</a>. <a href="login.html#login" data-route="login">Log in</a> to see all your bookings.</p>
+            </div>
+          </div>
+          <div class="res" id="gb-res" hidden aria-live="polite"></div>
+        </div>
+          <aside class="lk-side" aria-label="How it works">
+            <h3 class="lk-side-h">How it works</h3>
+            <ol>
+            <li><b>1</b><div><h3>Enter your code</h3><p>It is on your booking confirmation and starts with TOD-.</p></div></li>
+            <li><b>2</b><div><h3>Check the details</h3><p>Studio, date, time, add-ons and what is left to pay.</p></div></li>
+            <li><b>3</b><div><h3>Show up and play</h3><p>Pay any balance at the studio when you arrive.</p></div></li>
+            </ol>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ============ My rental ============ -->
+      <section id="c-rental" class="pg">
+        <header class="pghead">
+          <div>
+            <span class="eyebrow">Your gear</span>
+            <h1>My rental</h1>
+            <p class="sub">Your outside rentals. Equipment added to a studio booking is listed under that booking in My bookings. Guests: enter the reference code from your confirmation.</p>
+          </div>
+          <div class="pg-chips" aria-hidden="true"><span>Outside rentals &amp; damage fees</span></div>
+        </header>
+        <div class="card" id="rt-member"><div class="tw" id="myrent"></div></div>
+
+        <div class="lk-row">
+        <div class="card lookup" id="rt-guest" hidden>
+          <div class="lk-grid">
+            <div class="lk-intro">
+              <div class="lk-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+              <span class="lk-ico"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></span>
+              <h2>Find your rental</h2>
+              <p>No account needed. Enter your reference code to see your gear, return time and status.</p>
+              <ul class="lk-tips">
+                <li>Outside rentals use an <b>OUT-</b> code, like OUT-5B07E1AA</li>
+                <li>Add-ons use your studio booking code</li>
+              </ul>
+            </div>
+            <div class="lk-main">
+              <form id="gr-form">
+                <label for="gr-ref">Reference code</label>
+                <div class="lk-field">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                  <input id="gr-ref" placeholder="e.g. OUT-5B07E1AA" autocomplete="off" required>
+                </div>
+                <button class="btn gold full" type="submit">Find rental</button>
+              </form>
+              <p class="lk-help">Guest access, no account needed. <a href="login.html#login" data-route="login">Log in</a> to see all your rentals.</p>
+            </div>
+          </div>
+          <div class="res" id="gr-res" hidden aria-live="polite"></div>
+        </div>
+          <aside class="lk-side" aria-label="How it works">
+            <h3 class="lk-side-h">How it works</h3>
+            <ol>
+            <li><b>1</b><div><h3>Enter your code</h3><p>Outside rentals start with OUT-. Add-ons use your studio booking code.</p></div></li>
+            <li><b>2</b><div><h3>Check your gear</h3><p>See your items, return time and current status.</p></div></li>
+            <li><b>3</b><div><h3>Return on time</h3><p>Bring the equipment back by the return time shown.</p></div></li>
+            </ol>
+          </aside>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+
+  <!-- ============ Rental checkout (wide modal over the main content area) ============ -->
+  <dialog class="dlg checkout" id="rcdlg" aria-labelledby="co-title">
+    <div class="co-head">
+      <div class="co-head-txt">
+        <h2 id="co-title" tabindex="-1">Checkout</h2>
+        <p class="mut" id="rmh"></p>
+      </div>
+      <div class="holdtimer" id="co-hold" role="timer" aria-live="off" hidden></div>
+      <button type="button" class="co-x" id="co-close" aria-label="Close checkout">&times;</button>
+    </div>
+    <div class="co-err" id="co-err" role="alert" hidden></div>
+    <div class="co-body">
+      <section class="co-col co-col-details" aria-label="Customer details">
+        <h3 class="co-h">Customer details</h3>
             <div id="fo" hidden>
               <div class="alert" id="fo-guest" hidden>Renting equipment to take outside the studio is for registered customers only. <a href="login.html#login" data-route="login">Log in</a> or <a href="login.html#register">create an account</a> to continue. Guests can still add equipment to a studio booking.</div>
 
@@ -103,19 +476,11 @@
                   <div><label for="on-ln">Last name <span class="req" aria-hidden="true">*</span></label><input id="on-ln" data-letters autocomplete="family-name" required aria-required="true"></div>
                 </div>
                 <label for="oc">Contact number <span class="req" aria-hidden="true">*</span></label>
-                <input id="oc" type="tel" placeholder="09XX XXX XXXX" autocomplete="tel" required aria-required="true">
+                <input id="oc" type="tel" data-phone inputmode="tel" maxlength="15" placeholder="e.g. 0917 123 4567" autocomplete="tel" required aria-required="true">
                 <label for="sm-link">Backup contact number <span class="req" aria-hidden="true">*</span></label>
-                <input id="sm-link" type="tel" placeholder="09XX XXX XXXX" required aria-required="true">
+                <input id="sm-link" type="tel" data-phone inputmode="tel" maxlength="15" placeholder="e.g. 0917 123 4567" required aria-required="true">
 
-                <div class="fg2">
-                  <div><label for="pd">Pick-up date <span class="req" aria-hidden="true">*</span></label><input id="pd" type="date"></div>
-                  <div><label for="pt">Pick-up time <span class="req" aria-hidden="true">*</span></label><select id="pt"></select></div>
-                </div>
-                <div class="fg2">
-                  <div><label for="rd">Return date <span class="req" aria-hidden="true">*</span></label><input id="rd" type="date"></div>
-                  <div><label for="rt">Return time <span class="req" aria-hidden="true">*</span></label><select id="rt"></select></div>
-                </div>
-                <p class="mut" id="rdur" style="margin-top:6px"></p>
+                <div class="when-sum" id="co-when" aria-live="polite"></div>
                 <div class="policy"><b>How outside rental time works</b>
                   <ul>
                     <li>The price covers <b>up to 8 hours</b> of use from your pick-up time. Use it the full 8 hours (for example 10:00 AM to 6:00 PM) at no extra charge.</li>
@@ -125,89 +490,105 @@
                   </ul>
                 </div>
 
-                <label for="vt">ID type <span class="req" aria-hidden="true">*</span></label>
-                <select id="vt">
-                  <option>Driver's license</option>
-                  <option>Passport</option>
-                  <option>UMID</option>
-                  <option>National ID (PhilSys)</option>
-                  <option>Postal ID</option>
-                  <option>School ID</option>
-                </select>
-                <label for="vf">Attach valid ID <span class="req" aria-hidden="true">*</span></label>
-                <input id="vf" type="file" accept="image/*,.pdf" required aria-required="true">
-                <p class="mut" style="margin-top:4px">Required for outside rentals. Upload a clear photo or PDF of the front of your ID (JPG, PNG or PDF).</p>
-                <div class="idprev" id="vf-prev" hidden>
-                  <img id="vf-img" alt="Preview of your valid ID" hidden>
-                  <div class="pdfic" id="vf-pdf" hidden>PDF</div>
-                  <span class="nm" id="vf-name"></span>
-                  <button type="button" class="btn line sm" id="vf-view">View ID</button>
-                  <button type="button" class="btn line sm" id="vf-clear">Remove</button>
-                </div>
+              </div>
+            </div>
+        <div id="fo-id" hidden>
+          <h3 class="co-h" style="margin-top:0">Valid ID</h3>
+          <label for="vt">ID type <span class="req" aria-hidden="true">*</span></label>
+          <select id="vt">
+            <option>Driver's license</option>
+            <option>Passport</option>
+            <option>UMID</option>
+            <option>National ID (PhilSys)</option>
+            <option>Postal ID</option>
+            <option>School ID</option>
+          </select>
+          <label for="vf">Attach valid ID <span class="req" aria-hidden="true">*</span></label>
+          <input id="vf" type="file" accept="image/*,.pdf" required aria-required="true">
+          <p class="mut" style="margin-top:4px">Required for outside rentals. Upload a clear photo or PDF of the front of your ID (JPG, PNG or PDF).</p>
+          <div class="idprev" id="vf-prev" hidden>
+            <img id="vf-img" alt="Preview of your valid ID" hidden>
+            <div class="pdfic" id="vf-pdf" hidden>PDF</div>
+            <span class="nm" id="vf-name"></span>
+            <button type="button" class="btn line sm" id="vf-view">View ID</button>
+            <button type="button" class="btn line sm" id="vf-clear">Remove</button>
+          </div>
 
+        </div>
+
+      </section>
+
+      <section class="co-col co-col-sum" aria-label="Order summary">
+        <h3 class="co-h">Order summary</h3>
+        <div class="co-sum">
+          <ul class="list" id="co-items"></ul>
+          <div class="bkt" id="rsum" hidden></div>
+          <div class="tot"><span>Total</span><span id="co-total">₱0</span></div>
+          <div class="co-due" id="co-due" hidden></div>
+        </div>
+
+      </section>
+
+      <section class="co-col co-col-pay" aria-label="Payment">
+        <h3 class="co-h">Payment</h3>
+        <div id="apay">
+          <div class="pay-step">
+            <p class="step-t"><span class="step-n" aria-hidden="true">1</span>Choose how much to pay now</p>
+            <div id="apay-opt"></div>
+          </div>
+          <div class="pay-step">
+            <p class="step-t"><span class="step-n" aria-hidden="true">2</span>Scan and pay with GCash</p>
+            <div class="gq">
+              <img id="aq-img" alt="GCash QR code to scan" hidden>
+              <p class="mut" id="aq-note">Scan this QR code with GCash and pay the <span id="aq-kind">down payment</span> of <b id="aq-amt"></b>. Then enter the reference number from your GCash receipt below.</p>
+            </div>
+          </div>
+          <div class="pay-step">
+            <p class="step-t"><span class="step-n" aria-hidden="true">3</span>Confirm your payment</p>
+            <div id="ag-proof"></div>
+            <label for="ag" id="ag-l">GCash reference number (down payment) <span class="req" aria-hidden="true">*</span></label>
+            <input id="ag" data-gcash-ref placeholder="13-digit reference" inputmode="numeric" autocomplete="off">
+          </div>
+        </div>
+        <div id="opay-wrap" hidden>
                 <div id="opay">
-                  <div id="opay-opt"></div>
-                  <div class="gq">
-                    <img id="oq-img" alt="GCash QR code to scan" hidden>
-                    <p class="mut" id="oq-note">Scan this QR code with GCash and pay the <span id="oq-kind">down payment</span> of <b id="oq-amt"></b>. Then enter the reference number from your GCash receipt below.</p>
+                  <div class="pay-step">
+                    <p class="step-t"><span class="step-n" aria-hidden="true">1</span>Choose how much to pay now</p>
+                    <div id="opay-opt"></div>
                   </div>
-                  <div id="og-proof"></div>
-                  <label for="og" id="og-l">GCash reference number (down payment) <span class="req" aria-hidden="true">*</span></label>
-                  <input id="og" placeholder="13-digit reference" inputmode="numeric" autocomplete="off" required aria-required="true">
+                  <div class="pay-step">
+                    <p class="step-t"><span class="step-n" aria-hidden="true">2</span>Scan and pay with GCash</p>
+                    <div class="gq">
+                      <img id="oq-img" alt="GCash QR code to scan" hidden>
+                      <p class="mut" id="oq-note">Scan this QR code with GCash and pay the <span id="oq-kind">down payment</span> of <b id="oq-amt"></b>. Then enter the reference number from your GCash receipt below.</p>
+                    </div>
+                  </div>
+                  <div class="pay-step">
+                    <p class="step-t"><span class="step-n" aria-hidden="true">3</span>Confirm your payment</p>
+                    <div id="og-proof"></div>
+                    <label for="og" id="og-l">GCash reference number (down payment) <span class="req" aria-hidden="true">*</span></label>
+                    <input id="og" data-gcash-ref placeholder="13-digit reference" inputmode="numeric" autocomplete="off" required aria-required="true">
+                  </div>
                 </div>
 
                 <label class="terms" id="or-terms">
                   <input type="checkbox" id="or-agree">
                   <span id="or-agreetxt">I understand and agree that: the <b>50% down payment is non-refundable</b> if I cancel this rental; the price covers <b>up to 8 hours</b> and returning earlier does not lower it; renting for <b>more than 8 hours</b> adds one-eighth of the item's price for every extra hour; and returning the equipment <b>late</b> (after the full 8-hour window) adds the same one-eighth charge for every hour it is late, which I pay at the studio when I return it.</span>
                 </label>
-              </div>
-            </div>
-
-            <button class="btn gold full" id="rq">Request rental</button>
-          </aside>
         </div>
       </section>
-
-      <!-- ============ My bookings ============ -->
-      <section id="c-bk" class="pg">
-        <h1>My bookings</h1>
-        <p class="sub">Changes and cancellations close 24 hours before your session.</p>
-        <!-- Signed in: the customer's own bookings -->
-        <div class="card" id="bk-member"><div class="tw" id="mybk"></div></div>
-
-        <!-- Guest: reference code only -->
-        <div class="card lookup" id="bk-guest" hidden>
-          <form id="gb-form">
-            <label for="gb-ref" style="margin-top:0">Reference code</label>
-            <input id="gb-ref" placeholder="Enter your reference code, e.g. TOD-9F3A21C7" autocomplete="off" required>
-            <button class="btn gold full" type="submit">Find booking</button>
-          </form>
-          <div class="res" id="gb-res" hidden aria-live="polite"></div>
-          <p class="mut" style="margin-top:14px">Guest access, no account needed. Lost your code? Email Dovepangilinan@gmail.com. <a href="login.html#login" data-route="login">Log in</a> to see all your bookings.</p>
-        </div>
-      </section>
-
-      <!-- ============ My rental ============ -->
-      <section id="c-rental" class="pg">
-        <h1>My rental</h1>
-        <p class="sub">Your outside rentals. Equipment added to a studio booking is listed under that booking in My bookings. Guests: enter the reference code from your confirmation.</p>
-        <div class="card" id="rt-member"><div class="tw" id="myrent"></div></div>
-
-        <div class="card lookup" id="rt-guest" hidden style="max-width:720px">
-          <form id="gr-form">
-            <label for="gr-ref" style="margin-top:0">Reference code</label>
-            <input id="gr-ref" placeholder="Enter your reference code, e.g. OUT-5B07E1AA" autocomplete="off" required>
-            <button class="btn gold full" type="submit">Find rental</button>
-          </form>
-          <div class="res" id="gr-res" hidden aria-live="polite"></div>
-          <p class="mut" style="margin-top:14px">Guest access, no account needed. Add-ons use your booking reference; outside rentals use an OUT- reference.</p>
-        </div>
-      </section>
-
     </div>
-  </main>
+    <div class="co-foot">
+      <div class="co-foot-due bk-foot-sum" id="co-foot-due" hidden>
+        <div class="ft-tot"><span>Total</span><b id="co-foot-tot">₱0</b></div>
+        <div class="ft-due"><span id="co-foot-lbl">Due now</span><b id="co-foot-amt">₱0</b></div>
+      </div>
+      <button type="button" class="btn line" id="co-cancel">Back to equipment</button>
+      <button class="btn gold" id="rq" type="button">Request rental</button>
+    </div>
+  </dialog>
 
-  <dialog class="dlg" id="bkdlg" aria-label="Booking form"></dialog>
+  <dialog class="dlg bookwide" id="bkdlg" aria-label="Booking form"></dialog>
   <dialog class="dlg" id="dlg" aria-label="Details"></dialog>
   <dialog class="dlg" id="okdlg" aria-label="Success"></dialog>
   <dialog class="dlg wide" id="eqdlg" aria-label="Add equipment"></dialog>
@@ -215,6 +596,10 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
   <!-- All site code is ES modules; this one entry file imports the rest -->
+  <script src="../js/shared/skeleton.js"></script>
   <script src="../js/shared/boot.js" data-entry="../js/customer/index.js"></script>
+  <script src="../js/shared/motion.js" defer></script>
+  <script src="../js/shared/datepicker.js" defer></script>
+  <script src="../js/shared/flair.js" defer></script>
 </body>
 </html>

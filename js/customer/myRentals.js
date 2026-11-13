@@ -6,11 +6,19 @@
 import { state } from './state.js';
 import { sb } from '../config/supabaseClient.js';
 import { RN_STATUS, loadMyRentals } from './data.js';
+import { PHOTO_BUCKET } from '../shared/inspectionPhoto.js';
 import { normRef, notFound, startsAt } from './myBookings.js';
 import { fmtDT } from './rent.js';
 import { okDlg } from './book.js';
+import { loadDamageBlock, onPayDamage } from './damageBlock.js';
+import { awaitingStudio, offersFor, openSwapChoice } from './swapChoice.js';
 import { closeActionMenu, openActionMenu } from '../shared/actionMenu.js';
-import { dlg, showDialog, showIdViewer, showSuccess, tableGrouped, tableNotes, whyRejected } from './ui.js';
+import { emptyState } from '../shared/emptyState.js';
+import { askConfirm, dlg, showDialog, showIdViewer, showSuccess, tableGrouped, tableNotes, whyRejected } from './ui.js';
+import { gcashQrUrl } from '../shared/catalog.js';
+import { gcashProofHtml, initGcashProof, uploadGcashProof } from '../shared/gcashProof.js';
+import { applyChecks, check, liveCheck } from '../shared/fieldCheck.js';
+import { btnBusy, btnReset, btnSuccess } from '../shared/btnState.js';
 import { BOOKINGS } from '../shared/availability.js';
 import { getUser } from '../shared/session.js';
 import { $, badge, esc, manilaParts, peso, shortDate, sum, toast } from '../shared/utils.js';
@@ -123,8 +131,15 @@ const rentalMenuBtn = ref => `<button type="button" class="btn sm line menu-btn"
 
 function rentalMenuItems(o) {
     const items = [{ act: 'details', label: 'Details' }];
+    if (o.type === 'out' && damageOwed(o.rentalRef) > 0)
+        items.unshift({ act: 'paydamage', label: `Pay damage fee (${peso(damageOwed(o.rentalRef))})` });
+    if (o.type === 'out' && lateOwed(o.rentalRef) > 0)
+        items.unshift({ act: 'paylate', label: `Pay late fee (${peso(lateOwed(o.rentalRef))})` });
     if (o.type === 'out')
         items.push({ act: 'viewid', label: 'View ID' });
+    const offer = offersFor(o.rentalRef)[0];
+    if (offer)
+        items.unshift({ act: 'choose', label: 'Choose replacement item' });   // staff offered other items instead of the one booked
     if (['Pending', 'Approved'].includes(o.rawStatus))
         items.push({ act: 'cancel', label: o.type === 'out' ? 'Cancel rental' : 'Cancel add-on', danger: true });
     return items;
@@ -135,11 +150,50 @@ function runRentalAction(action, rentalRef) {
         return showRentalDetails(rentalRef);
     if (action === 'viewid')
         return viewRentalId(rentalRef);
+    if (action === 'paydamage')
+        return startDamagePay(rentalRef);
+    if (action === 'paylate')
+        return startLatePay(rentalRef);
+    if (action === 'choose')
+        return openSwapChoice((offersFor(rentalRef)[0] || {}).id);
     startCancelRental(rentalRef);
 }
 
 /* Which "Past and closed" groups are open (closed by default; the button in the group row toggles it). */
 export const pastOpen = { bk: false, rn: false };
+
+/* ---- Damage fees (money the customer owes after a return; supabase/58_damage_charges.sql) ---- */
+export const damageOf = ref => state.DAMAGE[ref] || [];
+const damageSum = (ref, statuses) => sum(damageOf(ref).filter(d => statuses.includes(d.status)).map(d => d.amount));
+export const damageOwed = ref => damageSum(ref, ['Unpaid']);          // still to pay (nothing sent yet)
+export const damageWaiting = ref => damageSum(ref, ['Pending']);              // GCash sent, staff are checking it
+export const damageTotal = ref => sum(damageOf(ref).map(d => d.amount));
+/* Late fee left unpaid at the return ("Not now"): lines still owed / waiting for staff to check the GCash payment (83_late_fee_collection.sql) */
+const lateLinesOf = ref => state.RENTALS.filter(l => l.rentalRef === ref && l.lateDeferred && !l.latePaid && l.late > 0);
+export const lateOwed = ref => sum(lateLinesOf(ref).filter(l => !l.latePendingRef).map(l => l.late));   // nothing sent yet
+export const lateWaiting = ref => sum(lateLinesOf(ref).filter(l => l.latePendingRef).map(l => l.late));   // GCash sent, staff are checking it
+const lateBadge = ref => {
+    if (lateOwed(ref) > 0)
+        return ` <span class="b balancedue" title="Open Actions > Pay late fee">Late fee ${peso(lateOwed(ref))} unpaid</span>`;
+    if (lateWaiting(ref) > 0)
+        return ' <span class="b pending">Late fee: payment being checked</span>';
+    return '';
+};
+const damageBadge = ref => {
+    if (damageOwed(ref) > 0)
+        return ` <span class="b balancedue" title="Open Details to see the reason and the photos">Damage fee ${peso(damageOwed(ref))} unpaid</span>`;
+    if (damageWaiting(ref) > 0)
+        return ' <span class="b pending">Damage fee: payment being checked</span>';
+    return '';
+};
+
+/* the status badge of a rental: once the customer declined the replacement items, the studio is the one to act */
+const statusBadge = o => ['Pending', 'Approved'].includes(o.rawStatus) && awaitingStudio(o.rentalRef) && !offersFor(o.rentalRef).length
+    ? '<span class="b pending" title="You said none of the replacement items suit you. The studio will contact you.">Studio will contact you</span>'
+    : badge(o.status);
+
+/* a rental waiting for the customer to choose a replacement item */
+const swapChip = ref => offersFor(ref).length ? ' <span class="b balancedue" title="Open Actions > Choose replacement item">Choose a replacement</span>' : '';
 
 const rentalPickup = o => new Date((o.lines[0] && o.lines[0].pickup) || 0).getTime() || 0;
 const orderTotal = o => sum(o.lines.map(l => (l.unit || 0) * l.qty));
@@ -148,14 +202,16 @@ const orderTotal = o => sum(o.lines.map(l => (l.unit || 0) * l.qty));
    Cancelled and rejected ones stay in the list (struck through) so the customer sees why the total changed.
    plain = for a past booking: just the item and price, no status and no buttons. */
 export function addonSubRows(bookingRef, plain = false) {
+    /* Each add-on is returned as { text, strike, tail }. tail = cells for the LAST columns of the table (Status, Payment, Actions),
+       so tableGrouped puts the add-on's status and Actions button under the same columns as the booking row's. */
     return rentalOrders().filter(o => o.type === 'addon' && o.ref === bookingRef).map(o => {
         const closed = ['Cancelled', 'Rejected'].includes(o.rawStatus);
-        return `<div class="subin${closed ? ' strike' : ''}">
-            <span class="b addon">Add-on</span>
-            <span class="subtxt">${itemSummary(o.lines, true)} <span class="mut">(${peso(orderTotal(o))})</span></span>
-            ${plain ? '' : `${badge(o.status)}
-            <span class="subact">${rentalMenuBtn(o.rentalRef)}</span>`}
-        </div>`;
+        return {
+            strike: closed,
+            text: `<span class="b addon">Add-on</span>
+                <span class="subtxt">${itemSummary(o.lines, true)} <span class="mut">(${peso(orderTotal(o))})</span></span>`,
+            tail: plain ? [] : [statusBadge(o) + swapChip(o.rentalRef), '', rentalMenuBtn(o.rentalRef)]
+        };
     });
 }
 
@@ -166,7 +222,12 @@ export function renderMyRentals() {
     const mineBookings = new Set(BOOKINGS.filter(b => b.mine).map(b => b.ref));
     const orders = rentalOrders().filter(o => o.type === 'out' || !mineBookings.has(o.ref));
     if (!orders.length) {
-        $('#myrent').innerHTML = '<p class="mut" style="padding:8px">No rentals yet.</p>';
+        $('#myrent').innerHTML = emptyState({
+            icon: 'headphones',
+            title: 'No rentals yet',
+            text: 'Rent gear to take outside the studio, or add it to a studio booking.',
+            action: { label: 'Rent equipment', href: '#rent' }
+        });
         return;
     }
     const row = o => {
@@ -177,7 +238,9 @@ export function renderMyRentals() {
                 o.ret,
                 `<span class="itm">${itemSummary(o.lines)}</span>`,
                 `<span class="ref-static">${esc(o.ref)}</span>${o.type === 'addon' ? ' <span class="b addon">Add-on</span>' : ''}`,
-                badge(o.status),
+                // a returned rental with a fee still to pay (or being checked) shows only the fee status
+                o.rawStatus === 'Returned' && (damageOwed(o.rentalRef) > 0 || damageWaiting(o.rentalRef) > 0 || lateOwed(o.rentalRef) > 0 || lateWaiting(o.rentalRef) > 0)
+                    ? (lateBadge(o.rentalRef) + damageBadge(o.rentalRef)).trim() : statusBadge(o) + swapChip(o.rentalRef) + damageBadge(o.rentalRef),
                 actions
             ],
             note: whyRejected(o.status, o.reason),
@@ -187,8 +250,16 @@ export function renderMyRentals() {
     const inUse = orders.filter(o => o.rawStatus === 'Active')
         .sort((x, y) => (y.status === 'Overdue') - (x.status === 'Overdue') || rentalPickup(x) - rentalPickup(y));
     const upcoming = orders.filter(o => ['Pending', 'Approved'].includes(o.rawStatus)).sort((x, y) => rentalPickup(x) - rentalPickup(y));
-    const past = orders.filter(o => !['Active', 'Pending', 'Approved'].includes(o.rawStatus)).sort((x, y) => rentalPickup(y) - rentalPickup(x));
+    // a returned rental with a damage fee or late fee still to pay stays in the open list, so it is not forgotten
+    const owing = o => o.rawStatus === 'Returned' && (damageOwed(o.rentalRef) > 0 || lateOwed(o.rentalRef) > 0);
+    const owes = orders.filter(owing).sort((x, y) => rentalPickup(y) - rentalPickup(x));
+    // a returned rental whose fee payment staff are still checking is not closed yet either
+    const checking = o => o.rawStatus === 'Returned' && !owing(o) && (damageWaiting(o.rentalRef) > 0 || lateWaiting(o.rentalRef) > 0);
+    const checks = orders.filter(checking).sort((x, y) => rentalPickup(y) - rentalPickup(x));
+    const past = orders.filter(o => !['Active', 'Pending', 'Approved'].includes(o.rawStatus) && !owing(o) && !checking(o)).sort((x, y) => rentalPickup(y) - rentalPickup(x));
     const groups = [
+        { title: 'Fees to pay', rows: owes.map(row) },
+        { title: 'Fees being checked', rows: checks.map(row) },
         { title: 'In use', rows: inUse.map(row) },
         { title: 'Upcoming', rows: upcoming.map(row) },
         { title: 'Past and closed', toggle: 'rn', collapsed: !pastOpen.rn, rows: past.map(row) }
@@ -300,14 +371,47 @@ function buildRentalReceiptLines(order, costs) {
     }
     if (isOutsideRental) {
         if (costs.lateFee > 0)
-            receiptLines.push([costs.lateFeeIsStillGrowing ? 'Late fee so far' : 'Late fee', peso(costs.lateFee)]);
+            receiptLines.push([costs.lateFeeIsStillGrowing ? 'Late fee so far' : 'Late fee', peso(costs.lateFee)
+                + (lateOwed(order.rentalRef) > 0 ? ' (unpaid)' : lateWaiting(order.rentalRef) > 0 ? ' (payment being checked)' : '')]);
+        const rejectedLate = (lateLinesOf(order.rentalRef).find(l => l.lateReject && !l.latePendingRef) || {}).lateReject;
+        if (rejectedLate)
+            receiptLines.push(['Late fee payment rejected', rejectedLate]);
     }
     if (order.status === 'Rejected')
         receiptLines.push(['Reason for rejection', order.reason || 'No reason was given. Please contact the studio.']);
     return receiptLines;
 }
 
-function showRentalDetails(rentalRef) {
+/* One pop-up with the before or after photo of every item in the rental (each with its own "Open in new tab").
+   kind is 'before' or 'after'. */
+async function viewInspectionPhotos(lines, kind = 'before') {
+    const pathOf = l => kind === 'after' ? l.afterPhotoPath : l.beforePhotoPath;
+    const word = kind === 'after' ? 'After' : 'Before';
+    const urls = await Promise.all(lines.map(async l => {
+        const { data, error } = await sb.storage.from(PHOTO_BUCKET).createSignedUrl(pathOf(l), 600);
+        if (error)
+            console.error('Inspection photo', pathOf(l), error);
+        return data && data.signedUrl ? data.signedUrl : null;
+    }));
+    if (!urls.some(Boolean))
+        return toast('The photos could not be opened. Please try again or contact the studio.');
+    const many = lines.length > 1;
+    const items = lines.map((l, i) => {
+        const u = urls[i] ? esc(urls[i]) : '';
+        return `<div class="before-photo-item">
+          ${many ? `<h3>${esc(l.item)}</h3>` : ''}
+          ${u ? `<img class="idfull" src="${u}" alt="${word} photo: ${esc(l.item)}" decoding="async">
+                 <a class="btn sm line" href="${u}" target="_blank" rel="noopener">Open in new tab</a>`
+              : `<p class="mut">This photo could not be loaded.</p>`}
+        </div>`;
+    }).join('');
+    showDialog(`
+    <h2>${many ? `${word} photos` : `${word} photo`}</h2>
+    ${items}
+    <div class="acts"><button type="button" class="btn gold" data-close>Close</button></div>`);
+}
+
+async function showRentalDetails(rentalRef) {
     const order = rentalOrders().find(rentalOrder => rentalOrder.rentalRef === rentalRef);
     if (!order)
         return;
@@ -329,19 +433,290 @@ function showRentalDetails(rentalRef) {
             onClick: () => startCancelRental(order.rentalRef)
         });
 
+    // Condition notes (plain text rows), one "View before photos" button for all items, and and one "View after photo" button, both opening the same pop-up (outside rentals only)
+    const conditionLines = [];
+    if (isOutsideRental) {
+        const beforePhotos = order.lines.filter(l => l.beforePhotoPath);
+        if (beforePhotos.length)
+            extraActions.push({
+                label: beforePhotos.length > 1 ? 'View before photos' : 'View before photo',
+                className: 'line',
+                onClick: () => viewInspectionPhotos(beforePhotos, 'before')
+            });
+        const many = order.lines.length > 1;
+        for (const line of order.lines) {
+            const tag = many ? ` (${line.item})` : '';
+            if (line.returnedAt) {
+                conditionLines.push([`Return condition${tag}`, line.returnCondition || 'Not recorded']);
+                if (line.returnDescription)
+                    conditionLines.push([`Notes${tag}`, line.returnDescription]);
+            }
+        }
+        const afterPhotos = order.lines.filter(l => l.afterPhotoPath);
+        if (afterPhotos.length)
+            extraActions.push({
+                label: afterPhotos.length > 1 ? 'View after photos' : 'View after photo',
+                className: 'line',
+                onClick: () => viewInspectionPhotos(afterPhotos, 'after')
+            });
+    }
+
+    // damage fee (outside rentals): shown next to the late fee, as its own line
+    const damages = damageOf(order.rentalRef);
+    const damageLines = [];
+    if (isOutsideRental && damages.length) {
+        const total = damageTotal(order.rentalRef);
+        damageLines.push(['Damage fee', total > 0 ? `${peso(total)} (${damageOwed(order.rentalRef) > 0 ? 'unpaid' : damageWaiting(order.rentalRef) > 0 ? 'payment being checked' : 'paid'})` : 'Waived, nothing to pay']);
+        if (total > 0 && costs.lateFee > 0)
+            damageLines.push(['Late fee + damage fee', peso(costs.lateFee + total)]);
+    }
+
+    const allLines = [
+        ...buildRentalReceiptLines(order, costs),
+        ...conditionLines,
+        ...damageLines
+    ];
+
+    // Damage fee section: the amount, the reason, and the before / after photos side by side
+    let damageHtml = '';
+    if (isOutsideRental && damages.length) {
+        const signed = async path => {
+            if (!path)
+                return null;
+            const { data } = await sb.storage.from(PHOTO_BUCKET).createSignedUrl(path, 600);
+            return data && data.signedUrl ? data.signedUrl : null;
+        };
+        const fig = (url, cap) => url
+            ? `<figure><a href="${esc(url)}" target="_blank" rel="noopener" title="Open full size"><img src="${esc(url)}" alt="${esc(cap)}" loading="lazy" decoding="async"></a><figcaption>${esc(cap)}</figcaption></figure>`
+            : `<figure><div class="dc-nophoto">No photo</div><figcaption>${esc(cap)}</figcaption></figure>`;
+        const cards = await Promise.all(damages.map(async d => {
+            const [before, after] = await Promise.all([signed(d.beforePhotoPath), signed(d.afterPhotoPath)]);
+            const label = { Unpaid: 'Unpaid', Pending: 'Payment being checked', Paid: 'Paid', Waived: 'Waived' }[d.status] || d.status;
+            const cls = { Unpaid: 'balancedue', Pending: 'pending', Paid: 'paid', Waived: '' }[d.status] || '';
+            return `<div class="dc-item">
+              <div class="row"><b>${esc(d.item)} x${d.qty}</b><span class="b ${cls}">${esc(label)}</span></div>
+              <p style="margin:6px 0 0"><b>${d.amount > 0 ? peso(d.amount) : 'No charge'}</b> <span class="mut">Condition: ${esc(d.condition)}</span></p>
+              ${d.reason ? `<p style="margin:4px 0 0">${esc(d.reason)}</p>` : ''}
+              <div class="dc-photos">${fig(before, 'Before')}${fig(after, 'After')}</div>
+            </div>`;
+        }));
+        const owed = damageOwed(order.rentalRef);
+        damageHtml = `<div class="dmg-box"><h3>Damage fee</h3>
+          <p class="mut" style="margin:0">${owed > 0 ? 'Staff recorded a damage fee after your return. Compare the photos below. You can pay now with GCash, or pay later at the studio or here.'
+              : 'Staff recorded the condition of your equipment when it came back.'}</p>
+          ${cards.join('')}</div>`;
+    }
+
+    // Proof of handover: the photo staff attached when the equipment was given to the customer (separate from the before photos)
+    let proofHtml = '';
+    if (isOutsideRental) {
+        const proofPath = (order.lines.find(l => l.handoverPhotoPath) || {}).handoverPhotoPath;
+        if (proofPath) {
+            const { data } = await sb.storage.from(PHOTO_BUCKET).createSignedUrl(proofPath, 600);
+            const url = data && data.signedUrl ? data.signedUrl : null;
+            const issuedAt = order.lines[0].issuedAt ? fmtDT(order.lines[0].issuedAt) : '';
+            proofHtml = `<div class="handover-proof">
+              <h3>Proof of handover</h3>
+              <p class="mut">${issuedAt ? `Your equipment was handed over on ${esc(issuedAt)}. ` : ''}Tap the photo to open it full size.</p>
+              ${url ? `<a href="${esc(url)}" target="_blank" rel="noopener"><img src="${esc(url)}" alt="Proof of handover" loading="lazy" decoding="async"></a>`
+                    : '<p class="mut">The photo could not be loaded. Please try again or contact the studio.</p>'}
+            </div>`;
+        }
+        else if (['Active', 'Returned'].includes(order.rawStatus)) {
+            proofHtml = '<div class="handover-proof"><h3>Proof of handover</h3><p class="mut">No handover photo was recorded for this rental.</p></div>';
+        }
+    }
+
     showSuccess({
         title: 'Rental receipt',
         label: 'Reference code',
         ref: order.ref,
         icon: 'receipt',
         status: `${badge(order.status)} ${isOutsideRental ? '<span class="b out">Outside</span>' : '<span class="b addon">Add-on</span>'}`,
-        lines: buildRentalReceiptLines(order, costs),
+        lines: allLines,
         doneLabel: 'Close',
         extraActions,
+        extraHtml: damageHtml + proofHtml,
         shot: 'It is your official receipt. Show it to our staff when you collect or use the equipment so we can verify your rental.',
         note: isOutsideRental
             ? 'Each hour beyond 8 hours adds one-eighth of the item price. Returning late adds the same charge for every hour late.'
             : ''
+    });
+}
+
+/* ---- Pay the damage fee: NOW with GCash (staff verify it) or LATER (nothing is sent; the fee stays unpaid) ---- */
+function startDamagePay(rentalRef) {
+    const order = rentalOrders().find(o => o.rentalRef === rentalRef);
+    const owed = damageOwed(rentalRef), list = damageOf(rentalRef).filter(d => d.status === 'Unpaid' && d.amount > 0);
+    if (!order || owed <= 0)
+        return toast('There is no damage fee to pay on this rental.');
+    if (okDlg.open)
+        okDlg.close();
+    showDialog(`
+    <h2>Pay your damage fee</h2>
+    <p class="mut">${esc(order.ref)}: ${list.map(d => `${esc(d.item)} x${d.qty} (${peso(d.amount)})`).join(', ')}</p>
+    <div class="dr-sum"><div class="tot-line"><b>Damage fee to pay</b><b>${peso(owed)}</b></div></div>
+    <div class="dmg-pay">
+    <div class="dmg-choices" role="radiogroup" aria-label="When do you want to pay?">
+      <label class="dmg-choice"><input type="radio" name="dm-when" value="now" checked><span><b>Pay now with GCash</b><small>Staff check your payment, then the fee shows as paid.</small></span></label>
+      <label class="dmg-choice"><input type="radio" name="dm-when" value="later"><span><b>Pay later</b><small>Nothing is sent now. Pay in cash at the studio, or come back here and pay with GCash. The fee stays unpaid until then.</small></span></label>
+    </div>
+    <div id="dm-gc" class="dmg-gc">
+      <div class="gq">
+        <img id="dm-qr" alt="GCash QR code to scan" hidden>
+        <p class="mut" id="dm-qn">Scan this QR code with GCash and pay <b>${peso(owed)}</b>. Then attach the screenshot and enter the reference number from your GCash receipt.</p>
+      </div>
+      ${gcashProofHtml('dm')}
+      <label for="dm-g">GCash reference number <span class="req" aria-hidden="true">*</span></label>
+      <input id="dm-g" data-gcash-ref placeholder="13-digit reference" inputmode="numeric" required aria-required="true">
+    </div>
+    <div class="alert" id="dm-e" role="alert" hidden></div>
+    <div class="acts">
+      <button class="btn line" data-close>Close</button>
+      <button class="btn gold" id="dm-go">Send GCash payment</button>
+    </div>
+    </div>`);
+    const qr = $('#dm-qr');
+    qr.onload = () => {
+        qr.hidden = false;
+    };
+    qr.onerror = () => {
+        qr.hidden = true;
+        $('#dm-qn').innerHTML = `Pay <b>${peso(owed)}</b> using the studio's GCash account, then attach the screenshot and enter the reference number from your receipt. Ask staff if you need the account details.`;
+    };
+    qr.src = gcashQrUrl();
+    const proof = initGcashProof('dm', { ref: '#dm-g' });
+    const rules = () => [
+        ['#dm-ss', () => check.file(proof.file(), 'Attach a screenshot of your GCash payment.')],
+        ['#dm-g', () => check.gcashRef($('#dm-g').value)]
+    ];
+    liveCheck(rules());
+    const err = t => {
+        const box = $('#dm-e');
+        box.textContent = t;
+        box.hidden = !t;
+    };
+    const go = $('#dm-go'), later = () => dlg.querySelector('[name="dm-when"]:checked').value === 'later';
+    dlg.querySelectorAll('[name="dm-when"]').forEach(r => r.addEventListener('change', () => {
+        $('#dm-gc').hidden = later();
+        go.textContent = later() ? 'Pay later' : 'Send GCash payment';
+        err('');
+    }));
+    go.addEventListener('click', async () => {
+        err('');
+        if (later()) {
+            dlg.close();
+            return toast('No problem. Your damage fee stays unpaid. Pay in cash at the studio, or pay here with GCash anytime.');
+        }
+        if (!applyChecks(rules().map(([t, rule]) => [t, rule()])))
+            return;
+        const gcash = $('#dm-g').value.replace(/\s/g, '');
+        const yes = await askConfirm({
+            title: 'Send your GCash payment?',
+            message: `You paid ${peso(owed)} by GCash for the damage fee of ${order.ref}. Staff will check the reference number ${gcash} and the screenshot.`,
+            ok: 'Yes, send payment',
+            cancel: 'Not now'
+        });
+        if (!yes)
+            return;
+        btnBusy(go, 'Sending…');
+        const up = await uploadGcashProof(proof.file(), gcash);
+        if (up.error) {
+            btnReset(go);
+            return err('Could not upload your GCash screenshot: ' + up.error.message);
+        }
+        const { error } = await sb.rpc('customer_pay_damage', { p_rental_ref: rentalRef, p_gcash_reference: gcash });
+        if (error) {
+            btnReset(go);
+            return err(/schema cache|could not find/i.test(error.message || '') ? 'Paying online is not available yet. Please pay at the studio.' : error.message);   // for example the GCash reference was already used
+        }
+        await btnSuccess(go, 'Sent', { keep: true });
+        dlg.close();
+        await loadMyRentals();
+        await loadDamageBlock();   // the notice now says the payment is waiting for staff
+        toast('Payment sent. Staff will check it and mark your damage fee as paid.');
+    });
+}
+
+/* ---- Pay a late fee that was left unpaid at the return: GCash now (staff verify it). Paying in cash at the studio needs no step here. ---- */
+function startLatePay(rentalRef) {
+    const order = rentalOrders().find(o => o.rentalRef === rentalRef);
+    const owed = lateOwed(rentalRef), list = lateLinesOf(rentalRef).filter(l => !l.latePendingRef);
+    if (!order || owed <= 0)
+        return toast('There is no late fee to pay on this rental.');
+    if (okDlg.open)
+        okDlg.close();
+    const rejected = (list.find(l => l.lateReject) || {}).lateReject;
+    showDialog(`
+    <h2>Pay your late fee</h2>
+    <p class="mut">${esc(order.ref)}: ${list.map(l => `${esc(l.item)} x${l.qty} (${peso(l.late)})`).join(', ')}</p>
+    <div class="dr-sum"><div class="tot-line"><b>Late fee to pay</b><b>${peso(owed)}</b></div></div>
+    ${rejected ? `<div class="alert warn" role="note">Your last GCash payment was rejected: ${esc(rejected)}</div>` : ''}
+    <div class="dmg-pay">
+    <div id="lt-gc" class="dmg-gc">
+      <div class="gq">
+        <img id="lt-qr" alt="GCash QR code to scan" hidden>
+        <p class="mut" id="lt-qn">Scan this QR code with GCash and pay <b>${peso(owed)}</b>. Then attach the screenshot and enter the reference number from your GCash receipt. Prefer cash? Pay at the studio instead.</p>
+      </div>
+      ${gcashProofHtml('lt')}
+      <label for="lt-g">GCash reference number <span class="req" aria-hidden="true">*</span></label>
+      <input id="lt-g" data-gcash-ref placeholder="13-digit reference" inputmode="numeric" required aria-required="true">
+    </div>
+    <div class="alert" id="lt-e" role="alert" hidden></div>
+    <div class="acts">
+      <button class="btn line" data-close>Close</button>
+      <button class="btn gold" id="lt-go">Send GCash payment</button>
+    </div>
+    </div>`);
+    const qr = $('#lt-qr');
+    qr.onload = () => {
+        qr.hidden = false;
+    };
+    qr.onerror = () => {
+        qr.hidden = true;
+        $('#lt-qn').innerHTML = `Pay <b>${peso(owed)}</b> using the studio's GCash account, then attach the screenshot and enter the reference number from your receipt. Ask staff if you need the account details.`;
+    };
+    qr.src = gcashQrUrl();
+    const proof = initGcashProof('lt', { ref: '#lt-g' });
+    const rules = () => [
+        ['#lt-ss', () => check.file(proof.file(), 'Attach a screenshot of your GCash payment.')],
+        ['#lt-g', () => check.gcashRef($('#lt-g').value)]
+    ];
+    liveCheck(rules());
+    const err = t => {
+        const box = $('#lt-e');
+        box.textContent = t;
+        box.hidden = !t;
+    };
+    const go = $('#lt-go');
+    go.addEventListener('click', async () => {
+        err('');
+        if (!applyChecks(rules().map(([t, rule]) => [t, rule()])))
+            return;
+        const gcash = $('#lt-g').value.replace(/\s/g, '');
+        const yes = await askConfirm({
+            title: 'Send your GCash payment?',
+            message: `You paid ${peso(owed)} by GCash for the late fee of ${order.ref}. Staff will check the reference number ${gcash} and the screenshot.`,
+            ok: 'Yes, send payment',
+            cancel: 'Not now'
+        });
+        if (!yes)
+            return;
+        btnBusy(go, 'Sending…');
+        const up = await uploadGcashProof(proof.file(), gcash);
+        if (up.error) {
+            btnReset(go);
+            return err('Could not upload your GCash screenshot: ' + up.error.message);
+        }
+        const { error } = await sb.rpc('customer_pay_late_fee', { p_rental_ref: rentalRef, p_gcash_reference: gcash });
+        if (error) {
+            btnReset(go);
+            return err(/schema cache|could not find/i.test(error.message || '') ? 'Paying online is not available yet. Please pay at the studio.' : error.message);   // for example the GCash reference was already used
+        }
+        await btnSuccess(go, 'Sent', { keep: true });
+        dlg.close();
+        await loadMyRentals();
+        toast('Payment sent. Staff will check it and mark your late fee as paid.');
     });
 }
 
@@ -387,6 +762,7 @@ function confirmCancelRental(ref) {
 }
 
 export function initMyRentals() {
+    onPayDamage(ref => (damageOwed(ref) > 0 ? startDamagePay(ref) : startLatePay(ref)));   // the Pay now button in the "booking paused" notice opens the GCash dialog of the fee that is still unpaid
     // the same buttons live in My rental (outside rentals) and under a booking in My bookings (its add-ons)
     const onClick = clickEvent => {
         const menuButton = clickEvent.target.closest('[data-rmenu]');

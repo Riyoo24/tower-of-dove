@@ -26,9 +26,9 @@ import { $, badge, esc, pl, toast } from '../shared/utils.js';
 export function renderStudios() {
     $('#ast').innerHTML = STU.map((s, i) => {
         const c = STUDIO_COLORS[i % STUDIO_COLORS.length], letter = s.name.replace(/^studio\s*/i, '');
-        const ph = s.image ? `<div class="ph has"><img src="${esc(s.image)}" alt="${esc(s.name)}"></div>`
+        const ph = s.image ? `<div class="ph has"><img src="${esc(s.image)}" alt="${esc(s.name)}" width="320" height="104" loading="lazy" decoding="async"></div>`
             : `<div class="ph" style="background:linear-gradient(135deg,${c[0]},${c[1]})">${esc(letter)}</div>`;
-        return `<div class="card">${ph}<div class="row"><h3>${esc(s.name)}</h3>${badge(s.status)}</div><p class="mut">${esc(s.description || '')}</p>
+        return `<div class="card">${ph}<div class="row"><h3>${esc(s.name)}</h3>${badge(s.status)}</div><p class="mut" style="white-space:pre-line">${esc(s.description || '')}</p>
       <div class="row" style="margin-top:8px"><b>${money(s.hourly_rate)}/hr</b><span>${btn('st-edit', s.studio_id, 'Edit')}${btn('st-tog', s.studio_id, s.status === 'Available' ? 'Disable' : 'Enable', 1)}${dbtn('st-del', s.studio_id, 'Delete')}</span></div></div>`;
     }).join('');
 }
@@ -74,7 +74,7 @@ ACT['st-edit'] = id => {
     const s = STU.find(x => x.studio_id === +id);
     showDlg(`<form id="se-f" novalidate><h2 style="margin:0 0 4px">Edit ${esc(s.name)}</h2>
     <label for="se-n">Name</label><input id="se-n" value="${esc(s.name)}">
-    <label for="se-d">Description</label><input id="se-d" value="${esc(s.description || '')}">
+    <label for="se-d">Description</label><textarea id="se-d" rows="8" style="resize:vertical;min-height:140px" placeholder="Press Enter for a new line">${esc(s.description || '')}</textarea>
     <label for="se-r">Hourly rate (₱)</label><input id="se-r" type="number" min="0" value="${num(s.hourly_rate)}">
     <label for="se-s">Status</label><select id="se-s">${['Available', 'Unavailable', 'Maintenance'].map(x => `<option ${x === s.status ? 'selected' : ''}>${x}</option>`).join('')}</select>
     <label for="se-f2">New photo (optional)</label><input id="se-f2" type="file" accept="image/*">

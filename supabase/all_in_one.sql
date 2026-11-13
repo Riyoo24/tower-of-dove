@@ -5464,3 +5464,111 @@ end $$;
 select public.sync_addon_orders(null);
 
 -- end of 45_addon_balance_on_booking.sql
+
+-- =====================================================================
+-- 65_outside_no_auto_issue.sql  (safe to re-run)
+-- An OUTSIDE rental is never issued by itself, even when it is fully paid and its pick-up time has come.
+--   * Staff must issue it from the admin / staff page, where they attach the before photo of every item
+--     and the handover proof photo (file 57), and only then hand the equipment over.
+--   * Until now start_due_sessions() set an Approved outside rental to Active at its pick-up time when no
+--     balance was due. That could issue it without staff, if the photos had been uploaded early.
+--   * Studio sessions, extensions and add-ons behave exactly as before (file 41).
+-- Run this once in the Supabase SQL Editor (after 64_damage_block_reputation.sql).
+-- =====================================================================
+
+create or replace function public.start_due_sessions() returns integer
+language plpgsql security definer set search_path = public as $$
+declare n integer := 0; k integer;
+begin
+  -- confirmed studio sessions whose time has begun and that have no balance left to collect
+  update public.booking set status = 'In Progress'
+   where status = 'Approved' and start_at <= now() and end_at > now()
+     and public.booking_balance_due(booking_id) <= 0.005;
+  get diagnostics k = row_count; n := n + k;
+
+  -- sessions that reached their end time are completed (not while an extension is waiting to be verified)
+  update public.booking b set status = 'Completed'
+   where b.status = 'In Progress' and b.end_at <= now()
+     and not exists (select 1 from public.booking_extension x where x.booking_id = b.booking_id and x.status = 'Pending');
+  get diagnostics k = row_count; n := n + k;
+
+  -- outside rentals are NOT started here: staff issue them on the admin page (before photos + handover proof)
+
+  -- add-ons follow their session (issued while it runs, returned when it is completed)
+  perform public.sync_addon_orders(null);
+  return n;
+end $$;
+revoke all on function public.start_due_sessions() from public, anon;
+grant execute on function public.start_due_sessions() to authenticated;
+
+select public.start_due_sessions();
+
+-- =====================================================================
+-- 66_balance_receipt_email.sql  (safe to re-run)
+-- Fully paid receipt by email when staff collect the remaining balance.
+--   * Bookings: "Collect balance & start session". Rentals: "Collect balance & issue".
+--   * After the balance is saved, the admin page asks the Edge Function `send-receipt` (kind: balance) to email the
+--     customer a "fully paid" receipt: what was collected, how it was paid, and that nothing is left to pay.
+--   * The email goes to the address saved with the booking / rental (never typed in the browser), only staff can ask
+--     for it, and it is sent ONCE per collection (payment.balance_email_sent_at).
+-- Run once in the Supabase SQL Editor (after 65_outside_no_auto_issue.sql), then deploy the Edge Function again:
+--   supabase functions deploy send-receipt
+-- =====================================================================
+
+alter table public.payment add column if not exists balance_email_sent_at timestamptz;
+
+-- end of 66_balance_receipt_email.sql
+
+-- =====================================================================
+-- 67_balance_cash_tendered.sql  (safe to re-run)
+-- The fully paid receipt email (file 66) also shows the CASH RECEIVED and the CHANGE.
+--   * staff_collect_balance_proof() (file 56) already makes staff type the cash tendered, but did not keep it.
+--     Now the amount is saved on the payment(s) the collection settled (payment.balance_tendered).
+--   * Everything else in that function is unchanged.
+-- Run once in the Supabase SQL Editor (after 66_balance_receipt_email.sql), then deploy the send-receipt Edge Function again.
+-- =====================================================================
+
+alter table public.payment add column if not exists balance_tendered numeric(10,2);
+
+drop function if exists public.staff_collect_balance_proof(text, text, text, numeric, boolean, text, numeric);
+create function public.staff_collect_balance_proof(
+  p_kind text, p_ref text, p_method text default 'Cash', p_expected numeric default null,
+  p_start boolean default true, p_reference text default null, p_tendered numeric default null
+) returns table (kind text, ref text, collected numeric, new_status text)
+language plpgsql security definer set search_path = public as $$
+declare
+  m    text := case lower(coalesce(trim(p_method), 'cash')) when 'gcash' then 'GCash' when 'cash' then 'Cash' else null end;
+  gref text := regexp_replace(coalesce(p_reference, ''), '\D', '', 'g');
+  res  record;
+begin
+  if not public.is_staff() then raise exception 'Staff only.' using errcode = '42501'; end if;
+  if m is null then raise exception 'Choose how the balance was paid: Cash or GCash.' using errcode = 'P0001'; end if;
+
+  if m = 'GCash' and length(gref) <> 13 then
+    raise exception 'Enter the 13-digit GCash reference number.' using errcode = 'P0001';
+  end if;
+  if m = 'Cash' and p_expected is not null and (p_tendered is null or p_tendered + 0.005 < p_expected) then
+    raise exception 'The cash received is less than the balance of PHP %.', to_char(p_expected, 'FM999,999,990.00') using errcode = 'P0001';
+  end if;
+
+  select * into res from public.staff_collect_balance(p_kind, p_ref, m, p_expected, p_start);
+
+  -- now() is the start of this transaction: it marks exactly the payment rows the call above just settled
+  if m = 'GCash' then
+    update public.payment
+       set balance_paid_reference = gref
+     where balance_paid_at = now() and balance_paid_method = 'GCash'
+       and balance_paid_by is not distinct from public.current_app_user_id();
+  else
+    update public.payment
+       set balance_tendered = p_tendered
+     where balance_paid_at = now() and balance_paid_method = 'Cash'
+       and balance_paid_by is not distinct from public.current_app_user_id();
+  end if;
+
+  return query select res.kind::text, res.ref::text, res.collected::numeric, res.new_status::text;
+end $$;
+revoke all on function public.staff_collect_balance_proof(text, text, text, numeric, boolean, text, numeric) from public, anon;
+grant execute on function public.staff_collect_balance_proof(text, text, text, numeric, boolean, text, numeric) to authenticated;
+
+-- end of 67_balance_cash_tendered.sql

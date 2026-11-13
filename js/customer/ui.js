@@ -5,10 +5,15 @@
 
 import { okDlg } from './book.js';
 import { setActiveNav } from '../shared/layout.js';
-import { $, $$, esc } from '../shared/utils.js';
+import { ASSETS } from '../config/paths.js';
+import { $, $$, esc, reducedMotion } from '../shared/utils.js';
+import { downloadIcs, googleCalendarUrl } from '../shared/calendar.js';
 
-/* The sidebar links use #book, #rent, #my-bookings and #my-rentals. */
+/* The top bar links use #home, #book, #rent, #my-bookings, #my-rentals and #contact.
+   Home and Contact Us share one container (#home); #contact only shows its Contact section. */
 const TABS = {
+    'home': 'home',
+    'contact': 'home',
     'book': 'c-book',
     'rent': 'c-rent',
     'my-bookings': 'c-bk',
@@ -16,17 +21,43 @@ const TABS = {
 };
 
 const NAV_KEY = {
+    'home': 'home',
+    'contact': 'contact',
     'book': 'book',
     'rent': 'rent',
     'my-bookings': 'mybook',
     'my-rentals': 'myrent'
 };
 
+let firstTabDraw = true;
+
 export function showTab() {
-    const name = TABS[location.hash.slice(1)] ? location.hash.slice(1) : 'book';
-    $$('.pg').forEach(p => p.classList.toggle('on', p.id === TABS[name]));
-    setActiveNav(NAV_KEY[name]);
-    scrollTo(0, 0);
+    const name = TABS[location.hash.slice(1)] ? location.hash.slice(1) : 'home';
+    const target = TABS[name], home = $('#home');
+    const draw = () => {
+        $$('.pg').forEach(p => p.classList.toggle('on', p.id === target));
+        home.classList.toggle('on-contact', name === 'contact');
+        // the hero's pull-up-behind-the-bar styles are keyed to data-active="home"; Contact Us gets normal page spacing like the other tabs
+        document.body.dataset.active = name;
+        setActiveNav(NAV_KEY[name]);
+        scrollTo(0, 0);   // every tab opens at the top (no auto-scroll past the page header)
+    };
+    /* Moving to another tab cross-fades (View Transitions API). Skipped on the first draw, when the tab
+       does not change, for visitors who prefer less motion, and in browsers without the API. */
+    const changing = !firstTabDraw && document.body.dataset.active !== name;
+    firstTabDraw = false;
+    if (changing && document.startViewTransition && !reducedMotion() && !document.querySelector('dialog[open]'))
+    {
+        // Clicking tabs quickly starts a new transition and skips the old one; the browser then rejects the old
+        // one's promises with an AbortError. The page is fine (draw() still runs), so swallow those.
+        const vt = document.startViewTransition(draw);
+        const quiet = e => { if (e && e.name !== 'AbortError') throw e; };   // real errors still surface
+        vt.ready.catch(quiet);
+        vt.updateCallbackDone.catch(quiet);
+        vt.finished.catch(quiet);
+    } else {
+        draw();
+    }
 }
 
 /* The staff's reason for a rejected booking or rental, shown on its own line under the row. */
@@ -58,7 +89,12 @@ export const tableGrouped = (head, groups) => {
         return top + g.rows.map(r =>
             `<tr class="${[r.note ? 'has-why' : '', r.dim ? 'dim' : ''].join(' ').trim()}">${r.cells.map(c => `<td>${c}</td>`).join('')}</tr>`
             + (r.note ? `<tr class="why-row"><td colspan="${n}">${r.note}</td></tr>` : '')
-            + (r.subs || []).map(s => `<tr class="sub-row"><td></td><td colspan="${n - 1}">${s}</td></tr>`).join('')
+            + (r.subs || []).map(s => {
+                // a sub is HTML, or { text, strike, tail }: tail fills the last columns so status / actions line up with the row above
+                const sub = typeof s === 'string' ? { text: s, tail: [] } : s, tail = sub.tail || [];
+                return `<tr class="sub-row${sub.strike ? ' strike' : ''}"><td></td><td colspan="${n - 1 - tail.length}"><div class="subin">${sub.text}</div></td>`
+                    + tail.map(c => `<td>${c}</td>`).join('') + '</tr>';
+            }).join('')
         ).join('');
     }).join('');
     return `<table class="grouped"><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`;
@@ -153,7 +189,7 @@ export function showIdViewer({ url, pdf, title }) {
     showDialog(`
     <h2>${esc(title || 'Valid ID')}</h2>
     ${pdf ? `<iframe class="idframe" src="${u}" title="Valid ID (PDF)"></iframe>`
-            : `<img class="idfull" src="${u}" alt="Valid ID">`}
+            : `<img class="idfull" src="${u}" alt="Valid ID" loading="lazy" decoding="async">`}
     <div class="acts">
       <a class="btn line" href="${u}" target="_blank" rel="noopener">Open in new tab</a>
       <button type="button" class="btn gold" data-close>Close</button>
@@ -171,21 +207,45 @@ export const stampLabel = ts => new Date(ts).toLocaleString('en-PH', {
 
 const ICON_OK = '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
 
+const ICON_COPY = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+
+const ICON_CAL = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>';
+
+const ICON_PRINT = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><rect x="6" y="14" width="12" height="8" rx="1"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/></svg>';
+
+const ICON_CHEV = '<svg class="ok-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+
 const ICON_RECEIPT = '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2z"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>';
 
 /* Success pop-up and booking receipt. Stays open until the customer presses the button (no timer).
    shot = the sentence shown after "Take a screenshot of this page." (it is the official receipt).
-   lines = [[label, value, optionalElementId]]. extraActions = [{ label, className, onClick }] buttons shown before the closing button (for example "Cancel rental"). */
-export function showSuccess({ title, label, ref, lines, note, shot, icon, status, doneLabel, extraActions = [] }) {
+   lines = [[label, value, optionalElementId]]. calendar = an event from shared/calendar.js (calendarEvent) -> adds "Add to calendar" and "Google Calendar" buttons. extraActions = [{ label, className, onClick }] buttons shown before the closing button (for example "Cancel rental"). */
+export function showSuccess({ title, label, ref, lines, note, shot, icon, status, doneLabel, extraActions = [], extraHtml = '', calendar = null }) {
     okDlg.innerHTML = `
     <div class="in ok">
-      <div class="okic" aria-hidden="true">${icon === 'receipt' ? ICON_RECEIPT : ICON_OK}</div>
+      <div class="print-head" aria-hidden="true">
+        <img src="${ASSETS}img/logo.png" alt="" width="44" height="44">
+        <div><b>Tower of Dove Music Studio</b><span>${icon === 'receipt' ? 'Receipt' : 'Booking confirmation'} &middot; printed ${esc(new Date().toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Manila' }))}</span></div>
+      </div>
+      <div class="okic${icon === 'receipt' ? '' : ' okic-check'}" aria-hidden="true">${icon === 'receipt' ? ICON_RECEIPT : ICON_OK}</div>
       <h2>${esc(title)}</h2>
       ${status ? `<div style="margin:4px 0">${status}</div>` : ''}
       <p class="mut">${esc(label)}</p>
-      <div class="okref" id="ok-ref">${esc(ref)}</div>
-      <button type="button" class="btn line sm" id="ok-copy">Copy code</button>
+      <div class="okref" id="ok-ref">
+        <span class="okref-code">${esc(ref)}</span>
+        <button type="button" class="okref-copy" id="ok-copy" aria-label="Copy booking code" title="Copy code">${ICON_COPY}<span class="okref-copy-t">Copy</span></button>
+      </div>
+      <div class="ok-tools">
+        ${calendar ? `<button type="button" class="ok-link" id="ok-calbtn" aria-expanded="false" aria-controls="ok-calmenu">${ICON_CAL}<span>Add to calendar</span>${ICON_CHEV}</button>` : ''}
+        <button type="button" class="ok-link" id="ok-print">${ICON_PRINT}<span>Print receipt</span></button>
+      </div>
+      ${calendar ? `<div class="ok-calmenu" id="ok-calmenu" hidden>
+        <a class="ok-calopt" id="ok-gcal" href="${esc(googleCalendarUrl(calendar))}" target="_blank" rel="noopener">Google Calendar</a>
+        <button type="button" class="ok-calopt" id="ok-ics">Apple / Outlook (.ics file)</button>
+        <p class="ok-cal-note mut">${calendar.pending ? 'Saved as tentative until staff confirm. ' : ''}If you reschedule, add it again and the old entry is replaced.</p>
+      </div>` : ''}
       ${(lines && lines.length) ? `<dl class="dl" style="text-align:left;margin-top:14px">${lines.map(l => `<dt>${esc(l[0])}</dt><dd${l[2] ? ` id="${esc(l[2])}"` : ''}>${esc(l[1])}</dd>`).join('')}</dl>` : ''}
+      ${extraHtml || ''}
       ${shot ? `<div class="shot"><b>Take a screenshot of this page.</b> ${esc(shot)}</div>` : ''}
       ${note ? `<p class="mut" style="margin-top:12px">${esc(note)}</p>` : ''}
       <div class="acts" style="justify-content:center">
@@ -198,16 +258,36 @@ export function showSuccess({ title, label, ref, lines, note, shot, icon, status
     });
     $('#ok-done').onclick = () => okDlg.close();
     $('#ok-copy').onclick = async e => {
+        const btn = e.currentTarget, label = btn.querySelector('.okref-copy-t');
         try {
             await navigator.clipboard.writeText(ref);
-            e.target.textContent = 'Copied';
+            label.textContent = 'Copied';
+            btn.classList.add('done');
         }
         catch (err) {
-            e.target.textContent = 'Select the code above to copy';
+            label.textContent = 'Press and hold the code';
         }
+        setTimeout(() => { label.textContent = 'Copy'; btn.classList.remove('done'); }, 2000);
     };
+    $('#ok-print').onclick = () => window.print();   // css/print.css prints only this window
+    if (calendar && $('#ok-calbtn')) {
+        const calBtn = $('#ok-calbtn'), calMenu = $('#ok-calmenu');
+        calBtn.onclick = () => {
+            const open = calMenu.hidden;
+            calMenu.hidden = !open;
+            calBtn.setAttribute('aria-expanded', String(open));
+        };
+        $('#ok-ics').onclick = e => {
+            downloadIcs(calendar);
+            e.currentTarget.textContent = 'Calendar file saved';
+        };
+    }
     okDlg.showModal();
     $('#ok-done').focus();
+    // a short tick on phones that support it, only for a new confirmation (not when re-opening a receipt)
+    if (icon !== 'receipt' && navigator.vibrate && !reducedMotion()) {
+        try { navigator.vibrate(30); } catch (err) { /* not allowed: ignore */ }
+    }
 }
 
 /* ---- booking form (modal) ---- */

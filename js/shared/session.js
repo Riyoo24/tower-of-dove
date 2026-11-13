@@ -7,7 +7,6 @@
 
 import { ROOT, ROUTES } from '../config/paths.js';
 import { sb } from '../config/supabaseClient.js';
-import { navigate } from './navigation.js';
 
 /* ============================ SESSION ============================
    The real login lives in Supabase Auth. We also keep { role, label } in
@@ -48,14 +47,28 @@ export const isMember = () => {
     return !!u && u.role === 'customer';
 };
 
+let loggingOut = false;
+export const isLoggingOut = () => loggingOut;
+
 export async function logout() {
+    loggingOut = true;   // the page is about to leave: do not reload it when the sign-out event arrives
+    clearUser();         // forget the name first, so nothing can show it again while signing out
     try {
-        await sb.auth.signOut();
+        // never wait longer than 3 seconds for the network: the local session is removed either way
+        await Promise.race([sb.auth.signOut(), new Promise(done => setTimeout(done, 3000))]);
     } catch (e) {
         /* ignore */
     }
     clearUser();
-    navigate('home');
+    // Logging out while already on the home page used to only scroll to the top, so the sidebar kept showing the name.
+    // Go to the home page and always load it fresh.
+    const home = new URL(ROOT + ROUTES.home.split('#')[0], location.href);
+    if (home.pathname === location.pathname) {
+        history.replaceState(null, '', home.href);   // all customer tabs share one page: land on Home, then reload fresh
+        location.reload();
+    }
+    else
+        location.replace(home.href);
 }
 
 // the Supabase session ended (expired or signed out elsewhere): forget the cached user

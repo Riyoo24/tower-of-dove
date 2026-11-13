@@ -31,6 +31,12 @@ export const tlabel = h => (h % 12 || 12) + ':00 ' + (h < 12 ? 'AM' : 'PM');
 
 export const tOf = ts => tlabel(P(ts).hour);
 
+/* the exact clock time, minutes included ("1:52 PM"), for moments that are not on the hour such as a check-in */
+export const tExact = ts => {
+    const p = P(ts);
+    return (p.hour % 12 || 12) + ':' + String(p.minute).padStart(2, '0') + ' ' + (p.hour < 12 ? 'AM' : 'PM');
+};
+
 export const stampLabel = ts => new Date(ts).toLocaleString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -140,10 +146,127 @@ export async function notifyVerified(paymentId, quiet) {
     }
 }
 
-export async function uploadPublic(bucket, file) {
-    const ext = ((file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '')) || 'jpg';
-    const path = `${crypto.randomUUID()}.${ext}`;
-    const up = await sb.storage.from(bucket).upload(path, file, { contentType: file.type });
+/* After staff collect the remaining balance of a booking or rental: ask the send-receipt Edge Function to email the
+   customer a "fully paid" receipt. The function checks that the caller is staff, finds the customer's address in the
+   database and sends once per collection. Resolves to 'sent', 'noemail' or 'failed'; a failed email never undoes the
+   collection. */
+export async function notifyBalancePaid(target, ref) {
+    try {
+        const { data, error } = await sb.functions.invoke('send-receipt', { body: { kind: 'balance', target, ref } });
+        if (error)
+            throw error;
+        if (data && data.ok)
+            return 'sent';
+        if (data && data.reason === 'no_email')
+            return 'noemail';
+        return 'failed';
+    }
+    catch (err) {
+        console.warn('Fully paid receipt email failed:', err);
+        return 'failed';
+    }
+}
+
+/* The booked item became unavailable (for example it came back damaged) and staff dealt with it: ask the send-receipt Edge
+   Function to email the customer. event 'offer' (Let customer choose, id = the offer) lists the offered items with prices, the
+   deadline and the default item; event 'swap' (Swap item, id = the rental line) says which item replaced it and its price.
+   Resolves to 'sent', 'noemail' or 'failed'; a failed email never undoes the replacement. */
+export async function notifyReplacement(event, id) {
+    try {
+        const { data, error } = await sb.functions.invoke('send-receipt', { body: event === 'offer' ? { kind: 'replacement', event, offerId: +id } : { kind: 'replacement', event, detailId: +id } });
+        if (error)
+            throw error;
+        if (data && data.ok)
+            return 'sent';
+        if (data && data.reason === 'no_email')
+            return 'noemail';
+        return 'failed';
+    }
+    catch (err) {
+        console.warn('Replacement email failed:', err);
+        return 'failed';
+    }
+}
+
+/* After a damage fee is paid (staff collected it, accepted the customer's GCash payment, or collected it at the return): ask
+   the send-receipt Edge Function to email the customer the same fully paid receipt. The function checks that the caller is
+   staff, finds the customer's address in the database and sends once per payment. Resolves to 'sent', 'noemail' or
+   'failed'; a failed email never undoes the payment. */
+export async function notifyDamagePaid(ref) {
+    try {
+        const { data, error } = await sb.functions.invoke('send-receipt', { body: { kind: 'damage', ref } });
+        if (error)
+            throw error;
+        if (data && data.ok)
+            return 'sent';
+        if (data && data.reason === 'no_email')
+            return 'noemail';
+        return 'failed';
+    }
+    catch (err) {
+        console.warn('Damage fee receipt email failed:', err);
+        return 'failed';
+    }
+}
+
+/* The same for a LATE FEE (kind latefee in send-receipt, 83_late_fee_collection.sql): call it after a late fee was paid (at the return, or later). */
+export async function notifyLateFeePaid(ref) {
+    try {
+        const { data, error } = await sb.functions.invoke('send-receipt', { body: { kind: 'latefee', ref } });
+        if (error)
+            throw error;
+        if (data && data.ok)
+            return 'sent';
+        if (data && data.reason === 'no_email')
+            return 'noemail';
+        return 'failed';
+    }
+    catch (err) {
+        console.warn('Late fee receipt email failed:', err);
+        return 'failed';
+    }
+}
+
+/* the sentence added to the toast after a paid-receipt email */
+export const mailNoteOf = mail => mail === 'sent' ? ' Fully paid receipt emailed to the customer.'
+    : mail === 'noemail' ? ' No email on file, so no receipt was emailed.'
+        : mail === 'failed' ? ' The receipt email could not be sent.' : '';
+
+/* Shrinks a photo before it is uploaded: at most 1600 px on the longest side, saved as WebP (JPEG where the
+   browser cannot write WebP). A 2 MB phone photo becomes about 100-250 KB, so the website loads much faster.
+   Small files, GIF and SVG are uploaded as they are, and so is any file the browser cannot decode. */
+const MAX_SIDE = 1600, SKIP_BELOW = 200 * 1024;
+
+async function shrinkImage(file) {
+    if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size < SKIP_BELOW)
+        return file;
+    try {
+        const bmp = await createImageBitmap(file);
+        const scale = Math.min(1, MAX_SIDE / Math.max(bmp.width, bmp.height));
+        const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(bmp, 0, 0, w, h);
+        bmp.close && bmp.close();
+        for (const type of ['image/webp', 'image/jpeg']) {
+            const blob = await new Promise(res => canvas.toBlob(res, type, 0.82));
+            if (blob && blob.type === type)
+                return blob.size < file.size ? blob : file;   // never make a file bigger
+        }
+    }
+    catch (e) {
+        console.warn('Image not shrunk:', e);
+    }
+    return file;
+}
+
+export async function uploadPublic(bucket, original) {
+    const file = await shrinkImage(original);
+    const ext = file.type === 'image/webp' ? 'webp' : file.type === 'image/jpeg' ? 'jpg'
+        : ((original.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '')) || 'jpg';
+    const path = `${crypto.randomUUID()}.${ext}`;   // a new random name per upload, so the browser may cache it for a year
+    const up = await sb.storage.from(bucket).upload(path, file, { contentType: file.type, cacheControl: '31536000' });
     if (up.error)
         throw new Error(up.error.message);
     return sb.storage.from(bucket).getPublicUrl(path).data.publicUrl;
@@ -155,13 +278,24 @@ export const PHICON = '<svg width="34" height="34" viewBox="0 0 24 24" fill="non
 export const dlg = $('#rdlg');
 
 export function showDlg(html) {
+    dlg.classList.remove('hist');   // only the customer history window is wide; it adds this class itself
     dlg.innerHTML = `<div class="in">${html}</div>`;
     dlg.showModal();
 }
 
 dlg.addEventListener('click', e => {
+    if (dlg.dataset.locked && e.target === dlg)
+        return;   // a required-action pop-up: only its own button closes it
     if (e.target === dlg || e.target.closest('[data-close]'))
         dlg.close();
+});
+dlg.addEventListener('cancel', e => {
+    if (dlg.dataset.locked)
+        e.preventDefault();   // Esc does nothing while an action is required
+});
+dlg.addEventListener('close', () => {
+    dlg.classList.remove('hist');
+    delete dlg.dataset.locked;
 });
 
 $('#eqdlg').addEventListener('click', e => {

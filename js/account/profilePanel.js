@@ -12,6 +12,7 @@ import {
     updateAccountName
 } from './profileService.js';
 import { $, toast } from '../shared/utils.js';
+import { btnBusy, btnReset, btnSuccess } from '../shared/btnState.js';
 
 const PANEL_HTML = `
   <div class="grid ge">
@@ -56,17 +57,17 @@ function showMessage(elementId, message) {
     messageBox.hidden = !message;
 }
 
-/* Runs a save action with the button disabled and shows any error in the given box. */
+/* Runs a save action: a spinner while it works, a check mark when it worked, and any error in the given box. */
 async function runFormAction(saveButtonId, errorBoxId, action) {
     const saveButton = $(saveButtonId);
     showMessage(errorBoxId, '');
-    saveButton.disabled = true;
+    btnBusy(saveButton, 'Saving…');
     try {
         await action();
+        await btnSuccess(saveButton, 'Saved');
     } catch (error) {
+        btnReset(saveButton);
         showMessage(errorBoxId, error.message);
-    } finally {
-        saveButton.disabled = false;
     }
 }
 

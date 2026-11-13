@@ -16,6 +16,38 @@
     margin: 0 auto 14px;
 }
 
+/* ===== Glowing logo (login card) =====
+   A soft red glow that breathes slowly. Motion is switched off for visitors who prefer less. */
+.logo-glow {
+    width: 88px;
+    height: 88px;
+    margin: 6px auto 20px;
+}
+
+.logo-glow .logo-lg {
+    margin: 0;
+    animation: none;
+    box-shadow: 0 0 0 1.5px #b3202f99, 0 0 16px #b3202f55;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .logo-glow .logo-lg {
+        animation: lgBreathe 4s ease-in-out infinite;
+    }
+
+    @keyframes lgBreathe {
+
+        0%,
+        100% {
+            box-shadow: 0 0 0 1.5px #b3202f88, 0 0 12px #b3202f44;
+        }
+
+        50% {
+            box-shadow: 0 0 0 1.5px #cf3e4d, 0 0 24px #b3202f88;
+        }
+    }
+}
+
 .login-foot {
     margin-top: 16px;
     border-top: 1px solid var(--line);

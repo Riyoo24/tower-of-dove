@@ -42,6 +42,10 @@ export const queueHold = fn => {
     return run;
 };
 
+/* The database's own message when the last hold_slot call was refused for a reason other than a taken hour
+   (for example an old database that still limits a booking to 4 hours), or '' when there was none. */
+export let holdError = '';
+
 export function holdSlots(studioIdx, date, first, hours) {
     return queueHold(async () => {
         const s = STUDIOS[studioIdx];
@@ -51,6 +55,7 @@ export function holdSlots(studioIdx, date, first, hours) {
             p_end_at: manilaTS(date, 10 + first + hours),
             p_token: HOLD_TOKEN
         });
+        holdError = error ? (error.message || 'Could not hold these hours.') : '';
         if (error) {
             console.error(error);
             return false;
@@ -101,6 +106,28 @@ export function holdRescheduleSlots(bookingRef, studioIdx, date, first, hours) {
     });
 }
 
+/* Rental checkout: hold the cart's items for the hours they are needed (rpc hold_equipment, file 89), the same 2-minute
+   hold as the studio booking form. Resolves true when held, false when someone else holds / has reserved them. */
+export function holdEquipment(items, startAt, endAt) {
+    return queueHold(async () => {
+        const { data, error } = await sb.rpc('hold_equipment', {
+            p_items: items,
+            p_start_at: startAt,
+            p_end_at: endAt,
+            p_token: HOLD_TOKEN
+        });
+        holdError = error ? (error.message || 'Could not hold this equipment.') : '';
+        if (error) {
+            console.error(error);
+            holdActive = false;
+            return false;
+        }
+        holdActive = data === true;
+        return data === true;
+    });
+}
+
+/* releaseHold() also frees the equipment hold (file 89), so the same call closes every kind of hold. */
 export function releaseHold() {
     holdActive = false;
     return queueHold(async () => {

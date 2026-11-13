@@ -15,12 +15,14 @@ import { sb } from '../config/supabaseClient.js';
 import { navigate } from '../shared/navigation.js';
 import { claimableGuestBookings, clearPendingBooking, readPendingBooking } from '../shared/guestStore.js';
 import { clearUser, setUser } from '../shared/session.js';
-import { $, $$, SLOTS, isEmail, isName, longDate, pl, toast } from '../shared/utils.js';
+import { $, $$, SLOTS, isEmail, longDate, pl, toast } from '../shared/utils.js';
 import '../shared/formRules.js';
 import { injectChrome } from '../shared/layout.js';
 import './passwordToggle.js';
+import { btnBusy, btnReset, btnSuccess } from '../shared/btnState.js';
+import { applyChecks, check, hasFieldError, liveCheck, setFieldError } from '../shared/fieldCheck.js';
 
-injectChrome();   // sidebar + mobile bar
+injectChrome();   // top navigation bar
 
 /* Send each role to its home page: customers book; owner and staff always open the dashboard Overview
    (ROUTES.admin = pages/admin.html#a-over). */
@@ -61,20 +63,50 @@ function showMode(mode) {
 
 const modeFromHash = () => location.hash === '#register' ? 'register' : 'login';
 
+/* The rules of each form. Checked when a field is left, and again when the form is sent. */
+const RULES = {
+    login: [
+        ['#lu', () => check.email($('#lu').value)],
+        ['#lp', () => $('#lp').value ? '' : 'Enter your password.']
+    ],
+    reg: [
+        ['#rg-fn', () => check.first($('#rg-fn').value)],
+        ['#rg-ln', () => check.last($('#rg-ln').value)],
+        ['#rg-phone', () => check.phone($('#rg-phone').value)],
+        ['#rg-user', () => check.email($('#rg-user').value)],
+        ['#rg-pass', () => check.password($('#rg-pass').value)],
+        ['#rg-pass2', () => check.confirm($('#rg-pass2').value, $('#rg-pass').value)]
+    ],
+    forgot: [['#fg-email', () => check.email($('#fg-email').value)]],
+    reset: [
+        ['#rs-pass', () => check.password($('#rs-pass').value, 'Enter a new password.')],
+        ['#rs-pass2', () => check.confirm($('#rs-pass2').value, $('#rs-pass').value)]
+    ]
+};
+Object.values(RULES).forEach(liveCheck);
+// changing a password changes whether its confirmation matches
+[['#rg-pass', '#rg-pass2'], ['#rs-pass', '#rs-pass2']].forEach(([a, b]) => {
+    $(a).addEventListener('input', () => {
+        if (hasFieldError(b))
+            setFieldError(b, check.confirm($(b).value, $(a).value));
+    });
+});
+
 $('#f-login').addEventListener('submit', async e => {
     e.preventDefault();
     const email = $('#lu').value.trim(), password = $('#lp').value;
-    if (!email)
-        return showError('#login-err', 'Enter your email address.');
-    if (!isEmail(email))
-        return showError('#login-err', 'Enter a valid email address, like name@example.com.');
-    if (!password)
-        return showError('#login-err', 'Enter your password.');
     showError('#login-err', '');
+    if (!applyChecks(RULES.login.map(([t, rule]) => [t, rule()])))
+        return;   // the wrong fields are marked under themselves
+    const btn = e.target.querySelector('button[type="submit"]');
+    btnBusy(btn, 'Logging in…');
     try {
-        enter(await signIn(email, password));
+        const user = await signIn(email, password);
+        await btnSuccess(btn, 'Logged in', { keep: true, ms: 500 });
+        enter(user);
     }
     catch (err) {
+        btnReset(btn);
         showError('#login-err', err.message);
         $('#login-resend').hidden = !err.needsVerify;
     }
@@ -86,27 +118,13 @@ $('#f-reg').addEventListener('submit', async e => {
         last = $('#rg-ln').value.trim(),
         phone = $('#rg-phone').value.trim();
     const email = $('#rg-user').value.trim();
-    const pass = $('#rg-pass').value, pass2 = $('#rg-pass2').value;
+    const pass = $('#rg-pass').value;
 
-    if (!first)
-        return showError('#reg-err', 'Enter your first name.');
-    if (!isName(first))
-        return showError('#reg-err', 'The first name can only contain letters.');
-    if (!last)
-        return showError('#reg-err', 'Enter your last name.');
-    if (!isName(last))
-        return showError('#reg-err', 'The last name can only contain letters.');
-    if (!/^[\d\s+()-]{7,}$/.test(phone))
-        return showError('#reg-err', 'Enter a valid phone number.');
-    if (!email)
-        return showError('#reg-err', 'Enter your email address.');
-    if (!isEmail(email))
-        return showError('#reg-err', 'Enter a valid email address, like name@example.com.');
-    if (pass.length < 8)
-        return showError('#reg-err', 'Use a password with at least 8 characters.');
-    if (pass !== pass2)
-        return showError('#reg-err', 'The two passwords do not match.');
     showError('#reg-err', '');
+    if (!applyChecks(RULES.reg.map(([t, rule]) => [t, rule()])))
+        return;   // the wrong fields are marked under themselves
+    const btn = e.target.querySelector('button[type="submit"]');
+    btnBusy(btn, 'Creating…');
     try {
         const r = await register({
             first,
@@ -115,10 +133,12 @@ $('#f-reg').addEventListener('submit', async e => {
             email,
             password: pass
         });
+        await btnSuccess(btn, 'Account created', { keep: !r.pending });
         if (r.pending)
             return showVerify(r.email);
         enter(r);
     } catch (err) {
+        btnReset(btn);
         showError('#reg-err', err.message);
     }
 });
@@ -267,36 +287,37 @@ $('#f-forgot').addEventListener('submit', async e => {
     e.preventDefault();
     const email = $('#fg-email').value.trim(), btn = $('#forgot-send');
     $('#forgot-ok').hidden = true;
-    if (!email)
-        return showError('#forgot-err', 'Enter your email address.');
-    if (!isEmail(email))
-        return showError('#forgot-err', 'Enter a valid email address, like name@example.com.');
     showError('#forgot-err', '');
-    btn.disabled = true;
+    if (!applyChecks(RULES.forgot.map(([t, rule]) => [t, rule()])))
+        return;
+    btnBusy(btn, 'Sending…');
     try {
         await requestPasswordReset(email);
+        await btnSuccess(btn, 'Sent', { keep: true });
+        btn.disabled = true;   // one request a minute (it is enabled again below)
         // same wording whether or not the address has an account
         $('#forgot-ok').textContent = 'If an account exists for that email, a reset link is on its way. Open it to choose a new password. Check your spam folder too.';
         $('#forgot-ok').hidden = false;
         setTimeout(() => {
-            btn.disabled = false;
+            btnReset(btn);
         }, 60000);   // one request a minute
     } catch (err) {
         showError('#forgot-err', err.message);
-        btn.disabled = false;
+        btnReset(btn);
     }
 });
 
 $('#f-reset').addEventListener('submit', async e => {
     e.preventDefault();
-    const pass = $('#rs-pass').value, pass2 = $('#rs-pass2').value;
-    if (pass.length < 8)
-        return showError('#reset-err', 'Use a password with at least 8 characters.');
-    if (pass !== pass2)
-        return showError('#reset-err', 'The two passwords do not match.');
+    const pass = $('#rs-pass').value;
     showError('#reset-err', '');
+    if (!applyChecks(RULES.reset.map(([t, rule]) => [t, rule()])))
+        return;
+    const btn = e.target.querySelector('button[type="submit"]');
+    btnBusy(btn, 'Saving…');
     try {
         await setNewPassword(pass);
+        await btnSuccess(btn, 'Saved');
         await sb.auth.signOut();   // the reset link signed them in temporarily; they log in normally with the new password
         clearUser();
         $('#rs-pass').value = $('#rs-pass2').value = '';
@@ -305,6 +326,7 @@ $('#f-reset').addEventListener('submit', async e => {
         $('#login-ok').textContent = 'Your password was changed. Log in with the new password.';
         $('#login-ok').hidden = false;
     } catch (err) {
+        btnReset(btn);
         showError('#reset-err', err.message);
     }
 });

@@ -62,6 +62,8 @@
 /* badges (class name = status in lower case, spaces removed) */
 .b {
     display: inline-block;
+    white-space: nowrap;   /* never wrap the dot and the word onto two lines */
+    flex: none;
     padding: 2px 10px;
     border-radius: 99px;
     font-size: 12.5px;
@@ -71,7 +73,9 @@
 }
 
 .b.pending,
+.b.unpaid,
 .b.low,
+.b.reserved,
 .b.maintenance,
 .b.balancedue,
 .b.duetoday {
@@ -88,6 +92,7 @@
 }
 
 .b.active,
+.b.paid,
 .b.verified,
 .b.fullypaid,
 .b.available,
@@ -99,6 +104,7 @@
 .b.rejected,
 .b.cancelled,
 .b.unavailable,
+.b.outofstock,
 .b.overdue {
     background: var(--bad-bg);
     color: var(--bad);
@@ -196,6 +202,76 @@
     white-space: nowrap;
 }
 
+/* loading and success states (js/shared/btnState.js) */
+.btn.is-busy,
+.btn.is-done {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.btn.is-busy:disabled {
+    opacity: .85;
+    cursor: progress;
+}
+
+.btn.is-done:disabled {
+    opacity: 1;
+    cursor: default;
+    background: var(--ok-bg);
+    border-color: var(--ok);
+    color: var(--ok);
+}
+
+.btn-spin {
+    flex: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    animation: btn-spin .7s linear infinite;
+}
+
+.btn-check {
+    flex: none;
+}
+
+@keyframes btn-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .btn-check path {
+        stroke-dasharray: 18;
+        stroke-dashoffset: 18;
+        animation: btn-check-draw .3s ease-out forwards;
+    }
+}
+
+@keyframes btn-check-draw {
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+
+/* reduced motion: no spinning, a gentle pulse instead */
+@media (prefers-reduced-motion: reduce) {
+    .btn-spin {
+        animation: btn-pulse 1.4s ease-in-out infinite;
+        border-top-color: currentColor;
+    }
+}
+
+@keyframes btn-pulse {
+    50% {
+        opacity: .35;
+    }
+}
+
 /* chips (availability suggestions) */
 .chip {
     border: 1px solid var(--field-bd);
@@ -290,6 +366,23 @@ textarea {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-x: contain;
+    /* every table scrolls up and down inside its own box, so a long list never makes the whole page scroll */
+    max-height: 60vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+/* the column headings stay at the top while the rows scroll */
+.tw thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--surface);
+}
+
+/* a table inside a pop-up window gets a little less height, so two tables still fit */
+.dlg .tw {
+    max-height: 40vh;
 }
 
 /* a table inside a card or dialog may never be wider than its parent without scrolling */
@@ -714,11 +807,12 @@ table.grouped tr.dim > td {
     opacity: .6;
 }
 
-/* add-on equipment under its booking */
+/* add-on equipment under its booking: the text sits under the booking's columns, its status and Actions button
+   are real cells so they line up with the Status and Actions columns above */
 table.grouped .sub-row td {
     padding-top: 2px;
     padding-bottom: 8px;
-    white-space: normal;
+    vertical-align: middle;
 }
 
 .subin {
@@ -730,6 +824,7 @@ table.grouped .sub-row td {
     margin-left: 10px;
     border-left: 3px solid var(--line);
     font-size: 13px;
+    white-space: normal;
 }
 
 .subin .subtxt {
@@ -737,12 +832,7 @@ table.grouped .sub-row td {
     min-width: 160px;
 }
 
-.subin .subact {
-    display: flex;
-    gap: 6px;
-}
-
-.subin.strike .subtxt {
+table.grouped .sub-row.strike .subtxt {
     text-decoration: line-through;
     opacity: .6;
 }
@@ -790,4 +880,848 @@ table.grouped .sub-row td {
 .actmenu button:disabled {
     opacity: .55;
     cursor: default;
+}
+
+/* ---- Equipment inspection photos (migration 46) ---- */
+.insp-thumb {
+    width: 80px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    display: block;
+    cursor: zoom-in;
+}
+
+.insp-thumb-lg {
+    max-width: 240px;
+    max-height: 180px;
+    object-fit: contain;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    display: block;
+    margin-top: 4px;
+}
+
+.photo-pick-wrap {
+    margin-top: 10px;
+}
+
+.photo-pick-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.photo-pick-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.photo-pick-btn.disabled {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+.photo-pick-name {
+    font-size: 13px;
+}
+
+.photo-pick-preview {
+    margin-top: 6px;
+}
+
+.ret-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 0;
+}
+
+.ret-nophoto {
+    font-size: 12px;
+    text-align: right;
+}
+
+.insp-line {
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+}
+
+.insp-before-row {
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+}
+
+.insp-before-row:last-child {
+    border-bottom: none;
+}
+
+
+/* ---- file pickers: every "Choose File" input in the system (GCash screenshot, valid ID, photos, QR upload) ---- */
+input[type="file"] {
+    width: 100%;
+    padding: 8px;
+    border: 1px dashed var(--field-bd);
+    border-radius: 10px;
+    background: var(--field);
+    color: var(--mut);
+    font-size: 14px;
+    cursor: pointer;
+}
+
+input[type="file"]:hover {
+    border-color: var(--line-strong);
+}
+
+input[type="file"]:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+}
+
+input[type="file"]::file-selector-button {
+    margin-right: 12px;
+    padding: 8px 14px;
+    border: 1px solid var(--btn-bd);
+    border-radius: 8px;
+    background: var(--btn);
+    color: var(--btn-fg);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color .15s, background-color .15s;
+}
+
+input[type="file"]::file-selector-button:hover {
+    border-color: var(--line-strong);
+}
+
+/* the "Attach photo" button hides its real input and is already a styled button, so it keeps its own look */
+.photo-pick-btn input[type="file"] {
+    padding: 0;
+    border: 0;
+    background: none;
+}
+
+/* ---- GCash reference number being detected from the screenshot (js/shared/gcashProof.js) ---- */
+.ocr-spin {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-right: 8px;
+    vertical-align: -2px;
+    border: 2px solid var(--line-strong);
+    border-top-color: var(--brand-hi);
+    border-radius: 50%;
+    animation: ocr-spin .8s linear infinite;
+}
+
+input.ocr-busy {
+    background-image: linear-gradient(100deg, transparent 30%, #ffffff14 50%, transparent 70%);
+    background-size: 220% 100%;
+    background-repeat: no-repeat;
+    animation: ocr-shimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes ocr-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes ocr-shimmer {
+    from {
+        background-position: 130% 0;
+    }
+    to {
+        background-position: -130% 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ocr-spin {
+        animation-duration: 2s;
+    }
+
+    input.ocr-busy {
+        animation: none;
+    }
+}
+
+/* =====================================================================
+   Loading skeletons (js/shared/skeleton.js)
+   Grey shimmer blocks that stand in for cards, KPI tiles and table rows while Supabase answers.
+   The page's render code replaces them with the real content. The `shimmer` keyframes are in motion.css.
+   ===================================================================== */
+.sk-sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+.sk-b {
+    display: block;
+    height: 12px;
+    max-width: 100%;
+    border-radius: 6px;
+    background: linear-gradient(100deg, var(--dove) 30%, #2f2f37 50%, var(--dove) 70%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+}
+
+.sk-card,
+.sk-kpi,
+.sk-tile,
+.sk-panel {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+}
+
+.sk-pic {
+    height: 104px;
+    border-radius: 8px;
+}
+
+.sk-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.sk-foot {
+    margin-top: 6px;
+}
+
+.sk-h {
+    height: 16px;
+}
+
+.sk-pill {
+    height: 20px;
+    border-radius: 999px;
+}
+
+.sk-btn {
+    height: 32px;
+    border-radius: 8px;
+}
+
+.sk-num {
+    height: 30px;
+    margin-top: 4px;
+}
+
+.sk-kpi {
+    min-height: 92px;
+}
+
+.sk-tile {
+    min-height: 84px;
+}
+
+.sk-panel {
+    min-height: 150px;
+}
+
+.sk-li {
+    list-style: none;
+    padding: 8px 0;
+}
+
+/* a table: filter tabs, a heading row and rows with the same height as real rows, so the page does not jump */
+.sk-table {
+    position: relative;
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.sk-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.sk-tab {
+    width: 78px;
+    height: 30px;
+    border-radius: 999px;
+}
+
+.sk-tr {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    height: 45px;
+    padding: 0 10px;
+    border-bottom: 1px solid var(--dove);
+}
+
+.sk-tr>.sk-b {
+    flex: 1 1 0;
+    min-width: 28px;
+}
+
+.sk-th {
+    height: 37px;
+    border-bottom-color: var(--line);
+}
+
+.sk-th>.sk-b {
+    height: 10px;
+}
+
+/* the loading failed: a short message instead of shimmer that never ends */
+.sk-fail {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 14px;
+    border: 1px dashed var(--line-strong);
+    border-radius: var(--r);
+    color: var(--mut);
+    font-size: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sk-b {
+        animation: none;
+    }
+}
+
+/* friendly empty states (js/shared/emptyState.js) */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 6px;
+    padding: 32px 16px;
+}
+
+.empty-ic {
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+    margin-bottom: 4px;
+    border-radius: 50%;
+    background: var(--dove);
+    color: var(--accent);
+}
+
+.empty-t {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--ink);
+}
+
+.empty-x {
+    margin: 0;
+    max-width: 38ch;
+    color: var(--mut);
+}
+
+.empty-state .btn {
+    margin-top: 10px;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.empty-state.compact {
+    padding: 14px 8px;
+    gap: 4px;
+}
+
+.empty-state.compact .empty-ic {
+    width: 44px;
+    height: 44px;
+}
+
+.empty-state.compact .empty-ic svg {
+    width: 22px;
+    height: 22px;
+}
+
+.empty-state.compact .empty-t {
+    font-size: 15px;
+}
+
+.empty-state.compact .empty-x {
+    font-size: 13px;
+}
+
+.empty-state.compact .btn {
+    margin-top: 6px;
+}
+
+/* the cart is a list: its empty message is not a row */
+.list li.empty-li {
+    display: block;
+    padding: 0;
+    border-bottom: 0;
+}
+
+/* inline field errors (js/shared/fieldCheck.js) */
+input.invalid,
+select.invalid,
+textarea.invalid {
+    border-color: var(--bad);
+    box-shadow: 0 0 0 1px var(--bad);
+}
+
+.field-err {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin: 4px 0 0;
+    font-size: 13px;
+    line-height: 1.35;
+    color: var(--bad);
+}
+
+.field-err::before {
+    content: "!";
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 15px;
+    height: 15px;
+    margin-top: 1px;
+    border-radius: 50%;
+    background: var(--bad);
+    color: var(--bad-bg);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .field-err {
+        animation: fieldErrIn .2s ease-out;
+    }
+}
+
+@keyframes fieldErrIn {
+    from {
+        opacity: 0;
+        transform: translateY(-3px);
+    }
+}
+
+/* ---- Damage fees (migration 58): admin window, return window and the customer's receipt ---- */
+.dc-item {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    text-align: left;
+}
+
+.dc-photos {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 10px;
+    margin: 8px 0;
+}
+
+.dc-photos figure {
+    margin: 0;
+}
+
+.dc-photos img,
+.dc-nophoto {
+    display: block;
+    width: 100%;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+
+.dc-nophoto {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--mut);
+    font-size: 13px;
+}
+
+.dc-photos figcaption {
+    margin-top: 3px;
+    font-size: 12px;
+    color: var(--mut);
+    text-align: center;
+}
+
+.dc-line {
+    margin: 8px 0;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+}
+
+.dc-warn {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: var(--warn);
+}
+
+.dc-log {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 13px;
+}
+
+.dc-log li {
+    margin-bottom: 6px;
+}
+
+.dc-note {
+    color: var(--mut);
+}
+
+.dc-collect {
+    margin-top: 10px;
+}
+
+.dmg-box {
+    margin-top: 14px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    text-align: left;
+}
+
+.dmg-box h3 {
+    margin: 0 0 4px;
+    font-size: 15px;
+}
+
+/* Pay your damage fee (customer My rental) */
+.dmg-pay .dr-sum,
+.dmg-pay + .dr-sum {
+    margin-bottom: 12px;
+}
+
+.dmg-choices {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+    align-items: stretch;
+}
+
+.dmg-choice {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    margin: 0;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-weight: 400;
+    cursor: pointer;
+}
+
+.dmg-choice:has(input:checked) {
+    border-color: var(--brand-hi);
+    background: #B3202F1F;
+}
+
+.dmg-choice:has(input:focus-visible) {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+}
+
+.dmg-choice input {
+    -webkit-appearance: none;
+    appearance: none;
+    display: grid;
+    place-content: center;
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    padding: 0;
+    margin: 2px 0 0;
+    flex: none;
+    border: 2px solid var(--line-strong, #6b6b78);
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer;
+}
+
+.dmg-choice input::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--brand-hi);
+    transform: scale(0);
+    transition: transform .12s ease-in-out;
+}
+
+.dmg-choice input:checked {
+    border-color: var(--brand-hi);
+}
+
+.dmg-choice input:checked::before {
+    transform: scale(1);
+}
+
+.dmg-choice input:focus-visible {
+    outline: none;
+}
+
+.dmg-choice b,
+.dmg-choice small {
+    display: block;
+}
+
+.dmg-choice small {
+    margin-top: 2px;
+    color: var(--mut);
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.dmg-gc {
+    margin-top: 12px;
+}
+
+/* QR on the left, instructions on the right, so the form is not pushed off screen */
+.dmg-gc .gq {
+    grid-template-columns: auto minmax(0, 1fr);
+    justify-items: start;
+    align-items: center;
+    gap: 18px;
+    margin-top: 0;
+    text-align: left;
+    border-style: solid;
+    background: var(--field);
+}
+
+.dmg-gc .gq img {
+    width: 144px;
+    max-width: 100%;
+}
+
+.dmg-gc .gq:has(img[hidden]) {
+    grid-template-columns: 1fr;
+}
+
+.dmg-gc .gq p {
+    font-size: 14px;
+    line-height: 1.55;
+}
+
+@media (max-width: 560px) {
+    .dmg-choices {
+        grid-template-columns: 1fr;
+    }
+
+    .dmg-gc .gq {
+        grid-template-columns: 1fr;
+        justify-items: center;
+        text-align: center;
+    }
+}
+
+/* GCash screenshot in the Damage fee window: whole picture like the Verify drawer, click to enlarge */
+.dc-shots {
+    margin-top: 10px;
+}
+
+.dc-shotbtn {
+    display: block;
+    margin: 0 auto;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: zoom-in;
+}
+
+.dc-shotbtn .idimg {
+    max-height: 320px;
+    margin: 8px auto;
+}
+
+.dc-shothint {
+    margin: 4px 0 0;
+    font-size: 13px;
+    text-align: center;
+}
+
+.dlg.imgviewer {
+    max-width: 720px;
+    width: min(92vw, 720px);
+}
+
+.dlg.imgviewer h2 {
+    text-align: center;
+}
+
+.dlg.imgviewer .acts {
+    justify-content: center;
+}
+
+/* reference number and amount above the screenshot, so they can be compared without closing the picture */
+.imgviewer .iv-info {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 10px 44px;
+    margin: 0 auto 12px;
+    padding: 12px 18px;
+    text-align: center;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, .04);
+}
+
+.imgviewer .iv-info > div {
+    display: grid;
+    justify-items: center;
+    gap: 4px;
+}
+
+.imgviewer .iv-info .mut {
+    font-size: 12px;
+}
+
+.imgviewer .iv-info b {
+    font-size: 18px;
+}
+
+.imgviewer .iv-info .iv-ref {
+    font-size: 22px;
+    letter-spacing: .06em;
+    font-variant-numeric: tabular-nums;
+}
+
+/* keep the details and the buttons on screen: the picture shrinks to fit the window height */
+.imgviewer .idfull {
+    max-height: calc(100vh - 300px);
+    width: auto;
+    max-width: 100%;
+    object-fit: contain;
+}
+
+/* History in the Damage fee window: a dropdown, closed until opened */
+.dc-history {
+    margin-top: 16px;
+    border-top: 1px solid var(--border);
+}
+
+.dc-history summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 0;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    list-style: none;
+}
+
+.dc-history summary::-webkit-details-marker {
+    display: none;
+}
+
+.dc-history summary::after {
+    content: "";
+    width: 7px;
+    height: 7px;
+    margin-left: auto;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+    transition: transform .15s ease-in-out;
+}
+
+.dc-history[open] summary::after {
+    transform: rotate(-135deg);
+}
+
+.dc-history summary:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+}
+
+/* Handover / before / after photos in the rental details drawer: whole picture, not a small cropped thumbnail */
+.insp-proof {
+    display: block;
+    max-width: 100%;
+    max-height: 240px;
+    margin: 6px 0 2px;
+    object-fit: contain;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #000;
+    cursor: zoom-in;
+}
+
+/* quantity stepper: minus / count / plus (equipment windows) */
+.qstep {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--line, rgba(255, 255, 255, .18));
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.qstep .qbtn {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 20px;
+    line-height: 1;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.qstep .qbtn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, .1);
+}
+
+.qstep .qbtn:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: -2px;
+}
+
+.qstep .qbtn:disabled {
+    opacity: .35;
+    cursor: not-allowed;
+}
+
+.qstep .qval {
+    min-width: 34px;
+    text-align: center;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
 }

@@ -7,6 +7,7 @@
 
 import { state } from './state.js';
 import { EQUIPMENT } from '../shared/catalog.js';
+import { saveCart } from './cartStore.js';
 
 export const CTX_LABEL = {
     addon: 'Studio Add-ons',
@@ -15,6 +16,14 @@ export const CTX_LABEL = {
 };
 
 const CTXS = ['addon', 'book', 'out'];
+
+/* free stock of an item for the hours of `ctx` (falls back to the stock right now while the hours are unknown) */
+export const stockOf = (e, ctx) => {
+    if (!e)
+        return 0;
+    const m = state.winStock[ctx];
+    return m && m[e.id] !== undefined ? m[e.id] : e.stock;
+};
 
 /* quantity of an item held in every cart except `ctx` */
 const heldElsewhere = (ctx, id) => CTXS.filter(k => k !== ctx).reduce((n, k) => n + qtyIn(k, id), 0);
@@ -25,7 +34,7 @@ export const qtyIn = (ctx, id) => +state.cart[ctx][id] || 0;
 /* how many more of this item can be added to `ctx` (what the other carts hold is already taken) */
 export const remainingFor = (ctx, id) => {
     const e = EQUIPMENT.find(x => x.id === +id);
-    return e ? Math.max(0, e.stock - heldElsewhere(ctx, id) - qtyIn(ctx, id)) : 0;
+    return e ? Math.max(0, stockOf(e, ctx) - heldElsewhere(ctx, id) - qtyIn(ctx, id)) : 0;
 };
 
 /* the most that `ctx` may hold of this item (its own quantity plus what is still free) */
@@ -39,6 +48,7 @@ export function setQty(ctx, id, want) {
         state.cart[ctx][id] = q;
     else
         delete state.cart[ctx][id];
+    saveCart(state.cart);   // persist so the cart survives navigating away and back
     return {
         q,
         capped: q < Math.max(0, Math.floor(+want) || 0)
@@ -46,8 +56,8 @@ export function setQty(ctx, id, want) {
 }
 
 /* Sentence for the alert: where the item's stock is held right now. */
-export function allocationMessage(id) {
-    const e = EQUIPMENT.find(x => x.id === +id);
+export function allocationMessage(id, ctx = state.rentMode) {
+    const e = EQUIPMENT.find(x => x.id === +id), st = stockOf(e, ctx);
     const a = qtyIn('addon', id), b = qtyIn('book', id), o = qtyIn('out', id);
     const held = [];
     if (a)
@@ -59,11 +69,11 @@ export function allocationMessage(id) {
     const list = held.length > 1 ? held.slice(0, -1).join(', ') + ' and ' + held[held.length - 1] : held[0];
     return {
         name: e ? e.name : 'this item',
-        stock: e ? e.stock : 0,
+        stock: st,
         addon: a,
         book: b,
         out: o,
-        text: `You have reached the maximum available stock of ${e ? e.stock : 0}. ` +
+        text: `You have reached the maximum available stock of ${st}${state.winStock[ctx] ? ' for your hours' : ''}. ` +
             (list ? `You currently have ${list}.` : 'None of it is allocated yet.')
     };
 }
@@ -71,22 +81,41 @@ export function allocationMessage(id) {
 /* empties the add-on cart after the studio booking or add-on request was sent */
 export const clearCart = ctx => {
     Object.keys(state.cart[ctx]).forEach(k => delete state.cart[ctx][k]);
+    // 'book' is the booking-form cart — it is never persisted, so only save for 'addon'/'out'
+    if (ctx !== 'book')
+        saveCart(state.cart);
 };
 
-/* drops cart lines whose equipment is gone or no longer offered, and cuts quantities to fit the (reloaded) stock */
-export function trimCartToStock() {
-    CTXS.forEach(ctx => {
+/* drops cart lines whose equipment is gone or no longer offered, and cuts quantities to fit the (reloaded) stock.
+   `only` limits it to one cart ('addon' | 'book' | 'out'). Returns true when anything was removed or reduced. */
+export function trimCartToStock(only) {
+    /* The equipment list loads asynchronously. Until it has arrived every cart line would look like
+       "equipment that is gone" and be deleted (and the empty cart saved), which is what used to empty the
+       cart whenever the page was reloaded or revisited. Do nothing until the catalog is in. */
+    if (!EQUIPMENT.length)
+        return false;
+    let changed = false;
+    CTXS.filter(ctx => !only || ctx === only).forEach(ctx => {
         Object.keys(state.cart[ctx]).forEach(id => {
             const e = EQUIPMENT.find(x => x.id === +id);
-            if (!e || (ctx === 'out' ? !e.outside : !e.addon))
+            if (!e || (ctx === 'out' ? !e.outside : !e.addon)) {
                 delete state.cart[ctx][id];
+                changed = true;
+            }
             else {
-                const left = e.stock - heldElsewhere(ctx, id);
-                if (left <= 0)
+                const left = stockOf(e, ctx) - heldElsewhere(ctx, id);
+                if (left <= 0) {
                     delete state.cart[ctx][id];
-                else if (state.cart[ctx][id] > left)
+                    changed = true;
+                }
+                else if (state.cart[ctx][id] > left) {
                     state.cart[ctx][id] = left;
+                    changed = true;
+                }
             }
         });
     });
+    if (changed)
+        saveCart(state.cart);   // keep sessionStorage in sync after trimming
+    return changed;
 }

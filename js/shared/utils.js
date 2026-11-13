@@ -17,9 +17,10 @@ export const isName = v => {
     return t.length > 0 && /\p{L}/u.test(t) && !/[^\p{L}\p{M}\s.'\u2019-]/u.test(t);
 };
 
-/* Philippine mobile numbers: 0917 123 4567, 63 917 123 4567 or +63 917 123 4567 (spaces, dashes and brackets are ignored). */
-export const PHONE_BAD = /[^\d\s+()-]/g;
-export const isPhone = v => /^(\+63|63|0)9\d{9}$/.test(String(v).replace(/[\s().-]/g, ''));
+/* Philippine mobile numbers: 11 digits starting with 09, like 0917 123 4567 (spaces and dashes are ignored). */
+export const PHONE_BAD = /[^\d\s-]/g;
+export const PHONE_MAX_DIGITS = 11;   // 0917 123 4567
+export const isPhone = v => /^09\d{9}$/.test(String(v).replace(/[\s-]/g, ''));
 
 /* The database stores real timestamps; the studio runs on Manila time (UTC+8). */
 export const manilaTS = (dateISO, hour) => `${dateISO}T${String(hour).padStart(2, '0')}:00:00+08:00`;
@@ -57,6 +58,36 @@ export const $ = s => document.querySelector(s);
 export const $$ = s => [...document.querySelectorAll(s)];
 
 export const esc = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
+/* Turns a studio description into tidy HTML. A line ending in ":" becomes a small heading,
+   lines starting with "-" become list items (a tick under "Included", a cross under "Not included"),
+   and any other line stays a plain paragraph, so old one-line descriptions still look right. */
+export function descHTML(text, cls = '') {
+    const lines = String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (!lines.length)
+        return '';
+    const out = [];
+    let sec = null;   // the list currently being filled
+    const close = () => { if (sec) { out.push('</ul></div>'); sec = null; } };
+    for (const l of lines) {
+        const item = l.match(/^[-\u2013\u2022*]\s*(.+)$/);
+        if (item) {
+            if (!sec) { out.push('<div class="ds"><ul>'); sec = 'plain'; }
+            out.push(`<li>${esc(item[1])}</li>`);
+        } else if (l.endsWith(':')) {
+            close();
+            const no = /^(not|exclud|no\b)/i.test(l);
+            out.push(`<div class="ds ${no ? 'no' : 'yes'}"><h4>${esc(l.slice(0, -1))}</h4><ul>`);
+            sec = no ? 'no' : 'yes';
+        } else {
+            close();
+            out.push(`<p>${esc(l)}</p>`);
+        }
+    }
+    close();
+    const rich = out.some(x => x.startsWith('<div class="ds'));   // has lists, not just a tagline
+    return `<div class="desc ${cls}${rich ? ' rich' : ''}">${out.join('')}</div>`;
+}
 
 export const peso = n => '₱' + n.toLocaleString('en-US');
 
@@ -115,3 +146,26 @@ export const sum = a => a.reduce((x, y) => x + y, 0);
 export const downPayment = total => Math.round(total * 50) / 100;
 
 export const pl = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
+
+/* Like setInterval, but does nothing while the tab is hidden and catches up once when the tab
+   comes back (so a background tab does no work). Returns a function that stops it. */
+export function everyVisible(fn, ms) {
+    let missed = false;
+    const id = setInterval(() => {
+        if (document.hidden)
+            missed = true;
+        else
+            fn();
+    }, ms);
+    const onShow = () => {
+        if (!document.hidden && missed) {
+            missed = false;
+            fn();
+        }
+    };
+    document.addEventListener('visibilitychange', onShow);
+    return () => {
+        clearInterval(id);
+        document.removeEventListener('visibilitychange', onShow);
+    };
+}

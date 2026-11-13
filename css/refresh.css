@@ -1,0 +1,1903 @@
+/* =====================================================================
+   refresh.css - visual refresh of the CUSTOMER pages (home, book, rent,
+   my bookings, my rental, account, login).  Loaded last, after motion.css.
+   Everything is scoped to body.hastop / the customer page ids, so the admin
+   dashboard is not affected.  Remove the <link> to get the old look back.
+   ===================================================================== */
+
+/* ---------- ambient background: soft red glows + a faint dot grid ---------- */
+body.hastop {
+    position: relative;
+    background: var(--paper);
+}
+
+body.hastop::before,
+body.hastop::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+}
+
+body.hastop::before {
+    background:
+        radial-gradient(55% 45% at 88% -8%, #7a1222aa, transparent 70%),
+        radial-gradient(40% 40% at -4% 38%, #4500118c, transparent 70%),
+        radial-gradient(45% 40% at 104% 96%, #b3202f38, transparent 70%);
+}
+
+body.hastop::after {
+    background-image: radial-gradient(#ffffff12 1px, transparent 1.2px);
+    background-size: 30px 30px;
+    -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 75%);
+    mask-image: linear-gradient(180deg, #000 0%, transparent 75%);
+}
+
+/* ---------- small shared pieces ---------- */
+.eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    font: 700 11px 'Instrument Sans', sans-serif;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: #EB5365;   /* 4.5:1+ on the dark page (was #CF3E4D = 4.16) */
+}
+
+.eyebrow::before {
+    content: "";
+    width: 22px;
+    height: 2px;
+    border-radius: 2px;
+    background: currentColor;
+}
+
+/* highlighted words keep the normal white heading colour (no colour accent) */
+.hl {
+    color: inherit;
+}
+
+/* softer, slightly lifted cards on every customer page */
+body.hastop .page .card {
+    background: linear-gradient(180deg, #1c1c21 0%, #151519 100%);
+    border-color: #ffffff12;
+    box-shadow: 0 1px 0 #ffffff08 inset, 0 12px 32px #00000040;
+}
+
+/* ---------- page headers (book / rent / my bookings / my rental / account) ---------- */
+.pghead {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    margin: 6px 0 26px;
+    padding: 26px 0 22px;
+    border-bottom: 1px solid #ffffff12;
+    position: relative;
+}
+
+.pghead::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -1px;
+    width: 120px;
+    height: 2px;
+    background: linear-gradient(90deg, var(--brand-hi), transparent);
+}
+
+.pghead h1 {
+    font-size: 40px;
+    line-height: 1.08;
+    margin-bottom: 8px;
+}
+
+.pghead .sub {
+    max-width: 64ch;
+    color: var(--mut);
+}
+
+.pg-chips {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+    flex: none;
+    max-width: 380px;
+}
+
+.pg-chips span {
+    padding: 7px 13px;
+    border-radius: 999px;
+    background: #ffffff0a;
+    border: 1px solid #ffffff17;
+    color: #cfcdd6;
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* the rental summary stays in view while you scroll the equipment list */
+@media (min-width: 901px) {
+    #c-rent .rsum-card {
+        position: sticky;
+        top: 96px;
+    }
+}
+
+/* ---------- home: hero ---------- */
+body.hastop .hero {
+    position: relative;
+    overflow: hidden;
+    background: none;
+}
+
+.hx-art {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 78%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 max(20px, calc((100% - var(--maxw, 1120px)) / 2));
+    pointer-events: none;
+    -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 70%);
+    mask-image: linear-gradient(180deg, transparent 0%, #000 70%);
+}
+
+.hx-art i,
+.cta-bars i,
+.aa-bars i {
+    flex: 1;
+    min-width: 3px;
+    max-width: 26px;
+    height: var(--h, 40%);
+    border-radius: 6px 6px 0 0;
+    background: linear-gradient(180deg, #e23b4e55, #b3202f10);
+    transform-origin: bottom;
+    animation: eq 3.6s ease-in-out infinite;
+    animation-delay: calc(var(--d, 0) * -1s);
+}
+
+.hx-art i:nth-child(6n+1),
+.cta-bars i:nth-child(6n+1),
+.aa-bars i:nth-child(6n+1) {
+    --h: 34%;
+    --d: .4;
+}
+
+.hx-art i:nth-child(6n+2),
+.cta-bars i:nth-child(6n+2),
+.aa-bars i:nth-child(6n+2) {
+    --h: 62%;
+    --d: 1.7;
+}
+
+.hx-art i:nth-child(6n+3),
+.cta-bars i:nth-child(6n+3),
+.aa-bars i:nth-child(6n+3) {
+    --h: 48%;
+    --d: 2.5;
+}
+
+.hx-art i:nth-child(6n+4),
+.cta-bars i:nth-child(6n+4),
+.aa-bars i:nth-child(6n+4) {
+    --h: 86%;
+    --d: .9;
+}
+
+.hx-art i:nth-child(6n+5),
+.cta-bars i:nth-child(6n+5),
+.aa-bars i:nth-child(6n+5) {
+    --h: 56%;
+    --d: 3.1;
+}
+
+.hx-art i:nth-child(6n),
+.cta-bars i:nth-child(6n),
+.aa-bars i:nth-child(6n) {
+    --h: 72%;
+    --d: 2;
+}
+
+@keyframes eq {
+
+    0%,
+    100% {
+        transform: scaleY(1);
+    }
+
+    50% {
+        transform: scaleY(.55);
+    }
+}
+
+.hx .hi1 {
+    position: relative;
+    z-index: 1;
+}
+
+.hx h1 {
+    font-size: clamp(40px, 4.4vw, 68px);
+    line-height: 1.02;
+    margin-bottom: 18px;
+}
+
+.hx-copy p {
+    font-size: 17px;
+    max-width: 50ch;
+}
+
+.hx-cta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin: 24px 0 0;
+}
+
+.hx-stats {
+    display: grid;
+    grid-template-columns: repeat(3, auto);
+    justify-content: start;
+    gap: 0;
+    margin-top: 30px;
+    padding-top: 22px;
+    border-top: 1px solid #ffffff14;
+}
+
+.hx-stats>div {
+    padding: 0 30px;
+    border-left: 1px solid #ffffff14;
+}
+
+.hx-stats>div:first-child {
+    padding-left: 0;
+    border-left: 0;
+}
+
+.hx-stats dt {
+    font: 700 28px/1.1 'Bricolage Grotesque', serif;
+    color: #fff;
+}
+
+.hx-stats dd {
+    margin: 4px 0 0;
+    color: var(--mut);
+    font-size: 12.5px;
+    letter-spacing: .04em;
+}
+
+/* on short windows keep the first screen compact (the stats fold away) */
+@media (min-width: 901px) and (max-height: 820px) {
+    .hx-stats {
+        display: none;
+    }
+}
+
+/* ---------- home: sections ---------- */
+.sec h2 {
+    font-size: 32px;
+}
+
+.hx-how {
+    padding-top: 40px;
+    counter-reset: step;
+}
+
+.hx-step {
+    position: relative;
+    overflow: hidden;
+    flex-direction: column;
+    gap: 14px;
+    padding: 24px;
+    border-radius: 18px;
+    border-color: #ffffff14;
+    background: linear-gradient(160deg, #1d1d23 0%, #141418 100%);
+    transition: transform .25s ease, border-color .25s ease;
+}
+
+.hx-step::after {
+    content: "";
+    position: absolute;
+    right: -40px;
+    top: -40px;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #b3202f40, transparent 70%);
+}
+
+.hx-step:hover {
+    transform: translateY(-3px);
+    border-color: #b3202f88;
+}
+
+.hx-step b {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    font: 700 19px 'Bricolage Grotesque', serif;
+    background: linear-gradient(135deg, var(--brand-hi), var(--brand-lo));
+    box-shadow: 0 8px 20px #b3202f55;
+}
+
+.hx-step h3 {
+    font-size: 18px;
+    margin-bottom: 4px;
+}
+
+.hx-room {
+    transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+}
+
+.hx-room:hover {
+    transform: translateY(-4px);
+    border-color: #b3202f77 !important;
+    box-shadow: 0 18px 40px #00000066, 0 0 0 1px #b3202f33 !important;
+}
+
+/* ---------- home: booking banner ---------- */
+.cta-band {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 28px;
+    margin-top: 64px;
+    padding: 44px 48px;
+    border-radius: 26px;
+    border: 1px solid #ff6b7833;
+    background:
+        radial-gradient(70% 140% at 0% 0%, #b3202f99, transparent 65%),
+        linear-gradient(120deg, #3a0a14 0%, #1a0a0e 100%);
+    width: calc(100% - 40px);
+}
+
+.cta-band h2 {
+    font-size: 34px;
+    margin-bottom: 8px;
+}
+
+.cta-band h2::after {
+    display: none;
+}
+
+.cta-band p {
+    color: #ffffffb3;
+    max-width: 46ch;
+}
+
+.cta-copy,
+.cta-btns {
+    position: relative;
+    z-index: 1;
+}
+
+.cta-btns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    flex: none;
+}
+
+.cta-bars {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 46%;
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+    gap: 7px;
+    padding-right: 20px;
+    opacity: .7;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 60%);
+    mask-image: linear-gradient(90deg, transparent, #000 60%);
+}
+
+/* ---------- footer (injected on every customer page) ---------- */
+.sitefoot {
+    max-width: var(--maxw, 1120px);
+    width: calc(100% - 40px);
+    margin: 72px auto 0;
+    padding: 40px 0 36px;
+    border-top: 1px solid #ffffff14;
+    color: var(--mut);
+    font-size: 14px;
+}
+
+.sf-in {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) repeat(2, minmax(0, 1fr));
+    gap: 40px;
+}
+
+.sf-brand p {
+    margin-top: 14px;
+    max-width: 38ch;
+}
+
+.sf-col {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+}
+
+.sf-col h4 {
+    margin-bottom: 4px;
+    font: 700 11px 'Instrument Sans', sans-serif;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: #e9e7ee;
+}
+
+.sf-col a {
+    color: var(--mut);
+    text-decoration: none;
+    width: fit-content;
+    transition: color .2s ease;
+}
+
+.sf-col a:hover {
+    color: #fff;
+}
+
+.sf-note {
+    margin-top: 32px;
+    padding-top: 20px;
+    border-top: 1px solid #ffffff0f;
+    font-size: 12.5px;
+    color: #7f7d8a;
+}
+
+/* ---------- login / register: split screen ---------- */
+#auth {
+    max-width: var(--maxw, 1120px);
+    margin: 0 auto;
+    padding: 28px 20px 24px;
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 480px);
+    gap: 56px;
+    align-items: center;
+    min-height: calc(100svh - 150px);
+}
+
+#auth .login {
+    max-width: none;
+    width: 100%;
+    margin: 0;
+    padding: 28px;
+    border-radius: 24px;
+}
+
+.auth-art {
+    position: relative;
+    overflow: hidden;
+    min-height: 520px;
+    padding: 52px 48px;
+    border-radius: 28px;
+    border: 1px solid #ff6b7833;
+    background:
+        radial-gradient(80% 90% at 0% 0%, #b3202f99, transparent 65%),
+        linear-gradient(150deg, #3a0a14 0%, #14090c 100%);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.auth-art>*:not(.aa-bars) {
+    position: relative;
+    z-index: 1;
+}
+
+.auth-art h2 {
+    font-size: clamp(34px, 3.6vw, 52px);
+    line-height: 1.04;
+    margin: 4px 0 16px;
+    color: #fff;
+}
+
+.auth-art p {
+    max-width: 42ch;
+    color: #ffffffbf;
+    font-size: 16px;
+}
+
+.auth-art ul {
+    list-style: none;
+    padding: 0;
+    margin-top: 26px;
+    display: grid;
+    gap: 12px;
+    color: #f4f1eecc;
+    font-size: 14.5px;
+}
+
+.auth-art li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.auth-art li::before {
+    content: "";
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--glow);
+    box-shadow: 0 0 0 4px #ff2d3622, 0 0 12px var(--glow);
+}
+
+.aa-bars {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 55%;
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    padding: 0 28px;
+    opacity: .75;
+    -webkit-mask-image: linear-gradient(180deg, transparent, #000 80%);
+    mask-image: linear-gradient(180deg, transparent, #000 80%);
+}
+
+.aa-bars i {
+    max-width: 34px;
+}
+
+.logo-lg {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* ---------- tablets and phones ---------- */
+@media (max-width: 900px) {
+    .pghead {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+        padding-top: 14px;
+    }
+
+    .pghead h1 {
+        font-size: 32px;
+    }
+
+    .pg-chips {
+        justify-content: flex-start;
+        max-width: none;
+    }
+
+    .hx-stats {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .hx-stats>div {
+        padding: 0 14px;
+    }
+
+    .hx-stats dt {
+        font-size: 22px;
+    }
+
+    .cta-band {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 32px 26px;
+    }
+
+    .cta-band h2 {
+        font-size: 28px;
+    }
+
+    .cta-bars {
+        width: 100%;
+        opacity: .35;
+    }
+
+    .sf-in {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 28px;
+    }
+
+    .sf-brand {
+        grid-column: 1 / -1;
+    }
+
+    #auth {
+        grid-template-columns: minmax(0, 1fr);
+        min-height: 0;
+        padding-top: 12px;
+    }
+
+    .auth-art {
+        display: none;
+    }
+
+    #auth .login {
+        max-width: 480px;
+        margin: 0 auto;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .hx-art i,
+    .cta-bars i,
+    .aa-bars i {
+        animation: none;
+    }
+
+    .hx-step,
+    .hx-room {
+        transition: none;
+    }
+}
+
+/* hero: centre the check-a-time card against the copy, keep the first screen tidy */
+@media (min-width: 821px) {
+    .hx .hx-grid {
+        align-items: center;
+    }
+
+    .hx-card {
+        padding: 24px;
+    }
+
+    .hx-card h3 {
+        margin-bottom: 12px;
+    }
+
+    body.hastop .slide {
+        height: clamp(300px, 30vw, 420px);
+    }
+
+    body.hastop .fold {
+        min-height: 0;
+    }
+}
+
+.cta-band .eyebrow {
+    color: #ffb3ba;
+}
+
+.hx-art {
+    opacity: .6;
+}
+
+/* =====================================================================
+   Hero copy nudge  (customer home page)
+   ---------------------------------------------------------------------
+   Keeps the headline block left-aligned but moves it slightly toward the
+   "Check a time" card so the gap in the middle is smaller.
+   ===================================================================== */
+@media (min-width: 901px) {
+    .hx .hx-copy {
+        padding-left: clamp(24px, 5vw, 88px);
+    }
+}
+
+/* page headers (Book / Rent / My bookings / My rental / Account): sit a little closer to the nav bar */
+body.hastop .pghead {
+    margin-top: 0;
+    padding-top: 14px;
+}
+
+/* "How booking works" cards: compact, number beside the text */
+.hx-how {
+    padding-top: 48px;
+    gap: 12px;
+}
+
+.hx-step {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px 16px;
+    border-radius: 14px;
+}
+
+.hx-step::after {
+    width: 80px;
+    height: 80px;
+    right: -28px;
+    top: -28px;
+}
+
+.hx-step b {
+    flex: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    font-size: 15px;
+    box-shadow: 0 4px 12px #b3202f44;
+}
+
+.hx-step h3 {
+    font-size: 15.5px;
+    margin-bottom: 2px;
+}
+
+.hx-step p {
+    font-size: 13.5px;
+    line-height: 1.4;
+}
+
+@media (max-width: 900px) {
+    .hx-how {
+        padding-top: 36px;
+    }
+}
+
+/* =====================================================================
+   Floating nav bar + richer hover effects
+   ---------------------------------------------------------------------
+   The bar drops in on load, then floats gently with a soft red glow that
+   breathes underneath it; a light streak travels along its top edge.
+   Links lift, glow and underline on hover; the Register button gets a
+   shine sweep. Motion is switched off for visitors who prefer less.
+   Delete this block to go back to the previous bar.
+   ===================================================================== */
+
+/* ---------- static polish (always on) ---------- */
+.topnav .tn-in {
+    background: linear-gradient(180deg, #17171cdd 0%, #101014dd 100%);
+    border-color: #ffffff1a;
+}
+
+/* hover underline that grows from the middle (the active page keeps its red dot) */
+.topnav .tn-links a::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: 5px;
+    width: 0;
+    height: 2px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, transparent, var(--brand-hi), transparent);
+    transform: translateX(-50%);
+    opacity: 0;
+}
+
+.topnav .tn-links li.active a::before {
+    display: none;
+}
+
+/* Register button: clip the shine to the button */
+.topnav .tn-auth .tn-reg {
+    overflow: hidden;
+    isolation: isolate;
+}
+
+.topnav .tn-auth .tn-reg::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: linear-gradient(110deg, transparent 30%, #ffffff40 50%, transparent 70%);
+    transform: translateX(-130%);
+}
+
+@media (max-width: 900px) {
+    .topnav .tn-links a::before {
+        display: none;
+    }
+}
+
+/* ---------- motion ---------- */
+@media (prefers-reduced-motion: no-preference) {
+
+    /* drop in, then float */
+    .topnav .tn-in {
+        animation:
+            tnDrop .8s cubic-bezier(.2, 1.1, .3, 1) backwards,
+            tnFloat 6.5s ease-in-out .8s infinite;
+    }
+
+    .topnav .tn-in:hover {
+        animation-play-state: running, paused;   /* hold still while the pointer is on the bar */
+    }
+
+    @keyframes tnDrop {
+        from {
+            opacity: 0;
+            transform: translateY(-26px) scale(.97);
+        }
+    }
+
+    @keyframes tnFloat {
+
+        0%,
+        100% {
+            transform: translateY(0);
+        }
+
+        50% {
+            transform: translateY(-3px);
+        }
+    }
+
+    @keyframes tnDot {
+
+        0%,
+        100% {
+            box-shadow: 0 0 6px var(--glow);
+        }
+
+        50% {
+            box-shadow: 0 0 14px var(--glow), 0 0 22px #ff2d3688;
+        }
+    }
+
+    @keyframes tnLogo {
+
+        0%,
+        100% {
+            box-shadow: 0 0 0 1.5px var(--brand), 0 0 12px #B3202F55;
+        }
+
+        50% {
+            box-shadow: 0 0 0 1.5px var(--brand-hi), 0 0 22px #B3202F99;
+        }
+    }
+
+    @keyframes tnItem {
+        from {
+            opacity: 0;
+            transform: translateY(-8px);
+        }
+    }
+
+    /* ----- brand ----- */
+    .tn-brand img {
+        animation: tnLogo 4s ease-in-out infinite;
+        transition: transform .45s cubic-bezier(.2, 1.4, .4, 1);
+    }
+
+    .tn-brand:hover img {
+        transform: rotate(-12deg) scale(1.12);
+    }
+
+    .tn-word b {
+        transition: color .25s ease, letter-spacing .3s ease;
+    }
+
+    .tn-brand:hover .tn-word b {
+        color: #ffd9dd;
+        letter-spacing: .01em;
+    }
+
+    /* ----- links ----- */
+    .topnav .tn-links a,
+    .topnav .tn-auth a {
+        transition: color .2s ease, background-color .2s ease, border-color .2s ease,
+            transform .25s cubic-bezier(.2, 1.3, .4, 1), box-shadow .25s ease;
+    }
+
+    .topnav .tn-links li:hover a {
+        color: #fff;
+        background: linear-gradient(180deg, #b3202f26, #ffffff0a);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 18px #00000059, 0 0 0 1px #ff6b7826 inset;
+        text-shadow: 0 0 14px #ff6b7888;
+    }
+
+    .topnav .tn-links li:hover a::before {
+        width: calc(100% - 26px);
+        opacity: 1;
+        transition: width .35s cubic-bezier(.2, 1, .3, 1), opacity .2s ease;
+    }
+
+    .topnav .tn-links li:active a {
+        transform: translateY(0) scale(.96);
+    }
+
+    .topnav .tn-links li.active a::after {
+        animation: tnDot 2.4s ease-in-out infinite;
+    }
+
+    /* ----- account area ----- */
+    .topnav .tn-auth li:hover .tn-login {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 18px #00000059;
+    }
+
+    .topnav .tn-auth li:hover .tn-reg {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 24px #B3202F88;
+    }
+
+    .topnav .tn-auth li:hover .tn-reg::after {
+        transform: translateX(130%);
+        transition: transform .7s cubic-bezier(.2, 1, .3, 1);
+    }
+
+    .topnav .tn-auth li:active a {
+        transform: translateY(0) scale(.96);
+    }
+
+    .topnav .tn-auth li:hover .tn-user {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 18px #00000059;
+    }
+
+    .tn-av {
+        transition: transform .3s cubic-bezier(.2, 1.4, .4, 1);
+    }
+
+    .tn-auth li:hover .tn-av {
+        transform: rotate(-10deg) scale(1.1);
+    }
+
+    .topnav .tn-auth li:hover .tn-out {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 18px #B3202F44;
+    }
+
+    /* ----- phone menu ----- */
+    .tn-burger {
+        transition: background-color .2s ease, border-color .2s ease, transform .2s ease;
+    }
+
+    .tn-burger:hover {
+        background: #B3202F33;
+        border-color: #ff6b7855;
+    }
+
+    .tn-burger:active {
+        transform: scale(.92);
+    }
+
+    @media (max-width: 900px) {
+
+        .topnav.open .tn-links li,
+        .topnav.open .tn-auth li {
+            animation: tnItem .35s cubic-bezier(.2, 1, .3, 1) backwards;
+        }
+
+        .topnav.open .tn-links li:nth-child(1) { animation-delay: .04s; }
+        .topnav.open .tn-links li:nth-child(2) { animation-delay: .08s; }
+        .topnav.open .tn-links li:nth-child(3) { animation-delay: .12s; }
+        .topnav.open .tn-links li:nth-child(4) { animation-delay: .16s; }
+        .topnav.open .tn-links li:nth-child(5) { animation-delay: .20s; }
+        .topnav.open .tn-auth li:nth-child(1) { animation-delay: .24s; }
+        .topnav.open .tn-auth li:nth-child(2) { animation-delay: .28s; }
+
+        .topnav .tn-links li:hover a {
+            transform: translateX(3px);
+        }
+    }
+}
+
+/* =====================================================================
+   Home page: first screen fits the window (no scrolling to see it)
+   ---------------------------------------------------------------------
+   Nav bar + hero + "Find your room" carousel share exactly one window
+   height. The carousel takes whatever room the hero leaves, so it never
+   spills below the fold on any screen size. Phones keep their own layout.
+   ===================================================================== */
+@media (min-width: 821px) {
+
+    /* the first screen is one window tall; the hero glow runs under the floating bar */
+    body.hastop[data-active="home"] .fold {
+        min-height: 100svh;
+        display: flex;
+        flex-direction: column;
+        padding-bottom: clamp(12px, 2.4svh, 24px);
+    }
+
+    /* hero: compact, scales with the window height */
+    body.hastop[data-active="home"] .hero.hx {
+        flex: none;
+        padding: clamp(84px, 10svh, 104px) 20px 0;
+    }
+
+    body.hastop[data-active="home"] .hx h1 {
+        font-size: clamp(34px, min(4vw, 5.4svh), 58px);
+        margin-bottom: clamp(8px, 1.6svh, 16px);
+    }
+
+    body.hastop[data-active="home"] .hx-copy p {
+        font-size: clamp(14.5px, 1.9svh, 17px);
+        margin-bottom: clamp(12px, 2svh, 20px);
+    }
+
+    body.hastop[data-active="home"] .hx-pill {
+        margin-bottom: clamp(10px, 1.8svh, 18px);
+    }
+
+    body.hastop[data-active="home"] .hx-cta {
+        margin-top: 0;
+    }
+
+    body.hastop[data-active="home"] .hx-card {
+        padding: clamp(16px, 2.4svh, 24px) 24px;
+        gap: clamp(10px, 1.6svh, 14px);
+    }
+
+    /* carousel: fills what is left under the hero */
+    body.hastop[data-active="home"] .slider-container {
+        position: relative;
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        min-height: 260px;
+        margin-top: clamp(14px, 3svh, 30px);
+    }
+
+    body.hastop[data-active="home"] .sc-head {
+        flex: none;
+        margin-bottom: 12px;
+    }
+
+    body.hastop[data-active="home"] .slider-wrapper {
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        max-height: 620px;
+    }
+
+    body.hastop[data-active="home"] .slider {
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+
+    body.hastop[data-active="home"] .slide {
+        height: auto;
+        min-height: 220px;
+        border-radius: 24px;
+    }
+
+    /* dots + counter move up beside the arrows, so they no longer take a row under the slide */
+    body.hastop[data-active="home"] .sc-foot {
+        position: absolute;
+        top: 0;
+        right: 112px;
+        height: 44px;
+        margin: 0;
+        gap: 18px;
+        justify-content: flex-end;
+    }
+
+    /* glassy arrows */
+    body.hastop[data-active="home"] .sc-arrows button {
+        background: #ffffff0d;
+        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(8px);
+    }
+}
+
+/* shorter windows: trim the extras so everything still fits */
+@media (min-width: 821px) and (max-height: 780px) {
+    body.hastop[data-active="home"] .slide-cap p {
+        display: none;
+    }
+
+    body.hastop[data-active="home"] .hx-copy p {
+        margin-bottom: 12px;
+    }
+}
+
+@media (min-width: 821px) and (max-height: 680px) {
+    body.hastop[data-active="home"] .hx-pill {
+        display: none;
+    }
+
+    body.hastop[data-active="home"] .hx-card small {
+        display: none;
+    }
+}
+
+/* ---------- a little extra polish on the first screen ---------- */
+body.hastop[data-active="home"] .hx-card {
+    background: linear-gradient(180deg, #202026e6 0%, #16161bf2 100%);
+    border-color: #ffffff1f;
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    box-shadow: 0 24px 60px #000000a0, 0 1px 0 #ffffff14 inset;
+    position: relative;
+}
+
+/* "Open daily" dot gently pings */
+@media (prefers-reduced-motion: no-preference) {
+    .hx-pill i {
+        animation: pillPing 2.4s ease-out infinite;
+    }
+
+    @keyframes pillPing {
+        0% {
+            box-shadow: 0 0 0 0 #4ed3a066;
+        }
+
+        70%,
+        100% {
+            box-shadow: 0 0 0 8px #4ed3a000;
+        }
+    }
+}
+
+/* ---------- home: taller carousel (hero spacing trimmed to make room) ---------- */
+@media (min-width: 821px) {
+    body.hastop[data-active="home"] .fold {
+        padding-bottom: clamp(10px, 1.8svh, 18px);
+    }
+
+    body.hastop[data-active="home"] .hero.hx {
+        padding-top: clamp(80px, 9svh, 92px);
+    }
+
+    body.hastop[data-active="home"] .hx h1 {
+        font-size: clamp(34px, min(3.9vw, 5svh), 54px);
+        margin-bottom: clamp(6px, 1.2svh, 12px);
+    }
+
+    body.hastop[data-active="home"] .hx-pill {
+        margin-bottom: clamp(8px, 1.4svh, 14px);
+    }
+
+    body.hastop[data-active="home"] .hx-copy p {
+        margin-bottom: clamp(10px, 1.6svh, 16px);
+    }
+
+    body.hastop[data-active="home"] .slider-container {
+        min-height: 320px;
+        margin-top: clamp(12px, 2.2svh, 22px);
+    }
+
+    body.hastop[data-active="home"] .sc-head {
+        margin-bottom: 10px;
+    }
+
+    body.hastop[data-active="home"] .slider-wrapper {
+        max-height: 700px;
+    }
+
+    body.hastop[data-active="home"] .slide {
+        min-height: 280px;
+    }
+}
+
+/* ---------- home: breathing room between the nav bar and the hero card ----------
+   The card is the tallest part of the hero, so its top edge sat only ~10px under the bar.
+   The hero now starts lower, and the card itself is made a little shorter to pay for it. */
+@media (min-width: 821px) {
+    body.hastop[data-active="home"] .hero.hx {
+        padding-top: clamp(96px, 11svh, 108px);
+    }
+
+    body.hastop[data-active="home"] .hx-card {
+        padding: clamp(14px, 2svh, 20px) 22px;
+        gap: clamp(8px, 1.4svh, 11px);
+    }
+
+    body.hastop[data-active="home"] .hx-card h3 {
+        margin-bottom: 2px;
+    }
+
+    body.hastop[data-active="home"] .hx-card label {
+        margin-bottom: 4px;
+    }
+
+    body.hastop[data-active="home"] .hx-card input,
+    body.hastop[data-active="home"] .hx-card select {
+        height: 40px;
+    }
+
+    body.hastop[data-active="home"] .hx-card .btn {
+        padding-top: 11px;
+        padding-bottom: 11px;
+    }
+}
+
+/* ---------- home: headline proportions ----------
+   The headline had become too small next to the card, and the text block sat too far in.
+   Bigger title (still scaled to the window height so the first screen fits),
+   smaller left nudge, and the copy column is a little wider. */
+@media (min-width: 901px) {
+    body.hastop[data-active="home"] .hx h1 {
+        font-size: clamp(38px, min(4.3vw, 6.3svh), 66px);
+        line-height: 1.02;
+        margin-bottom: clamp(8px, 1.5svh, 14px);
+    }
+
+    .hx .hx-copy {
+        padding-left: clamp(12px, 2.4vw, 48px);
+    }
+
+    body.hastop[data-active="home"] .hx-copy p {
+        max-width: 52ch;
+        font-size: clamp(15px, 2svh, 17.5px);
+    }
+}
+
+/* =====================================================================
+   "Check a time" card: same floating effects as the nav bar
+   ---------------------------------------------------------------------
+   Drops in, floats with a breathing red glow underneath, a light streak
+   travels along its top edge, and the card + its fields react on hover.
+   Uses the nav bar's keyframes (tnDrop / tnFloat).
+   ===================================================================== */
+
+@media (prefers-reduced-motion: no-preference) {
+
+    body.hastop[data-active="home"] .hx-card {
+        animation:
+            tnDrop .85s cubic-bezier(.2, 1.1, .3, 1) .2s backwards,
+            tnFloat 7.5s ease-in-out 1.05s infinite;
+        transition: border-color .3s ease, box-shadow .3s ease;
+    }
+
+    /* hold still while the pointer or the keyboard is inside the card (so the fields are easy to use) */
+    body.hastop[data-active="home"] .hx-card:hover,
+    body.hastop[data-active="home"] .hx-card:focus-within {
+        animation-play-state: running, paused;
+        border-color: #ffffff2e;
+        box-shadow: 0 28px 64px #000000b0, 0 1px 0 #ffffff1a inset;
+    }
+
+    /* fields lift and glow a little on hover */
+    body.hastop[data-active="home"] .hx-card input,
+    body.hastop[data-active="home"] .hx-card select,
+    body.hastop[data-active="home"] .hx-card .dp-trigger {
+        transition: border-color .2s ease, box-shadow .25s ease, background-color .2s ease,
+            transform .25s cubic-bezier(.2, 1.3, .4, 1);
+    }
+
+    body.hastop[data-active="home"] .hx-card input:hover,
+    body.hastop[data-active="home"] .hx-card select:hover,
+    body.hastop[data-active="home"] .hx-card .dp-trigger:hover {
+        border-color: #ff6b7877;
+        background-color: #ffffff0a;
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px #00000055, 0 0 0 1px #b3202f33;
+    }
+
+    body.hastop[data-active="home"] .hx-card h3 {
+        transition: letter-spacing .3s ease, color .3s ease;
+    }
+
+    body.hastop[data-active="home"] .hx-card:hover h3 {
+        color: #ffe3e6;
+        letter-spacing: .005em;
+    }
+}
+
+/* ---------- gear strip: as wide as the rest of the page ----------
+   It was capped at 1120px while the nav bar, carousel and sections are 1400px wide. */
+body.hastop .gear-strip {
+    max-width: var(--maxw, 1400px);
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+}
+
+body.hastop .gear-track {
+    padding: 16px 0;
+}
+
+/* =====================================================================
+   Nav bar with icons - styled like the admin dashboard sidebar
+   ---------------------------------------------------------------------
+   Icons beside every link. Active page = filled crimson pill with a glow,
+   hover = red tint + accent bar, icons pop / tilt, links slide in one by
+   one on load. Delete this block to go back to the text-only bar.
+   ===================================================================== */
+
+/* ---------- icons on desktop ---------- */
+@media (min-width: 1101px) {
+
+    .topnav .tn-links .ico,
+    .topnav .tn-auth .tn-login .ico,
+    .topnav .tn-auth .tn-reg .ico {
+        display: grid;
+        place-items: center;
+    }
+
+    .topnav .tn-links .icon,
+    .topnav .tn-auth .ico .icon {
+        width: 17px;
+        height: 17px;
+    }
+
+    .topnav .tn-links a,
+    .topnav .tn-auth .tn-login,
+    .topnav .tn-auth .tn-reg {
+        gap: 8px;
+        padding: 0 14px 0 12px;
+    }
+
+    .topnav .tn-links .ico {
+        color: #8d8b98;
+        transition: color .2s ease;
+    }
+
+    .topnav .tn-links li:hover .ico {
+        color: var(--brand-hi);
+    }
+}
+
+/* ---------- active page: filled pill like the admin sidebar ---------- */
+.topnav .tn-links li.active a {
+    background: linear-gradient(90deg, #8E161F 0%, var(--brand) 85%);
+    color: #fff;
+    box-shadow: 0 6px 20px #B3202F55, 0 1px 0 #ffffff1f inset;
+}
+
+.topnav .tn-links li.active .ico {
+    color: #fff;
+}
+
+/* the old red dot under the label is not needed any more */
+.topnav .tn-links li.active a::after {
+    display: none;
+}
+
+/* hover accent bar on the left (same idea as the sidebar's accent pill) */
+.topnav .tn-links a::before {
+    left: 5px;
+    bottom: auto;
+    top: 50%;
+    width: 3px;
+    height: 18px;
+    margin-top: -9px;
+    transform: scaleY(0);
+    opacity: 1;
+    background: var(--brand-hi);
+    box-shadow: 0 0 10px #FF2D3699;
+}
+
+.topnav .tn-links li:hover a::before {
+    width: 3px;
+    transform: scaleY(.6);
+}
+
+.topnav .tn-links li.active a::before {
+    display: block;
+    transform: scaleY(1);
+    background: #fff;
+    box-shadow: 0 0 10px #ffffffaa;
+}
+
+.topnav .tn-links li:not(.active):hover a {
+    background: linear-gradient(90deg, #B3202F26 0%, #B3202F59 100%);
+}
+
+@media (max-width: 900px) {
+    .topnav .tn-links a::before {
+        display: none;
+    }
+
+    .topnav .tn-links li.active a::before {
+        display: none;
+    }
+
+    .topnav .tn-links li.active a {
+        background: #B3202F2e;
+        box-shadow: none;
+    }
+}
+
+/* ---------- motion ---------- */
+@media (prefers-reduced-motion: no-preference) {
+
+    /* icons pop and tilt, and the active one pops in (same as the sidebar) */
+    .topnav .tn-links .ico,
+    .topnav .tn-auth .ico {
+        transition: transform .25s cubic-bezier(.34, 1.56, .64, 1), color .2s ease;
+    }
+
+    .topnav .tn-links li:hover .ico,
+    .topnav .tn-auth li:hover .ico {
+        transform: scale(1.2) rotate(-8deg);
+    }
+
+    .topnav .tn-links li.active .ico {
+        animation: popIn .45s cubic-bezier(.34, 1.56, .64, 1);
+    }
+
+    .topnav .tn-links li.active a {
+        animation: tnActiveGlow 3s ease-in-out infinite;
+    }
+
+    @keyframes tnActiveGlow {
+
+        0%,
+        100% {
+            box-shadow: 0 6px 20px #B3202F55, 0 1px 0 #ffffff1f inset;
+        }
+
+        50% {
+            box-shadow: 0 8px 26px #B3202F99, 0 1px 0 #ffffff26 inset;
+        }
+    }
+
+    /* links slide in one after another when the page loads */
+    @media (min-width: 901px) {
+
+        .topnav .tn-links li,
+        .topnav .tn-auth li {
+            animation: slideInLeft .5s cubic-bezier(.2, 1, .3, 1) backwards;
+        }
+
+        .topnav .tn-links li:nth-child(1) { animation-delay: .35s; }
+        .topnav .tn-links li:nth-child(2) { animation-delay: .40s; }
+        .topnav .tn-links li:nth-child(3) { animation-delay: .45s; }
+        .topnav .tn-links li:nth-child(4) { animation-delay: .50s; }
+        .topnav .tn-links li:nth-child(5) { animation-delay: .55s; }
+        .topnav .tn-links li:nth-child(6) { animation-delay: .60s; }
+        .topnav .tn-auth li:nth-child(1) { animation-delay: .65s; }
+        .topnav .tn-auth li:nth-child(2) { animation-delay: .70s; }
+    }
+}
+
+/* ---------- nav hover: bright white instead of red ---------- */
+.topnav .tn-links li:not(.active):hover a {
+    background: linear-gradient(180deg, #ffffff17, #ffffff0c);
+    color: #fff;
+}
+
+.topnav .tn-links li:hover .ico {
+    color: #fff;
+}
+
+.topnav .tn-links li:not(.active) a::before {
+    background: #fff;
+    box-shadow: 0 0 10px #ffffff88;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .topnav .tn-links li:hover a {
+        text-shadow: 0 0 14px #ffffff66;
+    }
+
+    .topnav .tn-links li:not(.active):hover a {
+        box-shadow: 0 8px 18px #00000059, 0 0 0 1px #ffffff1f inset;
+    }
+
+    .topnav .tn-links li.active:hover a {
+        box-shadow: 0 8px 26px #B3202F99, 0 1px 0 #ffffff26 inset;
+    }
+}
+
+/* =====================================================================
+   Guest lookup (My bookings / My rental when not logged in)
+   ---------------------------------------------------------------------
+   Two panels: a short intro on the left, the reference-code form on the
+   right. Results open underneath, across the full width of the card.
+   ===================================================================== */
+body.hastop .card.lookup {
+    max-width: 980px;
+    margin: 8px auto 0;
+    padding: 0;
+    overflow: hidden;
+    border-radius: 22px;
+}
+
+.lk-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+}
+
+/* ----- left: intro panel ----- */
+.lk-intro {
+    position: relative;
+    overflow: hidden;
+    padding: 36px 34px 40px;
+    background:
+        radial-gradient(90% 80% at 0% 0%, #b3202f80, transparent 65%),
+        linear-gradient(160deg, #35080f 0%, #130a0d 100%);
+    border-right: 1px solid #ffffff12;
+}
+
+.lk-intro>*:not(.lk-bars) {
+    position: relative;
+    z-index: 1;
+}
+
+.lk-ico {
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    margin-bottom: 18px;
+    border-radius: 16px;
+    color: #fff;
+    background: linear-gradient(135deg, var(--brand-hi), var(--brand-lo));
+    box-shadow: 0 10px 26px #b3202f66, 0 1px 0 #ffffff2e inset;
+}
+
+.lk-ico .icon {
+    width: 24px;
+    height: 24px;
+}
+
+.lk-intro h2 {
+    font-size: 27px;
+    line-height: 1.1;
+    margin: 0 0 10px;
+    color: #fff;
+}
+
+.lk-intro p {
+    max-width: 34ch;
+    color: #ffffffb8;
+    font-size: 14.5px;
+}
+
+.lk-tips {
+    list-style: none;
+    padding: 0;
+    margin: 22px 0 0;
+    display: grid;
+    gap: 10px;
+    color: #f4f1eecc;
+    font-size: 13.5px;
+}
+
+.lk-tips li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.lk-tips li::before {
+    content: "";
+    flex: none;
+    width: 7px;
+    height: 7px;
+    margin-top: 6px;
+    border-radius: 50%;
+    background: var(--glow);
+    box-shadow: 0 0 0 3px #ff2d3622, 0 0 10px var(--glow);
+}
+
+.lk-tips b {
+    color: #fff;
+}
+
+/* little equalizer along the bottom of the panel */
+.lk-bars {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 46%;
+    display: flex;
+    align-items: flex-end;
+    gap: 7px;
+    padding: 0 26px;
+    opacity: .5;
+    pointer-events: none;
+    -webkit-mask-image: linear-gradient(180deg, transparent, #000 85%);
+    mask-image: linear-gradient(180deg, transparent, #000 85%);
+}
+
+.lk-bars i {
+    flex: 1;
+    max-width: 22px;
+    height: var(--h, 40%);
+    border-radius: 6px 6px 0 0;
+    background: linear-gradient(180deg, #e23b4e66, #b3202f10);
+    transform-origin: bottom;
+    animation: eq 3.6s ease-in-out infinite;
+    animation-delay: calc(var(--d, 0) * -1s);
+}
+
+.lk-bars i:nth-child(5n+1) { --h: 38%; --d: .4; }
+.lk-bars i:nth-child(5n+2) { --h: 70%; --d: 1.7; }
+.lk-bars i:nth-child(5n+3) { --h: 52%; --d: 2.5; }
+.lk-bars i:nth-child(5n+4) { --h: 90%; --d: .9; }
+.lk-bars i:nth-child(5n) { --h: 60%; --d: 3.1; }
+
+/* ----- right: the form ----- */
+.lk-main {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 36px 38px;
+}
+
+.lk-main label {
+    margin: 0 0 8px;
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--mut);
+}
+
+.lk-field {
+    position: relative;
+}
+
+.lk-field .icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    width: 18px;
+    height: 18px;
+    margin-top: -9px;
+    color: var(--mut);
+    pointer-events: none;
+    transition: color .2s ease;
+}
+
+.lk-field:focus-within .icon {
+    color: var(--brand-hi);
+}
+
+.lk-field input {
+    width: 100%;
+    height: 50px;
+    padding-left: 44px;
+    font-size: 15.5px;
+    letter-spacing: .02em;
+    border-radius: 12px;
+}
+
+.lk-main .btn.full {
+    margin-top: 14px;
+    padding: 13px 18px;
+    font-size: 15.5px;
+}
+
+.lk-help {
+    margin: 18px 0 0;
+    font-size: 13.5px;
+    color: var(--mut);
+}
+
+/* ----- results ----- */
+.card.lookup>.res {
+    margin: 0;
+    padding: 22px 34px 28px;
+    border-top: 1px solid #ffffff12;
+    background: #00000026;
+}
+
+/* ----- phones and small tablets: panels stack ----- */
+@media (max-width: 760px) {
+    .lk-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .lk-intro {
+        padding: 26px 22px 70px;
+        border-right: 0;
+        border-bottom: 1px solid #ffffff12;
+    }
+
+    .lk-main {
+        padding: 24px 22px 26px;
+    }
+
+    .card.lookup>.res {
+        padding: 18px 22px 24px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .lk-bars i {
+        animation: none;
+    }
+}
+
+/* ---------- guest lookup: more compact ---------- */
+body.hastop .card.lookup {
+    max-width: 740px;
+    margin-top: 4px;
+    border-radius: 18px;
+}
+
+.lk-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+}
+
+.lk-intro {
+    padding: 22px 22px 26px;
+}
+
+.lk-ico {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 12px;
+    border-radius: 12px;
+}
+
+.lk-ico .icon {
+    width: 20px;
+    height: 20px;
+}
+
+.lk-intro h2 {
+    font-size: 21px;
+    margin-bottom: 6px;
+}
+
+.lk-intro p {
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.lk-tips {
+    margin-top: 14px;
+    gap: 7px;
+    font-size: 12.5px;
+}
+
+.lk-bars {
+    height: 30%;
+    opacity: .35;
+}
+
+.lk-main {
+    padding: 22px 24px;
+}
+
+.lk-main label {
+    margin-bottom: 6px;
+    font-size: 11.5px;
+}
+
+.lk-field input {
+    height: 44px;
+    font-size: 14.5px;
+}
+
+.lk-main .btn.full {
+    margin-top: 10px;
+    padding: 11px 16px;
+    font-size: 14.5px;
+}
+
+.lk-help {
+    margin-top: 12px;
+    font-size: 12.5px;
+}
+
+.card.lookup>.res {
+    padding: 18px 24px 22px;
+}
+
+@media (max-width: 760px) {
+    /* the two-column rule just above would otherwise beat the stacked layout set earlier for phones */
+    .lk-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .lk-intro {
+        border-right: 0;
+        border-bottom: 1px solid #ffffff12;
+    }
+
+    body.hastop .card.lookup {
+        max-width: 100%;
+    }
+
+    .lk-intro {
+        padding: 20px 20px 56px;
+    }
+
+    .lk-main {
+        padding: 20px;
+    }
+}
+
+/* guest lookup: line up with the page title on the left instead of floating in the middle */
+body.hastop .card.lookup {
+    margin-left: 0;
+    margin-right: auto;
+}
+
+/* =====================================================================
+   Guest lookup: card on the left, a short "How it works" panel on the right
+   ===================================================================== */
+.lk-row {
+    display: grid;
+    grid-template-columns: minmax(0, 740px) minmax(0, 1fr);
+    gap: 28px;
+    align-items: start;
+    margin-top: 4px;
+}
+
+body.hastop .lk-row>.card.lookup {
+    margin: 0;
+    max-width: none;
+}
+
+/* the panel only shows while the lookup card does (guests) */
+.lk-row>.card.lookup[hidden]+.lk-side {
+    display: none;
+}
+
+.lk-side {
+    padding: 6px 4px 6px 28px;
+    border-left: 1px solid #ffffff14;
+}
+
+.lk-side-h {
+    margin-bottom: 16px;
+    font: 700 11px 'Instrument Sans', sans-serif;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--brand-hi);
+}
+
+.lk-side ol {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 18px;
+    max-width: 380px;
+}
+
+.lk-side li {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+}
+
+.lk-side li b {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 10px;
+    font: 700 14px 'Bricolage Grotesque', serif;
+    color: #fff;
+    background: linear-gradient(135deg, var(--brand-hi), var(--brand-lo));
+    box-shadow: 0 6px 16px #b3202f4d;
+}
+
+.lk-side li h3 {
+    font-size: 15px;
+    margin-bottom: 2px;
+}
+
+.lk-side li p {
+    color: var(--mut);
+    font-size: 13.5px;
+    line-height: 1.45;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .lk-side li {
+        animation: slideInLeft .5s cubic-bezier(.2, 1, .3, 1) backwards;
+    }
+
+    .lk-side li:nth-child(1) { animation-delay: .15s; }
+    .lk-side li:nth-child(2) { animation-delay: .25s; }
+    .lk-side li:nth-child(3) { animation-delay: .35s; }
+}
+
+/* narrower windows: the panel moves under the card */
+@media (max-width: 1100px) {
+    .lk-row {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 22px;
+    }
+
+    body.hastop .lk-row>.card.lookup {
+        max-width: 740px;
+    }
+
+    .lk-side {
+        padding: 18px 4px 0;
+        border-left: 0;
+        border-top: 1px solid #ffffff14;
+        max-width: 740px;
+    }
+}

@@ -20,6 +20,7 @@
     padding: 20px 0;
     overflow-x: hidden;
     overflow-y: auto;
+    contain: layout paint;   /* the width change stays inside this fixed bar and never re-lays-out the page */
     transition: width .3s ease;
     /* no visible scrollbar in the menu; it still scrolls with wheel or touch on short screens */
     scrollbar-width: none;
@@ -165,10 +166,14 @@
     display: none;
 }
 
+html.sb-anim,
+html.sb-anim body {
+    overflow-x: clip;
+}
+
 /* page area sits to the right of the sidebar */
 .page {
-    margin-left: var(--sw);
-    transition: margin-left .3s ease;
+    margin-left: var(--sw);   /* set once; the slide is done with transform in layout.js */
 }
 
 .wrap {
@@ -249,7 +254,9 @@
     .pubside.collapsed {
         width: min(82vw, 320px);
         transform: translateX(-100%);
-        transition: transform .25s;
+        transition: transform .25s var(--ease, ease);
+        contain: none;
+        will-change: transform;   /* the drawer is the one thing that slides on phones */
         z-index: 200;
         padding: 0;
         border-right: 0;
@@ -332,7 +339,6 @@
 @media (prefers-reduced-motion: reduce) {
 
     .pubside,
-    .page,
     .scrim {
         transition: none;
     }
@@ -341,5 +347,486 @@
 @media (max-width: 820px) {
     .g2 {
         grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+
+/* =====================================================================
+   Customer top navigation (.topnav)  -  floating glass bar
+   ---------------------------------------------------------------------
+   Used on index.html, customer.html, account.html and login.html.
+   Injected by injectTopNav() in js/shared/layout.js. Everything is scoped
+   to .topnav / body.hastop, so the admin sidebar is not affected.
+   Desktop: logo | text links (centered) | account.  Phone: logo + menu button,
+   links open in a rounded card under the bar.
+   ===================================================================== */
+body.hastop {
+    --tn-h: 84px;
+    --maxw: 1400px;   /* content + bar width on big screens (phones and small laptops simply fill the window) */
+}
+
+body.hastop .page {
+    margin-left: 0;
+}
+
+html:has(body.hastop) {
+    scroll-padding-top: 96px;
+}
+
+.topnav {
+    position: sticky;
+    top: 0;
+    z-index: 160;
+    padding: 12px 20px 0;
+    pointer-events: none;   /* only the pill itself catches clicks */
+}
+
+.tn-in {
+    pointer-events: auto;
+    position: relative;
+    max-width: var(--maxw, 1120px);
+    height: 60px;
+    margin: 0 auto;
+    padding: 0 10px 0 14px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border-radius: 20px;
+    background: #121216d9;
+    border: 1px solid #ffffff14;
+    box-shadow: 0 1px 0 #ffffff0a inset, 0 8px 24px #00000059;
+    backdrop-filter: blur(16px) saturate(140%);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    transition: background-color .25s ease, box-shadow .25s ease, border-color .25s ease;
+}
+
+.topnav.scrolled .tn-in {
+    background: #0e0e11eb;
+    border-color: #ffffff1f;
+    box-shadow: 0 1px 0 #ffffff0a inset, 0 14px 36px #000000a6;
+}
+
+/* ----- brand ----- */
+.tn-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: none;
+    color: #fff;
+    text-decoration: none;
+}
+
+.tn-brand img {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1.5px var(--brand), 0 0 16px #B3202F66;
+}
+
+.tn-word {
+    display: grid;
+    line-height: 1.1;
+}
+
+.tn-word b {
+    font: 700 16.5px 'Bricolage Grotesque', serif;
+    letter-spacing: -.01em;
+    white-space: nowrap;
+}
+
+.tn-word small {
+    margin-top: 2px;
+    font: 600 9.5px 'Instrument Sans', sans-serif;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: #8d8b98;
+}
+
+/* ----- links ----- */
+.tn-nav {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.tn-links,
+.tn-auth {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.tn-links {
+    flex: 1;
+    justify-content: center;
+}
+
+.tn-links a,
+.tn-auth a {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 38px;
+    padding: 0 13px;
+    border-radius: 12px;
+    color: #a3a1ad;
+    font-weight: 500;
+    font-size: 14px;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: color .2s ease, background-color .2s ease, border-color .2s ease;
+}
+
+.tn-links .ico,
+.tn-auth .ico {
+    display: none;   /* text-only on desktop; icons come back in the phone menu */
+    place-items: center;
+    flex: none;
+}
+
+.tn-links .icon,
+.tn-auth .icon {
+    width: 18px;
+    height: 18px;
+}
+
+.tn-links li:hover a {
+    color: #fff;
+    background: #ffffff0d;
+}
+
+/* active page: white text, small red dot under the label */
+.tn-links li.active a {
+    color: #fff;
+    background: #ffffff10;
+}
+
+.tn-links li.active a::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: 3px;
+    width: 14px;
+    height: 3px;
+    margin-left: -7px;
+    border-radius: 3px;
+    background: var(--glow);
+    box-shadow: 0 0 10px var(--glow);
+}
+
+/* ----- account area ----- */
+.tn-auth {
+    flex: none;
+    gap: 6px;
+}
+
+.tn-auth .tn-login {
+    color: #e9e7ee;
+}
+
+.tn-auth li:hover .tn-login {
+    color: #fff;
+    background: #ffffff0d;
+}
+
+.tn-auth .tn-reg {
+    color: #fff;
+    font-weight: 600;
+    background: var(--brand);
+    box-shadow: 0 6px 16px #B3202F55;
+}
+
+.tn-auth li:hover .tn-reg {
+    background: var(--brand-hi);
+}
+
+.tn-auth .tn-user {
+    gap: 9px;
+    padding: 0 12px 0 5px;
+    color: #fff;
+    font-weight: 600;
+    background: #ffffff0d;
+    border: 1px solid #ffffff14;
+    border-radius: 999px;
+}
+
+.tn-auth li:hover .tn-user,
+.tn-auth li.active .tn-user {
+    background: #ffffff14;
+    border-color: #ffffff29;
+}
+
+.tn-av {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--brand-hi), var(--brand-lo));
+    color: #fff;
+    font: 700 13px 'Bricolage Grotesque', sans-serif;
+}
+
+.tn-auth .tn-user .lbl {
+    max-width: 130px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tn-auth .tn-out {
+    width: 38px;
+    padding: 0;
+    justify-content: center;
+}
+
+.tn-auth .tn-out .ico {
+    display: grid;
+}
+
+.tn-auth .tn-out .lbl {
+    display: none;
+}
+
+.tn-auth li:hover .tn-out {
+    color: #fff;
+    background: #B3202F33;
+}
+
+.tn-burger,
+.tn-scrim {
+    display: none;
+}
+
+/* first screen of the home page fills what is left under the bar */
+@media (min-width: 821px) {
+    body.hastop .fold {
+        min-height: calc(100svh - var(--tn-h));
+    }
+}
+
+/* ----- narrower desktops ----- */
+@media (max-width: 1060px) {
+    .tn-word small {
+        display: none;
+    }
+
+    .tn-links a,
+    .tn-auth a {
+        padding: 0 10px;
+        font-size: 13.5px;
+    }
+
+    .tn-in {
+        gap: 10px;
+    }
+}
+
+/* ----- tablets and phones: links move into a card under the bar ----- */
+@media (max-width: 900px) {
+    body.hastop {
+        --tn-h: 72px;
+    }
+
+    html:has(body.hastop) {
+        scroll-padding-top: 84px;
+    }
+
+    .topnav {
+        padding: 10px 12px 0;
+    }
+
+    .tn-in {
+        height: 54px;
+        padding: 0 8px 0 12px;
+        border-radius: 18px;
+    }
+
+    .tn-word small {
+        display: block;
+    }
+
+    .tn-brand {
+        margin-right: auto;
+    }
+
+    .tn-burger {
+        display: grid;
+        place-items: center;
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        background: #ffffff0d;
+        border: 1px solid #ffffff14;
+        color: #fff;
+        cursor: pointer;
+    }
+
+    .tn-nav {
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 0;
+        right: 0;
+        flex: none;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0;
+        padding: 10px;
+        background: #121216;
+        border: 1px solid #ffffff1a;
+        border-radius: 20px;
+        box-shadow: 0 24px 48px #000000b8;
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+        max-height: calc(100dvh - 90px);
+        overflow-y: auto;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-6px) scale(.985);
+        transform-origin: top center;
+        transition: opacity .18s ease, transform .18s ease, visibility 0s linear .18s;
+    }
+
+    .topnav.open .tn-nav {
+        opacity: 1;
+        visibility: visible;
+        transform: none;
+        transition: opacity .18s ease, transform .18s ease;
+    }
+
+    .tn-links,
+    .tn-auth {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 2px;
+    }
+
+    .tn-links .ico,
+    .tn-auth .ico {
+        display: grid;
+    }
+
+    .tn-links a,
+    .tn-auth a {
+        height: 48px;
+        padding: 0 14px;
+        border-radius: 14px;
+        font-size: 15.5px;
+    }
+
+    .tn-links li.active a {
+        background: #B3202F2e;
+        color: #fff;
+    }
+
+    .tn-links li.active .icon {
+        color: var(--brand-hi);
+    }
+
+    .tn-links li.active a::after {
+        left: auto;
+        right: 16px;
+        bottom: auto;
+        top: 50%;
+        width: 7px;
+        height: 7px;
+        margin: -3.5px 0 0;
+        border-radius: 50%;
+    }
+
+    .tn-auth {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid #ffffff14;
+    }
+
+    .tn-auth .tn-user {
+        border-radius: 14px;
+    }
+
+    .tn-auth .tn-user .lbl {
+        max-width: none;
+    }
+
+    .tn-auth .tn-out {
+        width: auto;
+        padding: 0 14px;
+        justify-content: flex-start;
+    }
+
+    .tn-auth .tn-out .lbl {
+        display: inline;
+    }
+
+    .tn-auth .tn-reg,
+    .tn-auth .tn-login {
+        justify-content: center;
+    }
+
+    .tn-auth .tn-login {
+        border: 1px solid #ffffff1f;
+    }
+
+    .tn-scrim {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 150;
+        background: #000000b3;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .2s ease;
+    }
+
+    .tn-scrim.on {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .tn-in,
+    .tn-nav,
+    .tn-scrim,
+    .tn-links a,
+    .tn-auth a {
+        transition: none;
+    }
+}
+
+/* the old sidebar section labels ("Menu" / "Account") do not belong in the top bar */
+.topnav #ps-main::before,
+.topnav #ps-auth::before {
+    content: none;
+    display: none;
+}
+
+/* page content lines up with the edges of the floating bar (bar = 1120px, .wrap padding = 20px each side) */
+body.hastop .wrap {
+    max-width: calc(var(--maxw) + 40px);
+}
+
+/* ----- phone / tablet menu: no glow on the selected tab, bright white brand ----- */
+@media (max-width: 900px) {
+    .topnav .tn-links li.active a {
+        animation: none !important;
+        box-shadow: none !important;
+        text-shadow: none;
+    }
+
+    .tn-brand,
+    .tn-word b,
+    .tn-word small {
+        color: #fff;
+    }
+
+    .tn-brand img {
+        filter: brightness(1.15);
     }
 }

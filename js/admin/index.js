@@ -3,7 +3,11 @@
    Tab switching by #hash, first data load, and the 30 s / 60 s refresh timers.
    ===================================================================== */
 
+import { checkTimeAlerts } from './alerts.js';
 import { renderBookings } from './bookings.js';
+import { renderCalendar } from './calendar.js';
+import './noShow.js';   // Sessions tab: no-show countdown, Hold and Release now (needs 78_no_show_release.sql)
+import './checkIn.js';   // Check in: record when the customer arrived (needs 87_booking_check_in.sql)
 import './balance.js';   // Start session / Issue equipment: verify and collect the remaining balance first
 import { renderCustomers } from './customers.js';
 import { STU, refresh } from './data.js';
@@ -19,7 +23,7 @@ import { renderStaff } from './settings.js';
 import { renderStudios } from './studios.js';
 import { dataReady } from '../shared/catalog.js';
 import { setActiveNav } from '../shared/layout.js';
-import { $, $$, esc } from '../shared/utils.js';
+import { $, $$, esc, everyVisible } from '../shared/utils.js';
 import { injectChrome } from '../shared/layout.js';
 import '../shared/formRules.js';
 import { ROOT } from '../config/paths.js';
@@ -50,6 +54,7 @@ export function renderAll(poll) {
     renderBookings();
     renderPayments();
     renderSessions();
+    renderCalendar();
     renderStudios();
     renderEquipmentTab();
     renderRentals();
@@ -57,6 +62,7 @@ export function renderAll(poll) {
     renderStaff();
     if (!poll || location.hash === '#a-rep')
         renderReports();
+    checkTimeAlerts();   // pop-ups for start times reached and sessions about to end (admin/alerts.js)
 }
 
 /* Owner and staff both land on the Overview. */
@@ -73,6 +79,8 @@ function showTab(id) {
         setActiveNav(key);
     if (key === 'a-rep')
         renderReports();
+    if (key === 'a-cal')
+        renderCalendar();
     scrollTo(0, 0);
 }
 
@@ -86,10 +94,8 @@ window.addEventListener('hashchange', () => showTab(location.hash.slice(1)));
     await refresh(false);
     initProfileView();
     document.documentElement.dataset.todReady = '1';   // tells the safety net in admin.html that the dashboard finished loading
-    setInterval(() => {
-        if (!document.hidden)
-            refresh(true);
-    }, 30000);   // new bookings appear on their own
-    setInterval(renderSessions, 15000);                                  // remaining session time and the "ends in 5 minutes" notice
-    setInterval(updateNavBadges, 60000);                                 // rentals whose start / return time has come
+    // all three pause while the tab is hidden and catch up once when it is shown again
+    everyVisible(() => refresh(true), 30000);   // new bookings appear on their own
+    everyVisible(() => { renderSessions(); checkTimeAlerts(); if (location.hash === '#a-cal') renderCalendar(); }, 15000);   // remaining session time, the "ends in 5 minutes" notice and its pop-up
+    everyVisible(updateNavBadges, 60000);       // rentals whose start / return time has come
 })();

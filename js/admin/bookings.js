@@ -9,6 +9,7 @@ import { BK, EXT, PAY, RL, refresh } from './data.js';
 import {
     ACT,
     CONFIRM,
+    OWNER,
     askConfirm,
     bkStatus,
     dOf,
@@ -27,11 +28,16 @@ import {
     tbl,
     tblGrouped
 } from './helpers.js';
-import { vdr } from './verify.js';
+import { arrivalText, checkInOf, checkInReady, needsCheckIn } from './checkInInfo.js';
+import { loadGcashShots, payBlock, vdr } from './verify.js';
+import { bookingTrail } from './trail.js';
+import { focusRows, rowMark } from './jump.js';
+import { repFlag } from './reputation.js';
 import { openActionMenu } from '../shared/actionMenu.js';
 import { holdCountdown } from '../shared/holdTimer.js';
 import { SUPABASE_ANON_KEY, SUPABASE_URL, sb } from '../config/supabaseClient.js';
 import { $, badge, esc, longDate, pl, shortDate, toast } from '../shared/utils.js';
+import { btnBusy, btnReset, btnSuccess } from '../shared/btnState.js';
 
 /* Row order in the Bookings table: Pending bookings first, then the other open ones, the soonest session on top inside each;
    finished ones (Completed, Cancelled, Rejected) after them, the most recent first. */
@@ -59,10 +65,15 @@ function bkMenuItems(b) {
         return [item('bk-verify', 'Verify')];   // opens the Verify drawer in the Payments tab
     const px = pendingExt(id),
         ext = px ? item('ext-verify', 'Verify extension', false, px.extension_id) : item('bk-ext', 'Extend');   // a customer's extension request comes first
+    /* Check in: when the customer arrived (a record only). The owner can undo a mistake. */
+    const open = checkInReady() && ['Approved', 'In Progress'].includes(b.status),
+        ci = open && !checkInOf(id) ? [item('bk-checkin', 'Check in')] : [],
+        undo = open && checkInOf(id) && OWNER ? [item('bk-uncheckin', 'Undo check-in')] : [];
     if (b.status === 'Approved')
-        return [item('bk-go', startLabel(b)), ext, item('bk-det', 'Details'), item('bk-cx', 'Cancel booking', true)];
+        // Start session / Collect balance & start is offered only after the customer has checked in
+        return [...ci, ...(needsCheckIn(id) ? [] : [item('bk-go', startLabel(b))]), ext, item('bk-det', 'Details'), ...undo, item('bk-cx', 'Cancel booking', true)];
     if (b.status === 'In Progress')
-        return [item('bk-done', 'Mark completed'), ext, item('bk-det', 'Details')];
+        return [item('bk-done', doneLabel(b)), ext, ...ci, item('bk-det', 'Details'), ...undo];
     return [item('bk-det', 'Details')];
 }
 
@@ -90,14 +101,16 @@ export function renderBookings() {
         && (!d || dOf(b.start_at) === d)
         && (!src || b.source === src))
         .sort(bkOrder);
-    const head = ['Reference', 'Customer', 'Studio', 'Date', 'Time', 'Duration', 'Status', 'Payment', 'Actions'];
+    const ci = checkInReady();   // the Arrived column needs 87_booking_check_in.sql
+    const head = ['Reference', 'Customer', 'Studio', 'Date', 'Time', 'Duration', ...(ci ? ['Arrived'] : []), 'Status', 'Payment', 'Actions'];
     const cells = b => [
-        b.booking_ref,
-        cut(b.customer_name) + (b.is_guest ? ' <span class="mut">(guest)</span>' : ''),
+        `<span ${rowMark(b.booking_ref)}>${esc(b.booking_ref)}</span>`,
+        cut(b.customer_name) + repFlag(b.customer_id, 'booking') + (b.is_guest ? ' <span class="mut">(guest)</span>' : ''),
         cut(b.studio_name),
         shortDate(dOf(b.start_at)),
         tOf(b.start_at),
         pl(Math.round(num(b.hours)), 'hr'),
+        ...(ci ? [arrivedCell(b)] : []),
         badge(bkStatus(b.status)),
         payCell(b),
         bkActions(b)
@@ -153,9 +166,21 @@ export function setBookingFilter(status, date, openPast) {
     renderBookings();
 }
 
+/* Used by the links in the Payments tab: show the Bookings tab with this booking highlighted.
+   Search, studio, date and source filters are cleared and the status tab is set to All, so the row is never hidden. */
+export function revealBooking(ref) {
+    const b = findBk(ref);
+    state.bkF = 'All';
+    ['#bk-q', '#bk-s', '#bk-d', '#bk-src'].forEach(s => { $(s).value = ''; });
+    if (b && isClosedBk(b))
+        state.pastOpen.bk = true;
+    renderBookings();
+    focusRows('a-book', '#abk', ref);
+}
+
 /* the small dialog and the Verify drawer both close after an action */
 export const closeOverlays = () => {
-    if (dlg.open)
+    if (dlg.open && !dlg.dataset.locked)
         dlg.close();
     if (vdr.open)
         vdr.close();
@@ -243,6 +268,19 @@ export const balanceOf = b => {
 /* a confirmed booking whose customer still owes the balance: Start session opens the balance window first */
 export const owesBalance = b => b.status === 'Approved' && balanceOf(b) > 0.005;   // also a fully paid booking whose later add-on still has a balance
 export const startLabel = b => owesBalance(b) ? 'Collect balance & start' : 'Start session';
+
+/* an Active session that still owes a balance (e.g. the extra hours of an extension) is NOT completed by itself (86_block_autocomplete_with_balance.sql):
+   Mark completed collects the balance first (balance.js) */
+export const owesOnComplete = b => !!b && b.status === 'In Progress' && balanceOf(b) > 0.005;
+export const doneLabel = b => owesOnComplete(b) ? 'Collect balance & complete' : 'Mark completed';
+
+/* Arrived column: the time the customer checked in, with early / late under it; a dash when not (yet) checked in */
+const arrivedCell = b => {
+    if (!checkInOf(b.booking_ref))
+        return '<span class="mut">-</span>';
+    const [at, when] = arrivalText(b).split(', ');
+    return `${esc(at)}<br><span class="mut">${esc(when)}</span>`;
+};
 
 /* Payment column: the payment status plus what is still to collect / that it became a full payment */
 export const payCell = b => {
@@ -346,7 +384,8 @@ ACT['bk-ext'] = async ref => {
     const rate = num(info.hourly_rate),
         end = new Date(info.current_end_at).getTime(),
         lo = info.min_hours,
-        hi = info.max_hours;
+        hi = info.max_hours,
+        addonHi = info.addon_max_hours == null ? info.max_hours : info.addon_max_hours;   // extra hours the add-on equipment is free for (file 55)
     const summary = `<dl class="dl"><dt>Customer</dt><dd>${esc(b.customer_name)}</dd><dt>Studio</dt><dd>${esc(b.studio_name)}</dd>
     <dt>Current session</dt><dd>${tOf(b.start_at)} to ${tOf(end)} (${pl(Math.round((end - new Date(b.start_at)) / 36e5), 'hr')})</dd><dt>Rate</dt><dd>${money(rate)} per hour</dd></dl>`;
 
@@ -361,6 +400,7 @@ ACT['bk-ext'] = async ref => {
     const opts = Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
     showDlg(`<div class="row" style="margin-bottom:8px"><h2 style="margin:0">Extend ${esc(ref)}</h2><span class="mut" id="hold-left" hidden></span></div>${summary}
     ${info.message ? `<div class="alert" style="background:var(--warn-bg);color:var(--warn)">${esc(info.message)}</div>` : ''}
+    <div class="alert" id="ex-addon" role="status" style="background:var(--warn-bg);color:var(--warn)" hidden></div>
     <label for="ex-h">Extra time</label>
     <select id="ex-h">${opts.map(h => `<option value="${h}">+${hrs(h)} (${money(rate * h)})</option>`).join('')}</select>
     <dl class="dl" style="margin-top:10px"><dt>New end time</dt><dd id="ex-end"></dd><dt>Extra cost</dt><dd id="ex-cost"></dd><dt>New studio total</dt><dd id="ex-tot"></dd></dl>
@@ -393,7 +433,7 @@ ACT['bk-ext'] = async ref => {
         if (done)
             return;
         holding = !error;
-        $('#ex-go').disabled = !holding;
+        $('#ex-go').disabled = !holding || $('#ex-go').classList.contains('is-busy');
         if (error) {
             err(error.message);
             $('#ex-hold').textContent = 'The time is not held.';
@@ -404,7 +444,10 @@ ACT['bk-ext'] = async ref => {
     });
 
     const preview = () => {
-        const h = +sel.value;
+        const h = +sel.value, box = $('#ex-addon');
+        box.hidden = !(h > addonHi);
+        if (!box.hidden)
+            box.innerHTML = `<b>The add-on equipment of this booking is not free for the extra time.</b> ${esc(info.addon_message || '')} The session can still be extended, but the add-on will <b>not</b> be included in the extra hours. You will be asked to confirm.`;
         $('#ex-end').textContent = tOf(end + h * 36e5);
         $('#ex-cost').textContent = money(rate * h);
         $('#ex-tot').textContent = money(num(b.total_amount) + rate * h);
@@ -446,6 +489,17 @@ ACT['bk-ext'] = async ref => {
     $('#ex-go').addEventListener('click', async () => {
         const h = +sel.value;
         err('');
+        // the equipment added to this booking is not free for the extra hours: extend the booking only, without the add-on
+        const noAddon = h > addonHi;
+        if (noAddon) {
+            const okAddon = await askConfirm({
+                title: 'Extend without the add-on?',
+                message: `The equipment added to ${ref} is not available for the extra time. If you continue, only the studio session is extended, until ${tOf(end + h * 36e5)}. The add-on is NOT recorded for the extra hours and must be returned when the current time ends (${tOf(end)}).`,
+                ok: 'Yes, extend without add-on'
+            });
+            if (!okAddon)
+                return;
+        }
         const yes = await askConfirm({
             title: 'Extend this session?',
             message: `${ref} (${b.customer_name}, ${b.studio_name}) will be extended by ${hrs(h)}, until ${tOf(end + h * 36e5)}. ${money(rate * h)} is added to the bill.`,
@@ -453,39 +507,61 @@ ACT['bk-ext'] = async ref => {
         });
         if (!yes)
             return;
-        $('#ex-go').disabled = true;
+        const exGo = $('#ex-go');
+        btnBusy(exGo, 'Extending…');
         const { data, error } = await sb.rpc('staff_extend_booking', {
             p_booking_ref: ref,
             p_extra_hours: h,
-            p_token: token
+            p_token: token,
+            p_without_addons: noAddon
         });
         if (error) {
+            btnReset(exGo, false);   // hold() below enables it again when the hours are still held
             err(error.message);
             hold();
             return;
         }   // for example the hold expired and someone booked the hour
+        await btnSuccess(exGo, 'Extended', { keep: true });
         const row = Array.isArray(data) ? data[0] : data;
         await refresh();
         closeOverlays();
-        toast(`${ref} extended by ${hrs(h)} until ${tOf(row.new_end_at)}. ${money(row.extra_cost)} added to the bill. Collect it from the customer.`);
+        toast(`${ref} extended by ${hrs(h)} until ${tOf(row.new_end_at)}. ${money(row.extra_cost)} added to the bill. Collect it from the customer.${row.addon_dropped ? ` The add-on was not extended: collect the equipment back at ${tOf(end)}.` : ''}`);
     });
 };
 
+/* Booking details (Bookings tab). Same sections as the Verify drawer in Payments: the payment itself (method, GCash reference and
+   screenshot, balance collected, status), then the History dropdown (bookingTrail) built from the dates the database keeps. */
 ACT['bk-det'] = ref => {
     const b = findBk(ref);
     const ad = RL.filter(l => l.booking_ref === ref && l.rental_type === 'Add-on' && !['Rejected', 'Cancelled'].includes(l.status));
     const pay = PAY.find(p => p.reference === ref && p.kind !== 'Extension');
     const exts = EXT.filter(x => x.booking_ref === ref && x.status !== 'Rejected');
     const col = num(b.balance_paid_amount),            // balance collected by staff (the payment then became a full payment)
-        opt = col > 0 ? 'down' : b.payment_option,
         down = num(b.down_payment),
-        grand = num(b.total_amount) + ad.reduce((n, l) => n + num(l.unit_price_at_request) * l.quantity, 0);
-    showDlg(`<div class="row"><h2 style="margin:0">${esc(b.booking_ref)}</h2>${badge(bkStatus(b.status))}</div>
-    <dl class="dl"><dt>Customer</dt><dd>${esc(b.customer_name)}${b.is_guest ? ' (guest)' : ''}</dd><dt>Phone</dt><dd>${esc(b.customer_number || 'Not on file')}</dd>
-    <dt>Studio</dt><dd>${esc(b.studio_name)}</dd><dt>Date</dt><dd>${longDate(dOf(b.start_at))}</dd>
+        full = col > 0 ? false : isFull(pay ? pay.payment_option : b.payment_option),
+        adTotal = ad.reduce((n, l) => n + num(l.unit_price_at_request) * l.quantity, 0),
+        grand = num(b.total_amount) + adTotal,
+        addPaid = addonPaidOf(ref),
+        balance = balanceOf(b);
+    const amount = `<div class="dr-sum"><div><span>Studio</span><span>${money(b.total_amount)}</span></div>${adTotal ? `<div><span>Add-on equipment</span><span>${money(adTotal)}</span></div>` : ''}<div class="tot-line"><b>Booking total</b><b>${money(grand)}</b></div>
+    ${down > 0 ? `<div><span>${payLabel(full ? 'full' : 'down')}</span><span>${money(down)}</span></div>${addPaid > 0 ? `<div><span>Equipment added later, paid</span><span>${money(addPaid)}</span></div>` : ''}${col > 0 ? `<div><span>Balance collected${b.balance_paid_method ? ' (' + esc(b.balance_paid_method) + ')' : ''}</span><span>${money(col)}</span></div>` : ''}<div><span>Balance to collect at the studio</span>${balance > 0.005 ? `<b style="color:var(--warn)">${money(balance)}</b>` : '<b>Paid in full</b>'}</div>`
+        : balance > 0.005 ? `${addPaid > 0 ? `<div><span>Equipment added later, paid</span><span>${money(addPaid)}</span></div>` : ''}<div><span>Add-on balance to collect</span><b style="color:var(--warn)">${money(balance)}</b></div>`
+        : pay ? `<div><span>Amount to pay</span><b>${money(pay.amount)}</b></div>` : ''}</div>`;
+    showDlg(`<div class="dr" style="padding:0">
+    <div class="row"><div><p class="mut" style="margin:0">Booking details</p><h2 style="margin:0">${esc(b.booking_ref)}</h2></div><button type="button" class="btn sm line" data-close aria-label="Close">Close</button></div>
+    <div><span class="mut">Booking</span> ${badge(bkStatus(b.status))} ${pay ? `<span class="mut">Payment</span> ${badge(pay.status)}` : ''}</div>
+    <h3>Customer</h3><dl class="dl"><dt>Name</dt><dd>${esc(b.customer_name)}${b.is_guest ? ' <span class="mut">(guest)</span>' : ''}</dd><dt>Phone</dt><dd>${esc(b.customer_number || 'Not on file')}</dd></dl>
+    <h3>Booking</h3><dl class="dl"><dt>Studio</dt><dd>${esc(b.studio_name)}</dd><dt>Date</dt><dd>${longDate(dOf(b.start_at))}</dd>
     <dt>Time</dt><dd>${tOf(b.start_at)} to ${tOf(b.end_at)} (${pl(Math.round(num(b.hours)), 'hr')})</dd>
+    ${checkInReady() ? `<dt>Arrived</dt><dd>${checkInOf(ref) ? `${esc(arrivalText(b))}${checkInOf(ref).by_name ? ` <span class="mut">(checked in by ${esc(checkInOf(ref).by_name)})</span>` : ''}` : '<span class="mut">Not checked in</span>'}</dd>` : ''}
     ${ad.length ? `<dt>Add-ons</dt><dd>${ad.map(l => esc(l.equipment_name) + ' x' + l.quantity + ' (' + money(num(l.unit_price_at_request) * l.quantity) + ')').join('<br>')}</dd>` : ''}
     ${exts.map(x => `<dt>Extension</dt><dd>+${pl(x.extra_hours, 'hr')} (${money(x.extra_cost)}), ${payWord(x.payment_option)} ${money(x.down_payment)} ${badge(x.status === 'Approved' ? 'Verified' : 'Pending')}${x.status === 'Approved' ? ' <span class="mut">included in the total</span>' : ' <span class="mut">not in the total yet</span>'}</dd>`).join('')}
-    <dt>Studio total</dt><dd>${money(b.total_amount)}</dd>${down <= 0 && balanceOf(b) > 0.005 ? `<dt>Booking total</dt><dd>${money(grand)}</dd>${addonPaidOf(ref) > 0 ? `<dt>Equipment added later, paid</dt><dd><b>${money(addonPaidOf(ref))}</b></dd>` : ''}<dt>Balance at the studio</dt><dd><b style="color:var(--warn)">${money(balanceOf(b))}</b> <span class="mut">add-on equipment</span></dd>` : ''}${down > 0 ? `<dt>Booking total</dt><dd>${money(grand)}</dd><dt>${payLabel(opt)}</dt><dd><b>${money(down)}</b></dd>${addonPaidOf(ref) > 0 ? `<dt>Equipment added later, paid</dt><dd><b>${money(addonPaidOf(ref))}</b></dd>` : ''}${col > 0 ? `<dt>Balance collected${b.balance_paid_method ? ' (' + esc(b.balance_paid_method) + ')' : ''}</dt><dd><b>${money(col)}</b>${b.balance_paid_at ? ' <span class="mut">' + stampLabel(b.balance_paid_at) + '</span>' : ''}</dd>` : ''}<dt>Balance at the studio</dt><dd><b>${balanceOf(b) > 0 ? money(balanceOf(b)) : 'Paid in full'}</b></dd>` : pay ? `<dt>Amount to pay</dt><dd><b>${money(pay.amount)}</b></dd>` : ''}<dt>${down > 0 ? (col > 0 || isFull(b.payment_option) ? 'Payment' : 'Down payment') : 'Payment'}</dt><dd>${col > 0 ? '<b>Fully paid</b> ' : ''}${badge(b.payment_status || 'Pending')} ${esc(b.payment_method || '')}${b.gcash_reference ? ', ref ' + esc(b.gcash_reference) : ''}</dd>
-    <dt>Source</dt><dd>${esc(b.source)}</dd>${b.status === 'Rejected' ? `<dt>Rejection reason</dt><dd>${esc(b.rejected_reason || 'No reason was recorded.')}</dd>` : ''}</dl><div class="acts"><button class="btn line" data-close>Close</button></div>`);
+    <dt>Source</dt><dd>${esc(b.source)}</dd></dl>
+    <h3>Amount</h3>${amount}
+    <h3>${down > 0 ? (col > 0 ? 'Fully paid' : full ? 'Full payment' : 'Down payment') : 'Payment'}</h3>${payBlock(pay, down > 0 ? down : grand)}
+    ${b.status === 'Rejected' ? `<h3>Reason for rejection</h3><div class="alert">${esc(b.rejected_reason || 'No reason was recorded.')}</div>` : ''}
+    ${bookingTrail(b, pay)}
+    <div class="acts"><button class="btn line" data-close>Close</button></div></div>`);
+    loadGcashShots(dlg);
 };
+

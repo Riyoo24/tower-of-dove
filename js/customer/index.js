@@ -6,21 +6,25 @@
 
 import { state } from './state.js';
 import { initBookTab, refreshBook } from './book.js';
+import { initDamageBlock, loadDamageBlock } from './damageBlock.js';
 import { openBook } from './bookingForm.js';
 import { loadMyBookings, loadMyRentals, profileReady } from './data.js';
 import { initBookingsTab } from './myBookings.js';
+import { initHome } from '../home/index.js';
 import { applyAccessMode, initMyRentals, initRentalLookup } from './myRentals.js';
+import { initSwapChoice } from './swapChoice.js';
 import { initRentTab, renderCart, renderEquipment, renderRentMode } from './rent.js';
 import { bkDlg, showTab } from './ui.js';
 import { firstBookableDate, isPastSlot, lastBookableDate, loadBusy, takenSlots } from '../shared/availability.js';
 import { EQUIPMENT, STUDIOS, dataReady, isClosed, studioIndex } from '../shared/catalog.js';
 import { clearPendingBooking, readPendingBooking } from '../shared/guestStore.js';
 import { isMember } from '../shared/session.js';
-import { $, SLOTS, toast } from '../shared/utils.js';
+import { $, SLOTS, everyVisible, toast } from '../shared/utils.js';
 import { injectChrome } from '../shared/layout.js';
 import '../shared/formRules.js';
+import '../shared/qrZoom.js';
 
-injectChrome();   // sidebar + mobile bar
+injectChrome();   // top navigation bar
 
 /* ============================ 6. START ============================ */
 
@@ -91,10 +95,24 @@ initBookingsTab();
 initRentalLookup();
 
 initMyRentals();
+initSwapChoice();   // the Choose button of the "choose your replacement item" notice
+initDamageBlock();
 
 applyAccessMode();
 
+initHome();   // Home + Contact Us tabs
+
+/* Every tab switch happens inside this page (no reload):
+   - hashchange: the tab links (#book, #rent, #my-bookings, #my-rentals, #home, #contact)
+   - popstate: Back / Forward between entries that differ only by their ?query
+   - tod:route: navigate() moved here with a ?studio=&date=&time=&item= query (see shared/navigation.js) */
 window.addEventListener('hashchange', showTab);
+window.addEventListener('popstate', showTab);
+window.addEventListener('tod:route', async () => {
+    showTab();
+    await applyUrlParams();
+    history.replaceState(null, '', location.pathname + location.hash);   // the params are used up: a refresh must not re-open the form
+});
 
 // wait for studios and equipment to load, then draw everything
 dataReady.then(async () => {
@@ -115,13 +133,13 @@ dataReady.then(async () => {
     showTab();
     await loadMyBookings();
     await loadMyRentals();
+    await loadDamageBlock();
     await applyUrlParams();
     await restorePendingBooking();
     // pick up changes staff make (an extended session, an overdue rental) without a manual reload
-    setInterval(() => {
-        if (!document.hidden && state.PROFILE) {
-            loadMyBookings();
-            loadMyRentals();
+    everyVisible(() => {
+        if (state.PROFILE) {
+            loadMyBookings().then(loadMyRentals).then(loadDamageBlock);   // one after the other: rentals read the bookings
         }
-    }, 60000);
+    }, 30000);
 });

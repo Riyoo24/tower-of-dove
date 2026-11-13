@@ -2,103 +2,40 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>Tower of Dove Music Studio</title>
-  <link rel="icon" type="image/png" href="assets/img/logo.png">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-  <!-- Stylesheets: shared first, then this page's own file -->
-  <link rel="stylesheet" href="css/base.css">
-  <link rel="stylesheet" href="css/components.css">
-  <link rel="stylesheet" href="css/layout.css">
-  <link rel="stylesheet" href="css/modals.css">
-  <link rel="stylesheet" href="css/home.css">
+  <meta name="theme-color" content="#0B0B0D">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Book a rehearsal room and rent studio gear. Four rooms, open daily 10 AM to 10 PM. No account needed to book.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/img/favicon-32.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Tower of Dove">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <!-- Link previews (Facebook, Messenger, Viber...): og:image must be a full web address.
+       Replace https://tidings-unreal-gratuity.ngrok-free.dev with the real domain once the site is hosted. -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Tower of Dove Music Studio">
+  <meta property="og:title" content="Tower of Dove Music Studio">
+  <meta property="og:description" content="Book a rehearsal room and rent studio gear. Four rooms, open daily 10 AM to 10 PM. No account needed to book.">
+  <meta property="og:image" content="https://tidings-unreal-gratuity.ngrok-free.dev/assets/img/og-cover.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Tower of Dove Music Studio">
+  <meta name="twitter:card" content="summary_large_image">
+  <script src="js/shared/themeInit.js"></script>
+
+  <!-- Home, Book, Rent, My Bookings, My Rental and Contact Us are tabs of one page: pages/customer.html.
+       This file only forwards old links (index.html, index.html#contact) to it. -->
+  <meta http-equiv="refresh" content="0;url=pages/customer.html#home">
+  <script>
+    (function () {
+      var h = location.hash === '#contact' ? '#contact' : '#home';
+      location.replace('pages/customer.html' + location.search + h);
+    })();
+  </script>
 </head>
-<body data-active="home">
-
-  <!-- Landing page -->
-  <main class="page" id="home">
-
-    <section class="hero">
-      <div class="hi1">
-        <h1>Book a room. Plug in. Play.</h1>
-        <p>Four rehearsal rooms and studio-owned gear to rent. No account needed to book, and you can log in any time to see your bookings.</p>
-        <button class="btn ghost lg" data-route="rent">Rent equipment</button>
-      </div>
-    </section>
-
-    <!-- Carousel (slides are built in js/home/carousel.js and render.js) -->
-    <section class="slider-container">
-      <div class="slider-wrapper" id="sw">
-        <div class="slider" id="slider"></div>
-        <button class="btn gold lg slide-cta" data-route="book">Book Now &rarr;</button>
-        <div class="slider-nav" id="sdots"></div>
-      </div>
-    </section>
-
-    <!-- Quick availability check -->
-    <div class="qb">
-      <div><label for="qs">Studio</label><select id="qs"></select></div>
-      <div><label for="qd">Date</label><input id="qd" type="date"></div>
-      <div>
-        <label for="qt">Start time</label>
-        <select id="qt">
-          <option>10:00 AM</option>
-          <option>12:00 PM</option>
-          <option selected>3:00 PM</option>
-          <option>6:00 PM</option>
-          <option>8:00 PM</option>
-        </select>
-      </div>
-      <button class="btn gold lg" id="qb-check">Check availability</button>
-    </div>
-    <section class="avail" id="avail" hidden aria-live="polite"></section>
-
-    <section class="sec" id="studios">
-      <h2>Our studios</h2>
-      <p class="sub">Pick a room, then choose a date and time.</p>
-      <div class="grid g4" id="studio-grid"></div>
-    </section>
-
-    <section class="sec" id="equipment">
-      <h2>Equipment to rent</h2>
-      <p class="sub">Add gear to a studio booking, or rent it to take outside the studio.</p>
-      <div class="grid g4" id="equipment-grid"></div>
-    </section>
-
-    <section class="sec" id="contact">
-      <div class="card ct-card">
-        <h2 class="ct-title">Contact Us</h2>
-        <p class="sub ct-sub">Questions about a booking or rental? Reach out any time.</p>
-
-        <div class="ct-cols">
-          <div>
-            <h3>Get in Touch</h3>
-            <ul class="ct-list" id="ct-touch"></ul>
-          </div>
-          <div>
-            <h3>Visit Us</h3>
-            <ul class="ct-list" id="ct-visit"></ul>
-          </div>
-          <div>
-            <h3>Follow Us On</h3>
-            <ul class="ct-list" id="ct-follow"></ul>
-          </div>
-        </div>
-
-        <hr class="ct-divider">
-        <div class="ct-map" id="ct-map"></div>
-      </div>
-    </section>
-
-    <footer class="foot">Tower of Dove Music Studio. Online bookings need a 50% GCash down payment (the balance is paid at the studio) and are confirmed after staff verify it.</footer>
-  </main>
-
-  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-  <!-- All site code is ES modules; this one entry file imports the rest -->
-  <script src="js/shared/boot.js" data-entry="js/home/index.js"></script>
-</body>
+<body></body>
 </html>

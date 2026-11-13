@@ -4,6 +4,9 @@
    Guests keep their booking references in localStorage; they are moved to the account on login.
    ===================================================================== */
 
+import { notifyStatusChanges } from './alerts.js';
+import { loadGrace, loadReleases } from './noShow.js';
+import { loadSwapOffers } from './swapChoice.js';
 import { state } from './state.js';
 import { sb } from '../config/supabaseClient.js';
 import { renderMyBookings } from './myBookings.js';
@@ -11,6 +14,7 @@ import { renderMyRentals } from './myRentals.js';
 import { fmtDT, renderAttachOptions } from './rent.js';
 import { BOOKINGS } from '../shared/availability.js';
 import { STUDIOS } from '../shared/catalog.js';
+import { COLS, LIMIT, run } from '../shared/query.js';
 import { claimableGuestBookings, forgetGuestBookings, guestBookings } from '../shared/guestStore.js';
 import { isMember } from '../shared/session.js';
 import { SLOTS, endTime, esc, manilaParts, shortDate, toast } from '../shared/utils.js';
@@ -29,6 +33,8 @@ async function loadProfile() {
             number: data.number || ''
         };
 }
+
+loadGrace();   // the grace minutes shown in the booking terms (customer/noShow.js)
 
 export const profileReady = loadProfile().catch(() => {
 });
@@ -118,11 +124,24 @@ async function claimGuestBookings() {
     }
 }
 
+let bookingLoads = 0;   // > 0 while My bookings is being reloaded (the lists are empty for a moment)
+
 export async function loadMyBookings() {
+    bookingLoads++;
+    try {
+        await loadMyBookingsNow();
+    } finally {
+        bookingLoads--;
+    }
+}
+
+async function loadMyBookingsNow() {
     BOOKINGS.length = 0;
     if (isMember()) {
         await claimGuestBookings();
-        const { data, error } = await sb.from('v_booking_summary').select('*').order('start_at');
+        // newest 300 only, then back into date order for the screens
+        const res = await run(sb, 'v_booking_summary', COLS.v_booking_summary, q => q.order('start_at', { ascending: false }).limit(LIMIT.mine));
+        const error = res.error, data = res.data ? res.data.reverse() : res.data;
         if (error) {
             console.error(error);
             toast('Could not load your bookings.');
@@ -133,6 +152,8 @@ export async function loadMyBookings() {
                 ref: r.booking_ref,
                 studio: studioLetter(r.studio_id),
                 date: p.date,
+                startAt: r.start_at,
+                endAt: r.end_at,
                 start: SLOTS[p.hour - 10],
                 hours: Math.round(+r.hours),
                 status: BK_STATUS[r.status] || r.status,
@@ -143,6 +164,7 @@ export async function loadMyBookings() {
                 created: r.created_at,
                 reason: r.rejected_reason || '',
                 down: Number(r.down_payment) || 0,
+                balanceDue: Number(r.balance_due) || 0,         // still to pay at the studio (the database works it out)
                 atStudio: Number(r.balance_paid_amount) || 0,   // balance staff collected at the studio
                 payOpt: Number(r.balance_paid_amount) > 0 ? 'down' : (r.payment_option || '')   // 'down' (50%) or 'full' (100%); the online payment stays a down payment once the balance was collected
             });
@@ -156,6 +178,7 @@ export async function loadMyBookings() {
         }));
     }
     await loadMyExtensions();
+    await loadReleases();   // release time of confirmed bookings with a balance, and which cancelled ones were no-shows (customer/noShow.js)
     renderMyBookings();
     renderAttachOptions();
 }
@@ -165,7 +188,7 @@ async function loadMyExtensions() {
     state.EXT = {};
     if (!isMember())
         return;
-    const { data, error } = await sb.from('v_booking_extension').select('*').order('created_at', { ascending: false });
+    const { data, error } = await run(sb, 'v_booking_extension', COLS.v_booking_extension, q => q.order('created_at', { ascending: false }).limit(LIMIT.mine));
     if (error) {
         console.warn('Extension requests not loaded (run 23_extension_payment.sql):', error.message);
         return;
@@ -186,12 +209,40 @@ async function loadMyExtensions() {
     });
 }
 
+/* Damage fees recorded for the customer's returned outside rentals (needs 58_damage_charges.sql; without it the list stays empty). */
+async function loadMyDamage() {
+    state.DAMAGE = {};
+    if (!isMember())
+        return;
+    const { data, error } = await run(sb, 'v_damage_charge', COLS.v_damage_charge, q => q.order('created_at', { ascending: false }).limit(LIMIT.mine));
+    if (error) {
+        console.warn('Damage fees not loaded (run 58_damage_charges.sql):', error.message);
+        return;
+    }
+    (data || []).forEach(d => {
+        (state.DAMAGE[d.rental_ref] = state.DAMAGE[d.rental_ref] || []).push({
+            id: d.damage_charge_id,
+            item: d.equipment_name,
+            qty: d.quantity,
+            condition: d.condition,
+            reason: d.reason || '',
+            notes: d.return_description || '',
+            amount: Number(d.amount) || 0,
+            status: d.status,                  // Unpaid | Pending (GCash sent, staff verify) | Paid | Waived
+            method: d.paid_method || '',
+            created: d.created_at,
+            beforePhotoPath: d.before_photo_path || null,
+            afterPhotoPath: d.after_photo_path || null
+        });
+    });
+}
+
 export async function loadMyRentals() {
     state.RENTALS = [];
     state.ADDONS = {};
     state.ADDPAID = {};   // booking reference -> { rental reference: amount paid for that add-on order }
     if (isMember()) {
-        const { data, error } = await sb.from('v_rental_lines').select('*').order('created_at', { ascending: false });
+        const { data, error } = await run(sb, 'v_rental_lines', COLS.v_rental_lines, q => q.order('created_at', { ascending: false }).limit(LIMIT.mine));
         if (error)
             console.error(error);
         (data || []).forEach(r => {
@@ -215,6 +266,7 @@ export async function loadMyRentals() {
                 when: addon ? (bk ? `${shortDate(bk.date)}, ${bk.start}` : fmtD(r.due_at)) : fmtDT(r.pickup_date),
                 ret: addon ? (bk ? `${shortDate(bk.date)}, ${endTime(bk.start, bk.hours)}` : fmtD(r.due_at)) : fmtDT(r.return_date),
                 rentalRef: r.rental_ref,
+                rentalDetailId: r.rental_detail_id,
                 rawStatus: r.status,
                 unit: Number(r.unit_price_at_request) || 0,
                 hours: Number(r.rental_hours) || 0,
@@ -222,12 +274,29 @@ export async function loadMyRentals() {
                 due: r.due_at,
                 down: Number(r.down_payment) || 0,
                 late: Number(r.late_fee) || 0,
+                lateDeferred: !!r.late_fee_deferred,                 // staff chose "Not now" at the return
+                latePaid: !!r.late_fee_paid_at,
+                latePendingRef: r.late_fee_pending_reference || '',  // the customer sent GCash, staff are checking it
+                lateReject: r.late_fee_reject_reason || '',
                 atPickup: Number(r.balance_paid_amount) || 0,   // balance staff collected at pick-up
                 returnedAt: r.line_returned_at,
                 status: RN_STATUS[r.status] || r.status,
-                reason: r.rejected_reason || ''
+                created: r.created_at,
+                reason: r.rejected_reason || '',
+                // Inspection documentation (outside rentals only)
+                issuedAt        : r.issued_at          || null,
+                issuedAt        : r.issued_at          || null,
+                handoverPhotoPath: r.handover_photo_path || null,
+                beforePhotoPath : r.before_photo_path  || null,
+                returnCondition : r.return_condition   || null,
+                returnDescription: r.return_description || null,
+                afterPhotoPath  : r.after_photo_path   || null
             });
         });
     }
+    await loadMyDamage();
+    await loadSwapOffers();   // replacement items staff offered (customer/swapChoice.js)
     renderMyRentals();
+    if (!bookingLoads)
+        notifyStatusChanges();   // pop-up when staff verified, approved or rejected something (customer/alerts.js)
 }

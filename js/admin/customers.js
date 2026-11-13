@@ -5,17 +5,28 @@
 
 import { afterAction } from './bookings.js';
 import { BK, CUS, RL } from './data.js';
-import { ACT, OWNER, bkStatus, btn, dOf, dbtn, money, num, run, showDlg, tb, tbl } from './helpers.js';
-import { dueB, lineStatus } from './rentals.js';
+import { ACT, OWNER, bkStatus, btn, dOf, dbtn, dlg, money, num, run, showDlg, tb, tbl } from './helpers.js';
+import { dueB, inspectionPhotoRow, lineStatus } from './rentals.js';
+import { repFlag } from './reputation.js';
 import { sb } from '../config/supabaseClient.js';
 import { $, badge, esc, shortDate, toast } from '../shared/utils.js';
 
 /* ============================ 8. CUSTOMERS ============================ */
 
+/* Sort choices. The customer id grows with every new customer, so it stands for "oldest to newest". */
+const regFirst = c => c.account_type === 'Registered' ? 0 : 1;
+const SORTS = {
+    'reg-old': (a, b) => regFirst(a) - regFirst(b) || a.customer_id - b.customer_id,
+    'reg-new': (a, b) => regFirst(a) - regFirst(b) || b.customer_id - a.customer_id,
+    name: (a, b) => (a.customer_name || '').localeCompare(b.customer_name || ''),
+    spent: (a, b) => num(b.total_spent) - num(a.total_spent)
+};
+
 export function renderCustomers() {
     const q = ($('#cu-q').value || '').toLowerCase(), type = $('#cu-type').value;
     tb('acu', ['Name', 'Phone', 'Account', 'Bookings', 'Rentals', 'Total spent', 'Status', ''],
         CUS.filter(c => (!type || c.account_type === type) && (!q || `${c.customer_name} ${c.number}`.toLowerCase().includes(q)))
+            .sort(SORTS[$('#cu-sort').value] || SORTS['reg-old'])
             .map(c => {
                 const off = c.status === 'Inactive',
                     reg = c.account_type === 'Registered',
@@ -24,7 +35,7 @@ export function renderCustomers() {
                 const owner = !OWNER ? '' : reg ? (off ? btn('cu-on', c.customer_id, 'Enable', 1) : dbtn('cu-off', c.customer_id, 'Disable'))
                     : (hist === 0 ? dbtn('cu-del', c.customer_id, 'Remove') : '');
                 return [
-                    esc(c.customer_name),
+                    esc(c.customer_name) + repFlag(c.customer_id),
                     esc(c.number || ''),
                     c.account_type,
                     String(c.bookings),
@@ -39,6 +50,8 @@ export function renderCustomers() {
 $('#cu-q').addEventListener('input', renderCustomers);
 
 $('#cu-type').addEventListener('change', renderCustomers);
+
+$('#cu-sort').addEventListener('change', renderCustomers);
 
 ACT['cu-off'] = id => {
     const c = CUS.find(x => x.customer_id === +id);
@@ -76,9 +89,16 @@ ACT['cu-del-go'] = async id => {
 
 ACT['cu-hist'] = id => {
     const c = CUS.find(x => x.customer_id === +id);
-    const bks = BK.filter(b => b.customer_id === c.customer_id),
-        lines = RL.filter(l => l.customer_id === c.customer_id);
-    showDlg(`<div class="row"><h2 style="margin:0">${esc(c.customer_name)}</h2><span class="mut">${c.account_type}</span></div>
+    const bks   = BK.filter(b => b.customer_id === c.customer_id);
+    const lines = RL.filter(l => l.customer_id === c.customer_id);
+
+    const condCell = l => {
+        if (l.rental_type !== 'Outside') return '<span class="mut">—</span>';
+        if (!l.line_returned_at) return '<span class="mut">Not returned</span>';
+        return l.return_condition ? esc(l.return_condition) : '<span class="mut">Not recorded</span>';
+    };
+
+    showDlg(`<div class="row"><h2 style="margin:0">${esc(c.customer_name)}${repFlag(c.customer_id)}</h2><span class="mut">${c.account_type}</span></div>
     <p class="mut" style="margin:4px 0 12px">${esc(c.number || '')}. Total spent (verified payments): <b>${money(c.total_spent)}</b></p>
     <h3 style="font-size:14px">Studio bookings</h3>${tbl(['Booking', 'Studio', 'Date', 'Hours', 'Amount', 'Status'], bks.map(b => [
         b.booking_ref,
@@ -88,13 +108,18 @@ ACT['cu-hist'] = id => {
         money(b.total_amount),
         badge(bkStatus(b.status))
     ]))}
-    <h3 style="font-size:14px;margin-top:14px">Equipment rented</h3><p class="mut" style="margin:0 0 6px">Past rentals are listed with how they ended: returned on time, returned late, or overdue now.</p>${tbl(['Order', 'Equipment', 'Qty', 'Date', 'Status', 'Return'], lines.map(l => [
+    <h3 style="font-size:14px;margin-top:14px">Equipment rented</h3>
+    <p class="mut" style="margin:0 0 6px">Outside rentals show the recorded condition at return. "Not recorded" means the rental predates this feature.</p>
+    ${tbl(['Order', 'Type', 'Equipment', 'Qty', 'Date', 'Status', 'Return', 'Condition'], lines.map(l => [
         l.rental_ref,
+        l.rental_type === 'Outside' ? '<span class="b out">Outside</span>' : '<span class="b addon">Add-on</span>',
         esc(l.equipment_name),
         String(l.quantity),
         shortDate(dOf(l.created_at)),
         badge(lineStatus(l)),
-        dueB(l)
+        dueB(l),
+        condCell(l)
     ]))}
     <div class="acts"><button class="btn line" data-close>Close</button></div>`);
+    dlg.classList.add('hist');   // wide window so both tables show every column without sideways scrolling
 };

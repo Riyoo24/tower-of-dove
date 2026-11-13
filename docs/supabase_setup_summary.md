@@ -722,3 +722,211 @@ Run `supabase/44_onsite_booking_down_payment.sql` once (after file 43). In the O
 Run `supabase/45_addon_balance_on_booking.sql` once (after file 44). When a customer (guest or account) adds equipment later with a 50% payment, the balance now also shows on the attached booking (Bookings tab: **Balance PHP x** instead of **Fully Paid**, also in Studio sessions and the booking details). The booking button reads **Collect balance & start**, and staff collect the add-on balance together with any booking balance. No other Supabase setting is needed.
 
 The same file also makes the customer see it: the guest booking lookup and the signed-in booking receipt show **Equipment balance at the studio** when the booking was paid in full but equipment added later still has a balance (shown after staff verify that equipment's payment).
+
+---
+
+## 14. Migration 46 — Equipment Condition Documentation
+
+### Overview
+
+Migration `46_equipment_condition_docs.sql` adds per-line equipment condition recording for **outside rentals only**. Add-on rentals, booking flows, and automation are completely unchanged.
+
+### What changes
+
+| Area | Change |
+|---|---|
+| `rental_detail` | Four new nullable columns: `before_photo_path`, `return_condition`, `return_description`, `after_photo_path` |
+| Storage | New private bucket `rental-photos`; staff can upload and read all; customers can read only their own |
+| `v_rental_lines` | Four new columns appended at end (safe; no existing queries break) |
+| New RPC | `staff_set_before_photo(detail_id, path)` — staff record the before-photo path |
+| New RPC | `staff_return_rental_with_condition(ref, equipment_id, condition, description, after_path)` — outside rental return with documentation |
+| New trigger | `trg_guard_outside_before_photo` — prevents issuing an outside rental if any line has no before photo |
+
+### Supabase Setup Instructions (numbered, copy-paste SQL order)
+
+**Step 1 — REQUIRED: Run the migration SQL**
+
+In the Supabase SQL Editor, run the complete contents of `supabase/46_equipment_condition_docs.sql`.
+
+This single file:
+- Adds the four columns to `rental_detail`
+- Creates and configures the `rental-photos` storage bucket
+- Sets storage RLS policies
+- Creates both new RPC functions
+- Creates the before-photo trigger
+- Recreates `v_rental_lines` with the four new columns appended
+
+```sql
+-- Paste the full contents of supabase/46_equipment_condition_docs.sql here
+-- (copy the file; it is safe to re-run)
+```
+
+**Step 2 — REQUIRED: Verify the storage bucket was created**
+
+In the Supabase Dashboard → Storage, confirm that `rental-photos` appears as a **private** bucket (the lock icon is shown, not "Public").
+
+If it does not appear, run this manually:
+
+```sql
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'rental-photos', 'rental-photos', false, 10485760,
+  ARRAY['image/jpeg', 'image/png', 'image/webp']
+)
+ON CONFLICT (id) DO UPDATE
+  SET public             = excluded.public,
+      file_size_limit    = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
+```
+
+**Step 3 — REQUIRED: Verify storage policies**
+
+In the SQL Editor, confirm the two policies exist:
+
+```sql
+SELECT policyname, cmd, roles::text
+  FROM pg_policies
+ WHERE tablename = 'objects'
+   AND schemaname = 'storage'
+   AND policyname LIKE 'tod_rental_photos%';
+```
+
+Expected rows:
+- `tod_rental_photos_staff_all` — `ALL` for authenticated (staff gate inside)
+- `tod_rental_photos_customer_own` — `SELECT` for authenticated (customer own only)
+
+If missing, re-run `46_equipment_condition_docs.sql`.
+
+**Step 4 — OPTIONAL: Verify new columns on rental_detail**
+
+```sql
+SELECT column_name, data_type, is_nullable
+  FROM information_schema.columns
+ WHERE table_schema = 'public'
+   AND table_name   = 'rental_detail'
+   AND column_name  IN ('before_photo_path','return_condition','return_description','after_photo_path')
+ ORDER BY ordinal_position;
+```
+
+All four should appear with `is_nullable = YES`.
+
+**Step 5 — OPTIONAL: Verify new RPCs**
+
+```sql
+SELECT routine_name
+  FROM information_schema.routines
+ WHERE routine_schema = 'public'
+   AND routine_name IN ('staff_set_before_photo','staff_return_rental_with_condition');
+```
+
+Both should appear.
+
+**Step 6 — OPTIONAL: Verify trigger**
+
+```sql
+SELECT trigger_name, event_manipulation, action_timing
+  FROM information_schema.triggers
+ WHERE trigger_schema = 'public'
+   AND trigger_name = 'trg_guard_outside_before_photo';
+```
+
+Should return one row: `BEFORE UPDATE`.
+
+**Step 7 — OPTIONAL: Verify v_rental_lines new columns**
+
+```sql
+SELECT column_name
+  FROM information_schema.columns
+ WHERE table_schema = 'public'
+   AND table_name   = 'v_rental_lines'
+   AND column_name  IN ('before_photo_path','return_condition','return_description','after_photo_path');
+```
+
+All four should appear.
+
+### Historical records
+
+Existing `rental_detail` rows have `NULL` for all four new columns. The admin and customer UIs display **"Not recorded"** in every place where condition or photo data would otherwise appear, so no historical record looks broken.
+
+### No dashboard configuration required
+
+The `rental-photos` bucket and its policies are fully managed by SQL. No manual clicks in the Supabase Storage dashboard are needed beyond verifying the bucket exists (Step 2).
+
+
+## 49 - Sessions start and end even when nobody is logged in
+
+Run `supabase/49_cron_auto_complete.sql` once (after file 41). It turns on the `pg_cron` extension and schedules the job `tod-start-sessions`, which calls `start_due_sessions()` every 30 seconds (every minute on older pg_cron). A studio session is therefore Completed at its end time by the database itself, with the admin / staff page closed; its add-on equipment is returned and the studio is freed. A session with an extension request still waiting for verification is not completed until staff verify or reject it. Check the job with `select * from cron.job;` and its runs with `select * from cron.job_run_details order by start_time desc limit 10;`.
+
+
+## 50 - Equipment added during a running session is paid in full
+
+Run `supabase/50_addon_full_payment_when_started.sql` once (after file 49). When a band adds equipment to a studio session that has already started (In Progress, or its start time has passed), `request_addon_rental()` accepts only full payment (100%); the website then shows only the Full Payment option. Nothing is left to collect, so the equipment is issued by itself as soon as staff verify the GCash payment. Before the session starts the customer still chooses 50% or 100%. Onsite add-ons recorded by staff were already full payment only (a down payment is refused for add-ons, file 43).
+
+
+## 51 - Equipment stock is checked for the hours it is needed
+
+Run `supabase/51_stock_by_time.sql` once (after file 50). Before, every approved or issued order counted against the stock until it was returned, whatever the day, and the check only happened when staff approved the order (after the customer paid). Now:
+
+- A studio add-on needs the item during its booking's hours; an outside rental from pick-up to return (an overdue item stays counted until it is returned). Two orders only compete for the same items when their hours **overlap**; back-to-back hours (one ends at 6:00 PM, the next starts at 6:00 PM) do not.
+- The check also runs when the customer **submits** the request (`request_rental`), so "Only 0 of Guitar Amp available for those hours" is shown before anything is paid. Staff approving, issuing, or recording an onsite rental are checked the same way (`assert_order_stock`).
+- Approved (verified) and issued (In Use) orders hold stock. Pending, unverified requests do not.
+- New functions: `order_window`, `equipment_in_use_between`, and `equipment_available_between(p_from, p_to)`, which the Rent equipment page, the booking form's equipment window and the staff onsite rental form call to show how many are free for the chosen hours.
+- "Available / In use" on the staff Equipment page now means **right now**: an order for a later day does not lower it until its hours begin.
+
+## 52 - Equipment is re-checked when a session is extended or rescheduled
+
+Run `supabase/52_stock_on_booking_time_change.sql` once (after file 51). File 51 checked a studio add-on against stock for its session's hours only when the add-on was requested or approved. If the session was extended or rescheduled afterwards, the new hours were never checked, so two bands could hold the same item at the same time. Now:
+
+- A trigger on `booking` (`trg_booking_time_stock`) re-checks the add-on equipment (orders Approved or Active, not returned) whenever `start_at` or `end_at` changes. Only the hours that are new are checked (for an extension, just the extra time). If an item is not free, the change is refused and nothing is saved. This covers staff extending, an extension payment being verified, and rescheduling.
+- `staff_extension_info` also looks at stock. The Extend window (customer and staff) offers only the extra hours whose equipment is free and explains why when it is limited, so the customer finds out before paying the 50% down payment. `staff_extend_booking`, `customer_request_extension` and `staff_hold_extension` all use this function, so they follow it automatically.
+- If another order takes the equipment while an extension payment is waiting, verifying that payment fails with a message telling staff to reject it with the reason "Equipment not available for the extra time".
+- Rescheduling to a time when the add-on is not free is refused with a message that names the item and how many are free.
+- New internal functions (not callable from the website): `equipment_held_by_others`, `booking_stock_conflict`, `booking_time_stock_trg`. Replaced: `staff_extension_info(text, text)`.
+- No website (JS / HTML) changes: the existing screens already show the messages these functions return.
+
+## 53 - Pending requests hold their equipment
+
+Run `supabase/53_pending_orders_hold_stock.sql` once (after file 52). Files 51 and 52 let only Approved or issued orders hold stock, so two customers could both be told "available", both pay, and the second one was refused only when staff verified the payment. Now:
+
+- A **Pending** add-on or outside-rental request holds its items for its hours from the moment it is submitted until staff verify it (Approved) or it is Rejected / Cancelled. There is **no time limit**, so slow staff never make a customer lose the items they paid a down payment for.
+- A Pending add-on whose booking is Rejected, Cancelled or Completed holds nothing, so a dead request never blocks stock.
+- The next customer is told "Only 0 of Guitar Amp available for those hours" when they submit, before paying. The Rent page, booking form and onsite form (`equipment_available_between`) count Pending requests too.
+- Extending or rescheduling a booking respects other customers' Pending orders, and the booking's own Pending add-on is re-checked for the new hours.
+- Staff approving an order are compared with Approved / issued orders only (the Pending ones were already checked on submit), so an approval never fails because of another waiting request.
+- The staff Equipment page "In use" still counts only Approved / issued orders right now.
+- Replaced: `equipment_in_use_between` (new last argument `p_include_pending`, default true), `equipment_in_use`, `equipment_available_between`, `assert_order_stock`, `equipment_held_by_others`, `booking_stock_conflict`. No website (JS / HTML) changes.
+- Staff should still verify or reject Pending payments promptly: an unpaid or abandoned request keeps its items held until staff reject it.
+
+## 54 - Reschedule greys out times where the add-on equipment is not free
+
+Run `supabase/54_reschedule_stock_slots.sql` once (after file 53). Before, a customer rescheduling a booking that has add-on equipment picked a time and only then saw "Only 0 of Guitar Amp would be free...". Now:
+
+- New function `reschedule_blocked_slots(p_booking_ref, p_date)` returns the start times of a day where the booking's equipment (Pending, Approved or issued add-on orders) is not free for the booking's whole length, with the reason. It uses the same check as the safety net in file 52, so what is greyed out is exactly what a save would refuse. Only the booking's owner (or staff) can call it.
+- The Reschedule window (`js/customer/myBookings.js`) asks for it each time the date changes or the times are redrawn. Those start times are disabled and marked **No equipment** (hover shows the reason), with a short note under the times. If the picked time becomes blocked while the window is open, the pick is dropped and its hold released.
+- A booking without add-on equipment sees no change. If the call fails, the window behaves as before and the server still refuses a conflicting time on save.
+
+## 55 - A session can be extended without its add-on
+
+Run `supabase/55_extend_without_addons.sql` once (after file 54). File 52 limited the Extend window to the hours the add-on equipment was free for, so a band could not extend just because one item was reserved later. Now:
+
+- The Extend window (customer and staff) offers every hour the **studio** is free for (next booking, holds, 10:00 PM closing). The equipment no longer limits it.
+- When the add-on equipment is not free for the chosen extra hours, the window shows a warning and, on submit, asks **"Extend without your add-on?"** (customer) / **"Extend without the add-on?"** (staff). **Yes**: only the booking is extended; the add-on keeps its original hours and is not recorded for the extra time, so the equipment must be returned when the original time ends. **No**: nothing changes.
+- The add-on order is not cancelled or repriced. `rental_order.addon_cut_hours` records how many hours at the end of the session the add-on does not cover; `order_window` uses it, so the other bookings can use that equipment during the extra hours.
+- A later extension never brings a shortened add-on back (its equipment is already returned).
+- A customer's choice is saved with the request (`booking_extension.without_addons`) and applied when staff verify the extension payment. If the equipment is free again by then, the add-on is extended normally.
+- If the equipment is free for the extra hours, nothing changes: the add-on is extended with the session.
+- Without the confirmation the server still refuses an extension whose equipment is not free, so it cannot happen by accident.
+- Replaced: `staff_extension_info` (new columns `addon_max_hours`, `addon_message`; `max_hours` no longer includes the equipment limit), `staff_extend_booking` (new argument `p_without_addons`, new column `addon_dropped`), `customer_request_extension` (new argument `p_without_addons`, new column `without_addons`), `apply_booking_extension`, `booking_stock_conflict`, `order_window`. New internal function: `apply_extension_addon_cut`.
+- Website: `js/customer/myBookings.js` and `js/admin/bookings.js` (warning, confirmation, and the new argument).
+- Staff must collect the equipment back when the original time ends. Staff are told so in the confirmation and the success message.
+
+## Rent equipment: pick-up and return times in the Rental summary (website only, no SQL)
+
+On the Rent equipment tab, **Outside rent** now shows the pick-up and return date and time inside the Rental summary (they used to be hidden in the checkout window). Customers set the hours first and the equipment cards show how many of each item are free from the pick-up to the return time (`equipment_available_between`). The line above the cards names the hours being checked, says "Checking what is free for your hours..." while it asks, and explains when the return is not after the pick-up. The checkout window shows the same four fields as before (pick-up date and time, return date and time) but locked, with the rental length under them. The note also now says items are reserved once the request is sent (file 53). Changed: `pages/customer.html`, `js/customer/rent.js`, `css/customer.css`.
+
+---
+
+## Mark completed collects the balance of an extended session (85) and no auto-complete while a balance is owed (86)
+Run `supabase/85_collect_balance_on_complete.sql` once (after 84), then `supabase/86_block_autocomplete_with_balance.sql` once (after 85). Safe to re-run; no Edge Function change.
+* **85**: `staff_collect_balance` also accepts an In Progress booking when called with `p_start = false` (it records the balance and leaves the status alone). Starting a session still needs a Confirmed booking. Each collection clears `payment.balance_email_sent_at`, so a second collection is emailed again. On the admin page, **Mark completed** on an Active session with a balance opens the **Collect balance & start** window (amount due, Cash with amount tendered and change, or GCash with a 13-digit reference), saves the balance as fully paid and then marks the booking Completed.
+* **86**: `start_due_sessions()` (file 78's version) completes a session at its end time only when its balance due is zero. A session that owes a balance stays In Progress, over time, until staff collect it.

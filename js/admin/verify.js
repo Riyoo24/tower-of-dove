@@ -3,8 +3,8 @@
    One place to check a transaction before verifying or rejecting it.
    ===================================================================== */
 
-import { addonPaidOf, balanceOf, closeOverlays, findBk, startLabel } from './bookings.js';
-import { EXT, PAY, RL, STK, refresh } from './data.js';
+import { addonPaidOf, balanceOf, closeOverlays, doneLabel, findBk, startLabel } from './bookings.js';
+import { EXT, PAY, RL, SHORT, refresh } from './data.js';
 import {
     ACT,
     bkStatus,
@@ -33,11 +33,17 @@ import {
     overdueHours,
     rentalBalance,
     setRental,
+    revealRental,
     addonWaitingBooking
 } from './rentals.js';
+import { needsCheckIn } from './checkInInfo.js';
+import { bookingTrail, extensionTrail, rentalTrail } from './trail.js';
+import { replacementPending } from './swapOffer.js';
+import { handoffNoteHtml, waitingForItem } from './handoff.js';
 import { sb } from '../config/supabaseClient.js';
 import { loadCatalog } from '../shared/catalog.js';
 import { listGcashProofs } from '../shared/gcashProof.js';
+import { photoBtn } from '../shared/imageViewer.js';
 import { $, $$, badge, esc, longDate, pl, shortDate, sum, toast } from '../shared/utils.js';
 
 /* ============================ 7b. VERIFY DRAWER (Payments tab) ============================
@@ -152,13 +158,13 @@ function openVerify(key) {
     loadGcashShots();
 }
 
-/* Fills the "GCash screenshot" boxes of the drawer (private bucket, 10 minute links). */
-async function loadGcashShots() {
-    for (const box of $$('#vdr .v-shot')) {
+/* Fills the "GCash screenshot" boxes of the drawer, or of any window passed as root (private bucket, 10 minute links). */
+export async function loadGcashShots(root = vdr) {
+    for (const box of root.querySelectorAll('.v-shot')) {
         const links = await listGcashProofs(box.dataset.ref);
         box.innerHTML = links.length
-            ? links.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener" title="Open full size"><img class="idimg" src="${esc(u)}" alt="Customer's GCash screenshot"></a>`).join('')
-              + '<p class="mut">Click the screenshot to open it full size. Check that its reference number and amount match the ones above.</p>'
+            ? `<div class="row" style="justify-content:flex-start;gap:8px;flex-wrap:wrap">${links.map((u, i) => photoBtn(u, "Customer's GCash screenshot", links.length > 1 ? `View GCash screenshot ${i + 1}` : 'View GCash screenshot', { ref: box.dataset.ref, amount: box.dataset.amount })).join('')}</div>`
+              + '<p class="mut">Check that its reference number and amount match the ones above.</p>'
             : '<p class="mut">No screenshot attached (onsite payment or an older payment).</p>';
     }
 }
@@ -188,9 +194,9 @@ function wireChecks() {
 
 const checkRow = text => `<label class="terms" style="margin:0"><input type="checkbox" class="vchk"><span>${text}</span></label>`;
 
-const payBlock = (p, fallbackAmount) => p
+export const payBlock = (p, fallbackAmount) => p
     ? `<dl class="dl"><dt>Method</dt><dd>${esc(p.method)}</dd><dt>Amount</dt><dd><b>${money(p.amount)}</b></dd>
-      ${p.method === 'GCash' ? `<dt>GCash reference</dt><dd><b style="letter-spacing:.04em">${esc(p.gcash_reference || '')}</b></dd>${p.gcash_reference ? `<dt>GCash screenshot</dt><dd><div class="v-shot" data-ref="${esc(p.gcash_reference)}"><span class="mut">Loading...</span></div></dd>` : ''}` : '<dt>Paid</dt><dd>Cash at the studio</dd>'}
+      ${p.method === 'GCash' ? `<dt>GCash reference</dt><dd><b style="letter-spacing:.04em">${esc(p.gcash_reference || '')}</b></dd>${p.gcash_reference ? `<dt>GCash screenshot</dt><dd><div class="v-shot" data-ref="${esc(p.gcash_reference)}" data-amount="${esc(money(p.amount))}"><span class="mut">Loading...</span></div></dd>` : ''}` : '<dt>Paid</dt><dd>Cash at the studio</dd>'}
       ${num(p.balance_paid_amount) > 0 ? `<dt>Balance collected</dt><dd><b>${money(p.balance_paid_amount)}</b> (${esc(p.balance_paid_method || 'Cash')}${p.balance_paid_at ? ', ' + stampLabel(p.balance_paid_at) : ''})</dd><dt>Total paid</dt><dd><b>${money(num(p.amount) + num(p.balance_paid_amount))}</b> <span class="mut">fully paid</span></dd>` : ''}
       <dt>Status</dt><dd>${badge(p.status)}</dd><dt>Sent</dt><dd>${p.created_at ? stampLabel(p.created_at) : '-'}</dd></dl>`
     : `<p class="mut">No payment record for this transaction. Amount: <b>${money(fallbackAmount)}</b>.</p>`;
@@ -216,6 +222,9 @@ function drawBookingTx(tx) {
     if (ad.length) {
         body += `<h3>Add-on equipment</h3><div class="dr-items">${ad.map(l => `<div class="dr-item"><div><b>${esc(l.equipment_name)}</b><div class="mut">${l.quantity} x ${money(l.unit_price_at_request)} ${badge(lineStatus(l))}</div></div><b>${money(num(l.unit_price_at_request) * l.quantity)}</b></div>`).join('')}</div>`;
     }
+    [...new Set(counted.filter(l => ['Pending', 'Approved'].includes(l.status)).map(l => l.rental_ref))].forEach(ref => {
+        body += handoffNoteHtml(ref);   // an add-on whose unit is out until about when this session starts
+    });
     const grand = studio + adTotal,
         paidOk = pay && pay.status === 'Verified' ? num(pay.amount) : 0,
         down = num(b.down_payment);
@@ -231,6 +240,8 @@ function drawBookingTx(tx) {
     if (b.status === 'Rejected')
         body += `<h3>Reason for rejection</h3><div class="alert">${esc(b.rejected_reason || 'No reason was recorded.')}</div>`;
 
+    body += bookingTrail(b, pay);
+
     if (needsCheck) {
         body += pay
             ? checkRow(pay.method === 'GCash' ? `I checked GCash reference <b>${esc(pay.gcash_reference || '')}</b> and the ${down > 0 ? payWord(full ? 'full' : 'down') : 'amount'} of <b>${money(pay.amount)}</b> was received.` : `The cash payment of <b>${money(pay.amount)}</b> was received at the studio.`)
@@ -245,12 +256,15 @@ function drawBookingTx(tx) {
                 pendingOrders.map(r => `<div class="row" style="margin-top:8px"><span>${esc(r)}</span><span>${btn('rn-ok', r, 'Approve add-on')}${btn('v-rn-reject', r, 'Reject add-on', 1)}</span></div>`).join('');
         }
         if (b.status === 'Approved' && balance > 0.005)
-            body += `<div class="alert warn">Collect the balance of <b>${money(balance)}</b> when the customer arrives. <b>${startLabel(b)}</b> asks you to confirm you received it, then marks the payment as fully paid and starts the session.</div>`;
+            body += `<div class="alert warn">Collect the balance of <b>${money(balance)}</b> when the customer arrives. ${needsCheckIn(b.booking_ref) ? 'Check the customer in first. Then ' : ''}<b>${startLabel(b)}</b> asks you to confirm you received it, then marks the payment as fully paid and starts the session.</div>`;
+        if (b.status === 'In Progress' && balance > 0.005)
+            body += `<div class="alert warn">The customer still owes <b>${money(balance)}</b> (for example extra hours added when the session was extended). <b>${doneLabel(b)}</b> asks you to confirm you received it, then marks the payment as fully paid and completes the session. The session does not complete by itself until it is paid.</div>`;
         const acts = [];
         if (b.status === 'Approved')
-            acts.push(btn('bk-go', b.booking_ref, startLabel(b)), btn('bk-cx', b.booking_ref, 'Cancel booking', 1));
+            acts.push(needsCheckIn(b.booking_ref) ? btn('bk-checkin', b.booking_ref, 'Check in') : btn('bk-go', b.booking_ref, startLabel(b)),   // start only after check-in
+                btn('bk-cx', b.booking_ref, 'Cancel booking', 1));
         if (b.status === 'In Progress')
-            acts.push(btn('bk-done', b.booking_ref, 'Mark completed'));
+            acts.push(btn('bk-done', b.booking_ref, doneLabel(b)));
         body += `<div class="acts"><button class="btn line" data-close>Close</button>${acts.join('')}</div>`;
     }
     vdr.innerHTML = drawerShell(needsCheck ? 'Verify booking' : 'Booking details', b.booking_ref, `<span class="mut">Booking</span> ${badge(bkStatus(b.status))} `
@@ -288,6 +302,8 @@ function drawExtensionTx(tx) {
     if (x.status === 'Rejected')
         body += `<h3>Reason for rejection</h3><div class="alert">${esc(x.rejected_reason || 'No reason was recorded.')}</div>`;
 
+    body += extensionTrail(x, pay);
+
     if (pending) {
         body += checkRow(pay.method === 'GCash' ? `I checked GCash reference <b>${esc(pay.gcash_reference || '')}</b> and the ${payWord(x.payment_option)} of <b>${money(pay.amount)}</b> was received.` : `The payment of <b>${money(pay.amount)}</b> was received.`);
         body += reasonPicker(REASONS_EXTENSION);
@@ -304,7 +320,7 @@ function drawExtensionTx(tx) {
 }
 
 /* ---- a rental (outside rentals with down payment and ID, or any other rental order) ---- */
-function drawRentalTx(tx) {
+async function drawRentalTx(tx) {
     const g = groups().find(x => x.ref === tx.ref), pay = tx.pay;
     if (!g) {
         vdr.innerHTML = drawerShell('Rental', tx.ref, '', '<p class="mut">This rental could not be found.</p>');
@@ -322,10 +338,9 @@ function drawRentalTx(tx) {
     const accr = out && due && g.status === 'Active' ? g.lines.filter(l => !l.line_returned_at && now > due) : [];
     const fee = sum(g.lines.map(l => num(l.late_fee)))
         + sum(accr.map(l => l.quantity * num(l.unit_price_at_request) / 8 * Math.ceil((now - due) / 36e5)));
-    const short = g.lines.filter(l => {
-        const s = STK.find(x => x.equipment_id === l.equipment_id);
-        return !s || s.available < l.quantity;
-    });
+    /* Short = not enough of the item for THIS rental's own hours. SHORT comes from the database's time-based check
+       (equipment_stock_conflicts), so an item that is in use now but back before this rental starts is not short. */
+    const short = g.lines.filter(l => SHORT.some(r => r.rental_ref === g.ref && String(r.equipment_id) === String(l.equipment_id)));
     const payPending = !!pay && pay.status === 'Pending', needApprove = g.status === 'Pending';
     const rFull = rcol > 0 ? false : (isFull(pay ? pay.payment_option : null) || (down > 0 && down >= total - 0.01));
 
@@ -340,15 +355,50 @@ function drawRentalTx(tx) {
       ${g.status === 'Active' && !l.line_returned_at ? `<div style="margin-top:6px">${btn('rn-retline', g.ref + ':' + l.equipment_id, 'Return this item', 1)}</div>` : l.line_returned_at ? '<div class="mut">Returned</div>' : ''}</div>
       <b>${money(lineTotal(l))}</b></div>`).join('')}</div>`;
     if (needApprove && short.length)
-        body += `<div class="alert">Not enough stock for: ${short.map(l => esc(l.equipment_name)).join(', ')}. It can't be approved until stock comes back.</div>`;
+        body += `<div class="alert">Not enough stock for: ${short.map(l => esc(l.equipment_name)).join(', ')}. ${payPending
+            ? 'You can still verify the payment. Then use <b>Let customer choose</b> or <b>Swap item</b> to replace the item; the rental is approved by itself once the replacement is in.'
+            : 'Payment is already verified. Use <b>Let customer choose</b> or <b>Swap item</b> to replace the item; the rental is approved by itself once the replacement is in.'}</div>`;
+
+    if (['Pending', 'Approved'].includes(g.status))
+        body += handoffNoteHtml(g.ref);   // the same unit is out until about when this rental starts
+    {
+        const wait = waitingForItem(g);
+        if (wait)
+            body += `<div class="alert warn"><b>Waiting for item.</b> ${esc(wait.line.equipment_name)} is still out with ${esc(wait.blockers[0].customer_name)} (${esc(wait.blockers[0].rental_ref)}). ${g.type === 'Add-on' ? 'It is issued by itself as soon as it is returned.' : 'Issue it once it is returned, or use <b>Swap item</b> in the Rentals tab.'}</div>`;
+    }
 
     body += `<h3>Amount</h3><div class="dr-sum"><div class="tot-line"><b>Total</b><b>${money(total)}</b></div>
     ${down > 0 ? `<div><span>${payLabel(rFull ? 'full' : 'down')}</span><span>${money(down)}</span></div>${rcol > 0 ? `<div><span>Balance collected</span><span>${money(rcol)}</span></div>` : ''}<div><span>Balance to collect ${out ? 'at pick-up' : 'at the studio'}</span><span>${rBal > 0.005 ? money(rBal) : 'Paid in full'}</span></div>` : ''}
-    ${fee > 0 ? `<div><span>Late fee ${accr.length ? 'so far' : 'charged'}</span><b style="color:var(--bad)">${money(fee)}</b></div>` : ''}</div>`;
+    ${fee > 0 ? `<div><span>Late fee ${accr.length ? 'so far' : 'charged'}</span><b style="color:var(--bad)">${money(fee)}</b></div>` : ''}
+    ${g.lines.some(l => l.late_fee_deferred && !l.late_fee_paid_at && num(l.late_fee) > 0) ? `<div><span>Late fee ${g.lines.some(l => l.late_fee_pending_reference && !l.late_fee_paid_at) ? 'payment being checked' : 'unpaid'}</span><b style="color:var(--bad)">${money(sum(g.lines.filter(l => l.late_fee_deferred && !l.late_fee_paid_at).map(l => num(l.late_fee))))}</b></div>` : ''}
+    ${(() => { const p = g.lines.find(l => l.late_fee_paid_method); return p && num(p.late_fee) > 0 ? `<div><span>Late fee paid</span><span>${esc(p.late_fee_paid_method)}${p.late_fee_reference ? ' (ref ' + esc(p.late_fee_reference) + ')' : ''}${p.late_fee_paid_at ? ', ' + esc(stampLabel(p.late_fee_paid_at)) : ''}</span></div>` : ''; })()}</div>`;
     if (pay)
         body += `<h3>${down > 0 ? (rcol > 0 ? 'Fully paid' : rFull ? 'Full payment' : 'Down payment') : 'Payment'}</h3>${payBlock(pay, down)}`;
     if (out)
         body += `<h3>Customer's valid ID</h3><div id="v-id"><p class="mut">Loading the ID...</p></div>`;
+
+    // Handover proof (one photo per outside rental)
+    if (out && ['Active', 'Returned'].includes(g.status) && g.lines[0].handover_photo_path)
+        body += `<h3>Handover proof</h3><div class="insp-before-row" id="v-hop"><span class="mut">Loading handover proof…</span></div>`;
+    // Inspection condition rows for returned outside rentals
+    if (out && g.status === 'Returned') {
+        const hasCondition = g.lines.some(l => l.return_condition);
+        body += `<h3>Equipment condition at return</h3><div id="v-insp-cond">`;
+        body += g.lines.map(l => {
+            const cond = l.return_condition || '<span class="mut">Not recorded</span>';
+            const desc = l.return_description ? `<div class="mut" style="font-size:13px">${esc(l.return_description)}</div>` : '';
+            return `<div class="insp-before-row">
+              <b>${esc(l.equipment_name)}</b> x${l.quantity}<br>
+              Condition: <b>${esc(l.return_condition || '')}${!l.return_condition ? '<span class="mut">Not recorded</span>' : ''}</b>
+              ${desc}
+              ${l.before_photo_path ? `<div id="v-bph-${l.rental_detail_id}"><span class="mut">Loading before photo…</span></div>` : ''}
+              ${l.after_photo_path ? `<div id="v-aph-${l.rental_detail_id}"><span class="mut">Loading after photo…</span></div>` : ''}
+            </div>`;
+        }).join('');
+        body += '</div>';
+    }
+
+    body += rentalTrail(g, pay);
 
     if (needApprove || payPending) {
         const checks = [];
@@ -365,19 +415,56 @@ function drawRentalTx(tx) {
         if (g.status === 'Approved' && addonWaitingBooking(g))
             body += `<div class="alert warn">This add-on belongs to booking <b>${esc(g.booking)}</b>, which has not started yet. The equipment can only be issued after the session starts. <b>${startLabel(addonWaitingBooking(g))}</b> starts the booking first.</div>`;
         else if (g.status === 'Approved' && rIssue > 0.005)
-            body += `<div class="alert warn">Collect the balance of <b>${money(rIssue)}</b>${out ? '' : ` of booking ${esc(g.booking)}`} before handing over the equipment. <b>Collect balance & issue</b> asks you to confirm you received it, then marks the payment as fully paid.</div>`;
+            body += `<div class="alert warn">Collect the balance of <b>${money(rIssue)}</b>${out ? '' : ` of booking ${esc(g.booking)}`} before handing over the equipment. <b>Collect balance & issue</b> asks for the cash tendered (it shows the change) or the GCash reference number, then marks the payment as fully paid.</div>`;
         if (g.status === 'Active' && fee > 0)
             body += `<div class="alert">The equipment is late. A late fee of ${money(fee)} (price / 8 per hour, per item) is charged when you process the return. Collect it then.</div>`;
         else if (g.lines.some(l => overdueHours(l) > 0))
             body += '<div class="alert">This order is overdue. Contact the customer to arrange the return.</div>';
-        const acts = g.status === 'Approved' ? btn('rn-issue', g.ref, addonWaitingBooking(g) ? startLabel(addonWaitingBooking(g)) : rIssue > 0.005 ? 'Collect balance & issue' : 'Issue equipment') : g.status === 'Active' ? btn('rn-ret', g.ref, 'Return everything') : '';
+        const holdIssue = g.status === 'Approved' && replacementPending(g.ref);
+        if (holdIssue)
+            body += '<div class="alert warn">A replacement item is not settled yet. Swap the item (or wait for the customer\'s answer) before issuing the equipment.</div>';
+        const acts = holdIssue ? '' : g.status === 'Approved' ? btn('rn-issue', g.ref, addonWaitingBooking(g) ? startLabel(addonWaitingBooking(g)) : rIssue > 0.005 ? 'Collect balance & issue' : 'Issue equipment') : g.status === 'Active' ? btn('rn-ret', g.ref, 'Return everything') : '';
         body += `<div class="acts"><button class="btn line" data-close>Close</button>${acts}</div>`;
     }
+
     vdr.innerHTML = drawerShell(needApprove || payPending ? 'Verify rental' : 'Rental details', g.type === 'Add-on' ? (g.booking || g.ref) : g.ref, `<span class="mut">Rental</span> ${badge(groupStatus(g))} `
         + (pay ? `<span class="mut">Payment</span> ${badge(pay.status)}` : ''), body);
     wireChecks();
     if (out)
-        loadRentalId(g.ref, 'v-id');
+        loadRentalId(g.ref, 'v-id', true);
+
+    if (out && ['Active', 'Returned'].includes(g.status) && g.lines[0].handover_photo_path) {
+        const { signedPhotoUrl: hURL } = await import('../shared/inspectionPhoto.js');
+        const el = document.querySelector('#v-hop'), url = await hURL(g.lines[0].handover_photo_path);
+        if (el)
+            el.innerHTML = url
+                ? photoBtn(url, 'Handover proof', 'View handover proof')
+                : '<span class="mut">Handover proof saved (reload to view).</span>';
+    }
+    // Async: load signed URLs for returned outside rental inspection photos
+    if (out && g.status === 'Returned') {
+        const { signedPhotoUrl: spURL } = await import('../shared/inspectionPhoto.js');
+        for (const l of g.lines) {
+            if (l.before_photo_path) {
+                const el = document.querySelector(`#v-bph-${l.rental_detail_id}`);
+                if (el) {
+                    const url = await spURL(l.before_photo_path);
+                    el.innerHTML = url
+                        ? `Before photo: ${photoBtn(url, 'Before photo', 'View photo')}`
+                        : '<span class="mut">Before photo saved (reload to view).</span>';
+                }
+            }
+            if (l.after_photo_path) {
+                const el = document.querySelector(`#v-aph-${l.rental_detail_id}`);
+                if (el) {
+                    const url = await spURL(l.after_photo_path);
+                    el.innerHTML = url
+                        ? `After photo: ${photoBtn(url, 'After photo', 'View photo')}`
+                        : '<span class="mut">After photo saved (reload to view).</span>';
+                }
+            }
+        }
+    }
 }
 
 const txWho = ref => {
@@ -412,8 +499,18 @@ ACT['v-rn-ok'] = async ref => {
     if (g && g.status === 'Pending'
         && !(await run(sb.from('rental_order').update({ status: 'Approved' }).eq('rental_ref', ref)))) {
         await refresh();                       // the payment was verified, the approval failed (for example no stock)
-        if (vKey)
-            openVerify(vKey);
+        // The payment is done (one Verify only). The rest is in the Rentals table: the staff member must now
+        // Let the customer choose or Swap the item, like after a damaged return. The order is approved by itself afterwards.
+        vKey = null;
+        closeOverlays();
+        if (location.hash.slice(1) !== 'a-rent')
+            location.hash = 'a-rent';
+        revealRental(ref);
+        toast(`${ref}: payment verified, but the item is out of stock. Choose Let customer choose or Swap item.`);
+        try {
+            const { showStockShortage } = await import('./equipment.js');
+            await showStockShortage(g.lines.map(l => l.equipment_id).filter(Boolean));
+        } catch (e) { console.error(e); }
         return;
     }
     await loadCatalog();

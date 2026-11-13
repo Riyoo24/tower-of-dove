@@ -7,6 +7,7 @@ import { afterAction } from './bookings.js';
 import { STAFF } from './data.js';
 import { ACT, OWNER, btn, dlg, run, showDlg, tb, CONFIRM } from './helpers.js';
 import { sb } from '../config/supabaseClient.js';
+import { btnBusy, btnReset, btnSuccess } from '../shared/btnState.js';
 import { GCASH_QR_PATH, gcashQrUrl } from '../shared/catalog.js';
 import { $, esc, isEmail, isName, normalizeEmail, toast } from '../shared/utils.js';
 
@@ -53,7 +54,7 @@ function staffForm() {
     <p class="req-note"><span class="req">*</span> Required</p>
     <div class="fg" style="grid-template-columns:1fr 1fr"><div><label for="sf-fn">First name <span class="req" aria-hidden="true">*</span></label><input id="sf-fn" data-letters autocomplete="off" required aria-required="true"></div><div><label for="sf-ln">Last name <span class="req" aria-hidden="true">*</span></label><input id="sf-ln" data-letters autocomplete="off" required aria-required="true"></div></div>
     <label for="sf-u">Email address <span class="req" aria-hidden="true">*</span></label><input id="sf-u" type="email" inputmode="email" autocomplete="off" placeholder="e.g. maria@example.com" required aria-required="true">
-    <label for="sf-p">Phone (optional)</label><input id="sf-p" type="tel" autocomplete="off">
+    <label for="sf-p">Phone (optional)</label><input id="sf-p" type="tel" data-phone inputmode="tel" maxlength="15" placeholder="e.g. 0917 123 4567" autocomplete="off">
     <label for="sf-pw">Temporary password <span class="req" aria-hidden="true">*</span></label><input id="sf-pw" autocomplete="off" placeholder="At least 8 characters" required aria-required="true">
     <div class="alert" id="sf-e" hidden></div>
     <div class="acts"><button type="button" class="btn line" data-close>Cancel</button><button class="btn gold" id="sf-go">Create account</button></div></form>`);
@@ -79,15 +80,17 @@ function staffForm() {
             return err('Enter a valid email address, like name@example.com.');
         if (v.password.length < 8)
             return err('The password must be at least 8 characters.');
-        $('#sf-go').disabled = true;
+        const go = $('#sf-go');
+        btnBusy(go, 'Creating…');
         err('');
         try {
             await fnCall(v);
+            await btnSuccess(go, 'Created', { keep: true });
             await afterAction(`Staff account "${v.email}" created.`);
         }
         catch (x) {
             err(x.message);
-            $('#sf-go').disabled = false;
+            btnReset(go);
         }
     };
 }
@@ -106,7 +109,8 @@ ACT['sf-pw'] = id => {
         }, pw = $('#sp-pw').value;
         if (pw.length < 8)
             return err('The password must be at least 8 characters.');
-        $('#sp-go').disabled = true;
+        const go = $('#sp-go');
+        btnBusy(go, 'Saving…');
         err('');
         try {
             await fnCall({
@@ -114,12 +118,13 @@ ACT['sf-pw'] = id => {
                 user_id: u.user_id,
                 password: pw
             });
+            await btnSuccess(go, 'Saved', { keep: true });
             dlg.close();
             toast(`Password for ${u.username} changed.`);
         }
         catch (x) {
             err(x.message);
-            $('#sp-go').disabled = false;
+            btnReset(go);
         }
     };
 };
@@ -169,15 +174,18 @@ if (OWNER) {
             return toast('Use a PNG, JPG or WebP image.');
         if (f.size > 5 * 1024 * 1024)
             return toast('The image must be 5 MB or smaller.');
-        $('#gq-btn').disabled = true;
+        const qrBtn = $('#gq-btn');
+        btnBusy(qrBtn, 'Uploading…');
         const up = await sb.storage.from('studio-images').upload(GCASH_QR_PATH, f, {
             upsert: true,
             contentType: f.type,
             cacheControl: '60'
         });
-        $('#gq-btn').disabled = false;
-        if (up.error)
+        if (up.error) {
+            btnReset(qrBtn);
             return toast('Upload failed: ' + up.error.message);
+        }
+        await btnSuccess(qrBtn, 'Saved');
         $('#gq-file').value = '';
         showQrPreview(gcashQrUrl(Date.now()));
         toast('GCash QR code saved. Customers will see it in the booking form.');

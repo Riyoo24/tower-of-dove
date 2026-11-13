@@ -2,27 +2,61 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>My account | Tower of Dove Music Studio</title>
   <link rel="icon" type="image/png" href="../assets/img/logo.png">
+  <meta name="theme-color" content="#0B0B0D">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Manage your Tower of Dove account.">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/img/favicon-32.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Tower of Dove">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <!-- Link previews (Facebook, Messenger, Viber...): og:image must be a full web address.
+       Replace https://tidings-unreal-gratuity.ngrok-free.dev with the real domain once the site is hosted. -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Tower of Dove Music Studio">
+  <meta property="og:title" content="My account | Tower of Dove Music Studio">
+  <meta property="og:description" content="Manage your Tower of Dove account.">
+  <meta property="og:image" content="https://tidings-unreal-gratuity.ngrok-free.dev/assets/img/og-cover.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Tower of Dove Music Studio">
+  <meta name="twitter:card" content="summary_large_image">
+  <script src="../js/shared/themeInit.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <!-- Stylesheets: shared first, then the customer page's own file -->
   <link rel="stylesheet" href="../css/base.css">
   <link rel="stylesheet" href="../css/components.css">
   <link rel="stylesheet" href="../css/layout.css">
   <link rel="stylesheet" href="../css/modals.css">
   <link rel="stylesheet" href="../css/customer.css">
+  <link rel="stylesheet" href="../css/motion.css">
+  <link rel="stylesheet" href="../css/refresh.css">
+  <link rel="stylesheet" href="../css/mobile.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/print.css" media="print">
+  <script src="../js/shared/modalTop.js"></script>
 </head>
 <body data-active="account">
 
-  <!-- The sidebar and mobile bar are injected by layout.js -->
+  <!-- The top navigation bar is injected by layout.js -->
   <main class="page" id="account">
     <div class="wrap">
       <section id="c-account" class="pg on">
-        <h1>My account</h1>
-        <p class="sub">Update your name, change your email, or request a password link.</p>
+        <header class="pghead">
+          <div>
+            <span class="eyebrow">Profile</span>
+            <h1>My account</h1>
+            <p class="sub">Update your name, change your email, or request a password link.</p>
+          </div>
+          <div class="pg-chips" aria-hidden="true"><span>Name</span><span>Email</span><span>Password</span></div>
+        </header>
         <div id="account-profile"></div>
       </section>
     </div>
@@ -32,5 +66,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
   <script src="../js/shared/boot.js" data-entry="../js/account/index.js"></script>
+  <script src="../js/shared/motion.js" defer></script>
 </body>
 </html>

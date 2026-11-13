@@ -10,7 +10,7 @@ import { getUser, isMember } from '../shared/session.js';
 import { $ } from '../shared/utils.js';
 import '../shared/formRules.js';
 
-injectChrome();   // sidebar + mobile bar
+injectChrome();   // top navigation bar
 
 /* Only logged-in customers have an account page; owner and staff use their own profile view. */
 const cachedUser = getUser();

@@ -9,8 +9,13 @@ import { sb } from '../config/supabaseClient.js';
 import { loadBusy, takenSlots } from '../shared/availability.js';
 import { HOLD_TOKEN, holdOnsiteSlots, releaseHold } from '../shared/holds.js';
 import { holdCountdown } from '../shared/holdTimer.js';
-import { equipmentImage } from '../shared/cards.js';
-import { STUDIOS, loadCatalog } from '../shared/catalog.js';
+import { browseHtml, noteHtml, paintBrowse, stockLine, suggestionBlock } from '../shared/eqBrowse.js';
+import { matchesSearch } from '../shared/eqFilter.js';
+import { changeMessage, modalToast } from '../shared/eqModal.js';
+import { STUDIOS, gcashQrUrl, loadCatalog } from '../shared/catalog.js';
+import { gcashProofHtml, initGcashProof, uploadGcashProof } from '../shared/gcashProof.js';
+import '../shared/qrZoom.js';   // tap the GCash QR to enlarge it
+import { check } from '../shared/fieldCheck.js';
 import {
     $,
     SLOTS,
@@ -41,6 +46,92 @@ const firstDay = () => manilaDay(todayOpen() ? 0 : 1);
 const isPast = (date, hour) => date === manilaDay(0) && hour * 60 < nowMins();   // that hour already started or passed
 const nextDay = d => new Date(new Date(d + 'T00:00:00Z').getTime() + 864e5).toISOString().slice(0, 10);
 const pastDateMsg = () => todayOpen() ? 'Past dates can\'t be selected. The earliest date is today.' : 'The studio is closed for today (9:00 PM). The earliest date is tomorrow.';
+
+/* ---- Cash payment block: the amount tendered (cash given), quick-cash chips and the change to return ----
+   Same behaviour as the balance window: the cash must cover the amount received now. The amount is saved with the
+   payment (supabase/75_onsite_cash_tendered.sql) and printed on the receipt email as "Cash received" and "Change". */
+const centsOf = n => Math.round(n * 100);
+const peso = n => '\u20B1' + (Math.round(n * 100) / 100).toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+function cashBox(box, getDue) {
+    const id = box.id;
+    box.innerHTML = `<label for="${id}-t">Amount tendered (cash given) <span class="req" aria-hidden="true">*</span></label>
+      <div class="money-in"><span aria-hidden="true">\u20B1</span><input type="text" id="${id}-t" inputmode="decimal" autocomplete="off" placeholder="0.00" aria-describedby="${id}-c"></div>
+      <div class="quick-cash" role="group" aria-label="Quick cash amounts"><button type="button" class="chip" data-quick="exact">Exact</button>${[200, 500, 1000].map(q => `<button type="button" class="chip" data-quick="${q}">\u20B1${q.toLocaleString('en-US')}</button>`).join('')}</div>
+      <div class="bal-calc" id="${id}-c" role="status" aria-live="polite"></div>`;
+    const input = box.querySelector('input'), calc = box.querySelector('.bal-calc');
+    const tendered = () => {
+        const v = input.value.replace(/,/g, '');
+        return v === '' || v === '.' ? null : Number(v);
+    };
+    const sync = () => {
+        const due = getDue(), t = tendered();
+        calc.className = 'bal-calc';
+        if (t === null)
+            calc.textContent = 'Enter the cash received from the customer.';
+        else if (centsOf(t) < centsOf(due)) {
+            calc.classList.add('short');
+            calc.innerHTML = `Short by <b>${peso((centsOf(due) - centsOf(t)) / 100)}</b>`;
+        } else {
+            calc.classList.add('ok');
+            calc.innerHTML = `Change to return: <b>${peso((centsOf(t) - centsOf(due)) / 100)}</b>`;
+        }
+        box.querySelectorAll('[data-quick]').forEach(c => {
+            const v = c.dataset.quick === 'exact' ? due : Number(c.dataset.quick);
+            c.classList.toggle('on', t !== null && centsOf(t) === centsOf(v));
+        });
+    };
+    input.addEventListener('input', () => {   // digits and one dot, 2 decimals
+        let v = input.value.replace(/[^\d.]/g, '');
+        const dot = v.indexOf('.');
+        v = dot >= 0 ? v.slice(0, dot).slice(0, 7) + '.' + v.slice(dot + 1).replace(/\./g, '').slice(0, 2) : v.slice(0, 7);
+        if (v !== input.value)
+            input.value = v;
+        sync();
+    });
+    box.querySelectorAll('[data-quick]').forEach(c => c.addEventListener('click', () => {
+        const due = getDue();
+        input.value = c.dataset.quick === 'exact' ? String(Number.isInteger(due) ? due : due.toFixed(2)) : c.dataset.quick;
+        sync();
+        input.focus();
+    }));
+    sync();
+    return {
+        tendered, sync, focus: () => input.focus(),
+        reset: () => { input.value = ''; sync(); },
+        /* null when fine, otherwise the message to show */
+        problem: () => {
+            const t = tendered();
+            return t === null ? 'Enter the cash received (amount tendered).' : centsOf(t) < centsOf(getDue()) ? 'The cash tendered is less than the amount received.' : null;
+        }
+    };
+}
+let obDue = 0, orDue = 0;   // what is received right now (the whole total, or the 50% down payment)
+let obCash = null, orCash = null;
+
+/* ---- GCash payment block (same as the customer booking window) ----
+   The studio's GCash QR, "Attach GCash Screenshot" (the 13-digit reference number is read from the picture by OCR and
+   filled in, staff can still correct it) and the reference number box. p = 'ob' (onsite booking) or 'or' (onsite rental). */
+function gcashBlock(p) {
+    $(`#${p}-gw`).innerHTML = `<div class="gq">
+      <img id="${p}-qr" alt="GCash QR code to scan" hidden>
+      <p class="mut" id="${p}-qn">Ask the customer to scan this QR code with GCash and pay the Total received shown below.</p>
+    </div>
+    ${gcashProofHtml(p)}
+    <label for="${p}-g">GCash reference number <span class="req" aria-hidden="true">*</span></label>
+    <input id="${p}-g" data-gcash-ref inputmode="numeric" required aria-required="true" placeholder="13-digit reference" autocomplete="off">`;
+    const qr = $(`#${p}-qr`);
+    qr.onload = () => {
+        qr.hidden = false;
+    };
+    qr.onerror = () => {
+        qr.hidden = true;
+        $(`#${p}-qn`).textContent = 'The studio GCash QR code is not set yet (Settings). Ask the customer to pay to the studio\'s GCash account.';
+    };
+    qr.src = gcashQrUrl();
+    return initGcashProof(p, { ref: `#${p}-g` });
+}
+const obProof = gcashBlock('ob');
+const orProof = gcashBlock('or');
 
 const nameParts = n => {
     const [first, ...rest] = n.trim().split(/\s+/);
@@ -128,19 +219,32 @@ function onbTot() {
     const si = +$('#ob-s').value, h = +$('#ob-h').value, d = $('#ob-d').value;
     if (!STUDIOS[si])
         return;
-    const total = STUDIOS[si].rate * h, later = !!d && d > manilaDay(0);
+    const total = h ? STUDIOS[si].rate * h : 0, later = !!d && d > manilaDay(0);
     $('#ob-pow').hidden = !later;
     if (!later)
         $('#ob-po').value = 'full';
     const now = Math.round(total * 50) / 100;
-    $('#ob-tot').textContent = later && $('#ob-po').value === 'down' ? `${money(now)} now, ${money(total - now)} at the studio (total ${money(total)})` : money(total);
+    $('#ob-tot').textContent = !h ? '-' : later && $('#ob-po').value === 'down' ? `${money(now)} now, ${money(total - now)} at the studio (total ${money(total)})` : money(total);
+    obDue = later && $('#ob-po').value === 'down' ? now : total;
+    if (obCash)
+        obCash.sync();
 }
 $('#ob-po').addEventListener('change', onbTot);
+obCash = cashBox($('#ob-cash'), () => obDue);
 
 async function onbFree(takeHold = false) {
     const si = +$('#ob-s').value, d = $('#ob-d').value, h = +$('#ob-h').value;
+    $('#ob-gw').hidden = $('#ob-m').value !== 'GCash';
+    $('#ob-cash').hidden = $('#ob-m').value !== 'Cash';
     if (!STUDIOS[si] || !d) {
         $('#ob-t').innerHTML = '<option value="">No free time</option>';
+        return;
+    }
+    if (!h) {   // no duration chosen yet: nothing to list, nothing to hold
+        $('#ob-t').innerHTML = '<option value="">Choose a duration first</option>';
+        onbTot();
+        if (held)
+            onbRelease();
         return;
     }
     await loadBusy(si, d, d);
@@ -152,6 +256,7 @@ async function onbFree(takeHold = false) {
         $('#ob-t').value = cur;
     onbTot();
     $('#ob-gw').hidden = $('#ob-m').value !== 'GCash';
+    $('#ob-cash').hidden = $('#ob-m').value !== 'Cash';
     if (takeHold)
         await onbHold();
     else if (held && $('#ob-t').value === '')
@@ -167,11 +272,20 @@ async function onbFree(takeHold = false) {
 }));
 $('#ob-t').addEventListener('change', onbHold);
 
-/* The optional receipt email of the onsite forms. Saves the address on the new onsite booking / rental and asks the
+/* The receipt email of the onsite forms. Saves the address on the new onsite booking / rental and asks the
    send-receipt Edge Function (the same "verified" email staff already send) to email the customer.
    Resolves true when the email went out. A failed email never undoes the booking or rental. */
-async function sendOnsiteReceipt(kind, ref, email) {
-    const r = await run(sb.rpc('staff_set_receipt_email', { p_kind: kind, p_ref: ref, p_email: email || null }));
+async function sendOnsiteReceipt(kind, ref, email, tendered = null) {
+    let r = null;
+    if (tendered !== null) {   // a cash payment: the amount tendered is saved first so the email can show the cash received and the change
+        const t = await sb.rpc('staff_set_receipt_email', { p_kind: kind, p_ref: ref, p_email: email || null, p_tendered: tendered });
+        if (t.error)
+            console.warn('Cash tendered was not saved (run supabase/75_onsite_cash_tendered.sql):', t.error.message);
+        else
+            r = t;
+    }
+    if (!r)
+        r = await run(sb.rpc('staff_set_receipt_email', { p_kind: kind, p_ref: ref, p_email: email || null }));
     const paymentId = r && r.data;
     return paymentId ? notifyVerified(paymentId, true) : false;
 }
@@ -191,10 +305,12 @@ $('#onb').onsubmit = async e => {
     if (!$('#ob-p').value.trim())
         return er('Enter the customer\'s phone number.');
     if (!isPhone($('#ob-p').value))
-        return er('Enter a valid phone number, like 0917 123 4567 or +63 917 123 4567.');
+        return er('Enter a valid phone number, like 0917 123 4567.');
     const email = normalizeEmail($('#ob-em').value);
-    if (email && !isEmail(email))
-        return er('Enter a valid email address, like name@gmail.com, or leave it blank.');
+    if (!email)
+        return er('Enter the customer\'s email address for the receipt.');
+    if (!isEmail(email))
+        return er('Enter a valid email address, like name@gmail.com.');
     if (!d)
         return er('Pick a date.');
     if (d < firstDay()) {
@@ -202,20 +318,48 @@ $('#onb').onsubmit = async e => {
         onbFree();
         return er(pastDateMsg());
     }
+    if (!h) {
+        $('#ob-h').focus();
+        return er('Choose how long the booking is (duration).');
+    }
     if (t === '')
         return er('No free time for that studio and date.');
     if (isPast(d, 10 + +t)) {
         onbFree();
         return er('That start time has already passed. Pick a later time.');
     }
-    // the GCash reference is optional for onsite bookings
+    // GCash: the payment screenshot and the reference number (13 digits) are required
+    if (m === 'GCash') {
+        const sm = check.file(obProof.file(), 'Attach a screenshot of the GCash payment.');
+        if (sm) {
+            $('#ob-ss').focus();
+            return er(sm);
+        }
+        const gm = check.gcashRef(g);
+        if (gm) {
+            $('#ob-g').focus();
+            return er(gm);
+        }
+    }
+    if (m === 'Cash') {
+        const cm = obCash.problem();
+        if (cm) {
+            obCash.focus();
+            return er(cm);
+        }
+    }
     const yes = await askConfirm({
         title: 'Record this onsite booking?',
-        message: `${n}, Studio ${STUDIOS[si].id}, ${longDate(d)}, ${SLOTS[+t]} for ${h} hour${h > 1 ? 's' : ''}. Received now: ${$('#ob-tot').textContent}, paid by ${m}.${email ? ` The receipt is emailed to ${email}.` : ''}`,
+        message: `${n}, Studio ${STUDIOS[si].id}, ${longDate(d)}, ${SLOTS[+t]} for ${h} hour${h > 1 ? 's' : ''}. Received now: ${$('#ob-tot').textContent}, paid by ${m}${m === 'Cash' ? ` (cash given ${peso(obCash.tendered())}, change ${peso(obCash.tendered() - obDue)})` : ''}.${email ? ` The receipt is emailed to ${email}.` : ''}`,
         ok: 'Yes, record booking'
     });
     if (!yes)
         return;
+    if (m === 'GCash') {
+        const up = await uploadGcashProof(obProof.file(), g.replace(/\s/g, ''));   // the screenshot goes first, filed under its reference number
+        if (up.error)
+            return er('Could not upload the GCash screenshot: ' + up.error.message);
+    }
     const [first, last] = nameParts(n);
     const r = await run(sb.rpc('staff_create_onsite_booking', {
         p_studio_id: STUDIOS[si].dbId,
@@ -225,7 +369,7 @@ $('#onb').onsubmit = async e => {
         p_last_name: last,
         p_number: $('#ob-p').value.trim(),
         p_payment_method: m,
-        p_gcash_reference: m === 'GCash' && g ? g : null,
+        p_gcash_reference: m === 'GCash' ? g.replace(/\s/g, '') : null,
         p_pay_option: $('#ob-pow').hidden ? 'full' : $('#ob-po').value,   // 'down' only for a booking on a later day
         p_token: HOLD_TOKEN
     }));
@@ -235,10 +379,15 @@ $('#onb').onsubmit = async e => {
     const row = Array.isArray(r.data) ? r.data[0] : r.data;
     held = false;   // the database removed the hold when it saved the booking
     holdNote();
+    const obGiven = m === 'Cash' ? obCash.tendered() : null;
     $('#onb').reset();
+    obProof.reset();
+    obCash.reset();
+    $('#ob-cash').hidden = false;   // the form is back on Cash
     $('#ob-d').value = firstDay();
+    onbFree();   // the duration is empty again: the start times wait for it
     await refresh();
-    const sent = email && row && row.booking_ref ? await sendOnsiteReceipt('booking', row.booking_ref, email) : false;
+    const sent = email && row && row.booking_ref ? await sendOnsiteReceipt('booking', row.booking_ref, email, obGiven) : false;
     toast(`Onsite booking ${row && row.booking_ref ? row.booking_ref : ''} recorded.${sent ? ' Receipt emailed.' : email ? ' The receipt email could not be sent.' : ''}`);
 };
 
@@ -247,6 +396,56 @@ let orCart = [];   // [{ equipment_id, quantity }]
 
 const inCart = id => (orCart.find(x => x.equipment_id === id) || { quantity: 0 }).quantity;
 
+/* How many are free for the HOURS of this rental (equipment_available_between, file 51): a studio add-on needs the item
+   during its booking, an outside rental from pick-up to return. Two orders only compete when their hours overlap.
+   Until the hours are known (or if file 51 is not installed) the stock right now is used. */
+let winAvail = null, winErr = false, winSeq = 0, winKey = '', winAt = 0;
+
+const availOf = e => winAvail && winAvail[e.equipment_id] !== undefined ? winAvail[e.equipment_id] : e.available;
+
+function onsiteWindow() {
+    if ($('#or-m').value === 'a') {
+        const b = BK.find(x => x.booking_ref === $('#or-b').value);
+        return b && b.start_at && b.end_at ? [b.start_at, b.end_at] : null;
+    }
+    const sd = $('#or-sd').value, rd = $('#or-r').value;
+    if (!sd || !rd)
+        return null;
+    const a = manilaTS(sd, +$('#or-st').value), z = manilaTS(rd, +$('#or-rt').value);
+    return new Date(z) > new Date(a) ? [a, z] : null;
+}
+
+async function refreshOnsiteStock() {
+    const w = onsiteWindow(), key = JSON.stringify([$('#or-m').value, w]);
+    if (key === winKey && Date.now() - winAt < 30000)
+        return;
+    winKey = key;
+    winAt = Date.now();
+    const seq = ++winSeq;
+    let map = null, failed = false;
+    if (w) {
+        const { data, error } = await sb.rpc('equipment_available_between', { p_from: w[0], p_to: w[1] });
+        if (!error && data)
+            map = Object.fromEntries(data.map(r => [r.equipment_id, r.available]));
+        else
+            failed = true;
+    }
+    if (seq !== winSeq)
+        return;   // the hours changed again while asking
+    if (failed)   // do not quietly fall back to today's stock: staff would trust a number that is not for these hours
+        toast("Couldn't check stock for these hours, so the numbers shown are today's stock. The system still checks when you save.");
+    winAvail = map;
+    winErr = failed;
+    const m = $('#or-m').value;
+    orCart = orCart.map(x => {   // cut the chosen quantities to what is free for these hours
+        const e = STK.find(y => y.equipment_id === x.equipment_id);
+        return e && offered(e, m) ? { ...x, quantity: Math.min(x.quantity, availOf(e)) } : null;
+    }).filter(x => x && x.quantity >= 1);
+    orTot();
+    if (eqPrev.open)
+        drawBrowse();
+}
+
 const offered = (e, m) => (m === 'a' ? e.allow_addon : e.allow_outside) && e.stock_status !== 'Unavailable';
 
 function orForm() {
@@ -254,7 +453,7 @@ function orForm() {
     // drop cart items that can no longer be rented (stock changed, or no longer offered for this kind of rent)
     orCart = orCart.map(x => {
         const e = STK.find(y => y.equipment_id === x.equipment_id);
-        return e && offered(e, m) ? { ...x, quantity: Math.min(x.quantity, e.available) } : null;
+        return e && offered(e, m) ? { ...x, quantity: Math.min(x.quantity, availOf(e)) } : null;
     }).filter(x => x && x.quantity >= 1);
 
     ['or-aw'].forEach(x => {
@@ -264,6 +463,7 @@ function orForm() {
         $('#' + x).hidden = m !== 'o';
     });
     $('#or-gw').hidden = $('#or-pm').value !== 'GCash';
+    $('#or-cash').hidden = $('#or-pm').value !== 'Cash';
     setOpts($('#or-b'), BK.filter(b => ['Approved', 'In Progress'].includes(b.status)).map(b => `<option value="${b.booking_ref}">${b.booking_ref}, ${esc(b.customer_name)}</option>`).join('')
         || '<option value="">No confirmed bookings</option>');
     // start and return choices (studio hours)
@@ -283,6 +483,7 @@ function orForm() {
     }
     syncRentalTimes();
     orTot();
+    refreshOnsiteStock();
 }
 
 /* Keeps the rental dates and times valid: no past date, no past time today, and a return after the pick-up.
@@ -347,9 +548,14 @@ function orTot() {
     if (!later)
         $('#or-po').value = 'full';
     const half = later && $('#or-po').value === 'down';
+    orDue = half ? Math.round(total * 50) / 100 : total;
+    if (orCash)
+        orCash.sync();
     $('#or-tot').textContent = half ? `${money(Math.round(total * 50) / 100)} now, ${money(total - Math.round(total * 50) / 100)} at pick-up (total ${money(total)})` : money(total);
     return total;
 }
+
+orCash = cashBox($('#or-cash'), () => orDue);
 
 $('#or-cart').addEventListener('click', e => {
     const rm = e.target.closest('[data-rm]');
@@ -364,49 +570,79 @@ $('#or-cart').addEventListener('click', e => {
 const eqPrev = $('#eqprev');
 
 let eqCat = 'All';
+let eqQuery = '';   // text typed in the window's search box (cleared each time the window opens)
 
-function eqCard(e, m) {
-    const max = Math.min(e.available, 10), q = inCart(e.equipment_id);
-    const info = e.description ? `<p>${esc(e.description)}</p>` : '<p class="mut">No description yet.</p>';
-    const unit = m === 'a' ? 'per session' : 'per 8 hours, then 1/8 per extra hour';
-    return `<div class="eqcard">
-      ${equipmentImage({ img: e.image, name: e.name })}
-      <p class="cat">${esc(e.category_name || '')}</p>
-      <h3>${esc(e.name)}</h3>
-      ${info}
-      <p class="mut" style="margin-top:6px">${e.available} available</p>
-      <div class="row" style="margin-top:8px">
-        <b>${money(m === 'a' ? e.add_on_rate : e.outside_rate)} <span class="mut" style="font-weight:400">${unit}</span></b>
-        <label class="qtyl">Qty <select data-aq="${e.equipment_id}" aria-label="Quantity of ${esc(e.name)}">${Array.from({ length: max + 1 }, (_, n) => `<option value="${n}" ${n === q ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
-      </div>
-    </div>`;
-}
+/* The window is drawn by shared/eqBrowse.js, the same layout the customer's booking window uses. */
+const eqItem = (e, m) => ({
+    id: e.equipment_id,
+    name: e.name,
+    category: e.category_name,
+    desc: e.description,
+    img: e.image,
+    price: money(num(m === 'a' ? e.add_on_rate : e.outside_rate))
+});
 
-function eqCount() {
-    const n = orCart.length, el = $('#eqd-n');
-    if (el)
-        el.textContent = n ? `${n} item${n === 1 ? '' : 's'} selected` : 'Nothing selected yet';
+/* the studio of the booking the add-on is for (used for "Frequently added with Studio X") */
+function bookingStudio() {
+    if ($('#or-m').value !== 'a')
+        return null;
+    const b = BK.find(x => x.booking_ref === $('#or-b').value);
+    const letter = b ? String(b.studio_name || '').replace(/^studio\s*/i, '') : '';
+    return STUDIOS.find(s => s.id === letter) || null;
 }
 
 function drawBrowse() {
     const m = $('#or-m').value;
-    const list = STK.filter(e => offered(e, m) && e.available > 0);
+    const all = STK.filter(e => offered(e, m));
+    const list = all.filter(e => availOf(e) > 0);
+    const hidden = winAvail ? all.length - list.length : 0;
     const cats = ['All', ...new Set(list.map(e => e.category_name).filter(Boolean))];
     if (!cats.includes(eqCat))
         eqCat = 'All';
-    const shown = list.filter(e => eqCat === 'All' || e.category_name === eqCat);
-    eqPrev.innerHTML = `<div class="in">
-    <div class="row"><h2 style="margin:0">Add equipment to the rental</h2><button type="button" class="btn sm line" data-close>Close</button></div>
-    <p class="mut" style="margin-top:4px">${m === 'a' ? 'Used inside the studio during the customer\'s session.' : 'Taken out of the studio by the customer.'} Choose a quantity for each item you want.</p>
-    <div class="tabs" style="margin-top:10px">${cats.map(c => `<button type="button" data-cat="${esc(c)}" class="${c === eqCat ? 'on' : ''}">${esc(c)}</button>`).join('')}</div>
-    <div class="eqgrid">${shown.map(e => eqCard(e, m)).join('') || '<p class="mut">Nothing available in this category.</p>'}</div>
-    <div class="acts"><span class="mut" id="eqd-n" style="margin-right:auto"></span><button type="button" class="btn gold" data-close>Done</button></div>
-  </div>`;
-    eqCount();
+    const shown = list.filter(e => (eqCat === 'All' || e.category_name === eqCat) && matchesSearch(eqItem(e, m), eqQuery));
+    const unit = m === 'a' ? 'per session' : 'per 8 hours, then 1/8 per extra hour';
+    const chosen = orCart.map(x => STK.find(y => y.equipment_id === x.equipment_id)).filter(Boolean).map(e => eqItem(e, m));
+    const st = bookingStudio();
+    paintBrowse(eqPrev, browseHtml({
+        title: 'Add equipment to the rental',
+        intro: m === 'a' ? 'Used inside the studio during the customer\'s session.' : 'Taken out of the studio by the customer.',
+        note: noteHtml(winErr ? 'error' : winAvail ? 'hours' : 'today', {
+            forWhat: 'the rental hours',
+            hidden,
+            tail: winErr ? 'The system checks again when you save.' : 'Availability is checked again when you save.'
+        }),
+        query: eqQuery,
+        cats,
+        cat: eqCat,
+        cards: shown.map(e => ({
+            ...eqItem(e, m),
+            unit,
+            qty: inCart(e.equipment_id),
+            max: Math.min(availOf(e), 10),
+            inLabel: 'In the rental',
+            stockText: stockLine(availOf(e), !!winAvail, Math.max(0, availOf(e) - inCart(e.equipment_id)))
+        })),
+        sugg: suggestionBlock({
+            studio: st,
+            chosen,
+            pool: list.filter(e => !inCart(e.equipment_id)).map(e => eqItem(e, m)),
+            query: eqQuery,
+            unit: m === 'a' ? 'per session' : 'per 8 hours'
+        }),
+        selRows: orCart.map(x => {
+            const e = STK.find(y => y.equipment_id === x.equipment_id);
+            return e ? { id: e.equipment_id, name: e.name, qty: x.quantity, price: money(num(m === 'a' ? e.add_on_rate : e.outside_rate) * x.quantity) } : null;
+        }).filter(Boolean),
+        selTitle: 'Added to the rental'
+    }), q => {
+        eqQuery = q;
+        drawBrowse();
+    });
 }
 
 $('#or-browse').addEventListener('click', () => {
     eqCat = 'All';
+    eqQuery = '';
     drawBrowse();
     eqPrev.showModal();
 });
@@ -421,17 +657,36 @@ eqPrev.addEventListener('click', e => {
         eqPrev.close();
 });
 
-eqPrev.addEventListener('change', e => {
-    const s = e.target.closest('[data-aq]');
-    if (!s)
+/* + / - on a card, and "Remove" in the Added list: change the quantity, redraw, and say what happened */
+function changeQty(id, delta) {
+    const eq = STK.find(y => y.equipment_id === id);
+    if (!eq)
         return;
-    const id = +s.dataset.aq, q = +s.value;
+    const before = inCart(id), q = Math.max(0, Math.min(Math.min(availOf(eq), 10), delta === null ? 0 : before + delta));
     orCart = orCart.filter(x => x.equipment_id !== id);
     if (q > 0)
         orCart.push({ equipment_id: id, quantity: q });
     $('#or-e').hidden = true;
     orTot();      // the list and the total behind the window update right away
-    eqCount();
+    const sc = eqPrev.querySelector('.in'), top = sc ? sc.scrollTop : 0;
+    drawBrowse();
+    if (sc) eqPrev.querySelector('.in').scrollTop = top;
+    const msg = changeMessage(eq.name, before, q);
+    if (msg)
+        modalToast(msg[0], msg[1]);
+}
+
+eqPrev.addEventListener('click', e => {
+    const rm = e.target.closest('[data-sel-rm]');
+    if (rm)
+        return changeQty(+rm.dataset.selRm, null);
+    const sg = e.target.closest('[data-sadd]');   // a suggestion's "+ Add" adds one
+    if (sg)
+        return changeQty(+sg.dataset.sadd, 1);
+    const b = e.target.closest('[data-qstep]');
+    if (!b || b.disabled)
+        return;
+    changeQty(+b.dataset.id, +b.dataset.qstep);
 });
 
 ['or-m', 'or-r', 'or-pm', 'or-po', 'or-sd', 'or-st', 'or-rt'].forEach(x => $('#' + x).addEventListener('change', () => {
@@ -442,7 +697,10 @@ eqPrev.addEventListener('change', e => {
     if (['or-sd', 'or-st', 'or-r', 'or-rt'].includes(x))
         syncRentalTimes(true);
     orTot();
+    if (['or-sd', 'or-st', 'or-r', 'or-rt'].includes(x))
+        refreshOnsiteStock();
 }));
+$('#or-b').addEventListener('change', refreshOnsiteStock);
 
 $('#onr').onsubmit = async e => {
     e.preventDefault();
@@ -457,10 +715,22 @@ $('#onr').onsubmit = async e => {
         return er('Add at least one item to the rental first. Press Browse equipment and choose a quantity.');
     for (const x of orCart) {
         const eq = STK.find(y => y.equipment_id === x.equipment_id);
-        if (!eq || x.quantity > eq.available)
-            return er(`Only ${eq ? eq.available : 0} of ${eq ? eq.name : 'that item'} available.`);
+        if (!eq || x.quantity > availOf(eq))
+            return er(`Only ${eq ? availOf(eq) : 0} of ${eq ? eq.name : 'that item'} available.`);
     }
-    // the GCash reference is optional for onsite rentals
+    // GCash: the payment screenshot and the reference number (13 digits) are required
+    if (pm === 'GCash') {
+        const sm = check.file(orProof.file(), 'Attach a screenshot of the GCash payment.');
+        if (sm) {
+            $('#or-ss').focus();
+            return er(sm);
+        }
+        const gm = check.gcashRef(g);
+        if (gm) {
+            $('#or-g').focus();
+            return er(gm);
+        }
+    }
     const args = {
         p_type: m === 'a' ? 'Add-on' : 'Outside',
         p_items: orCart.map(x => ({
@@ -475,12 +745,14 @@ $('#onr').onsubmit = async e => {
         p_id_type: null,
         p_id_checked: false,
         p_payment_method: pm,
-        p_gcash_reference: pm === 'GCash' && g ? g : null,
+        p_gcash_reference: pm === 'GCash' ? g.replace(/\s/g, '') : null,
         p_pay_option: 'full'
     };
     const email = m === 'a' ? '' : normalizeEmail($('#or-em').value);
+    if (m !== 'a' && !email)
+        return er('Enter the customer\'s email address for the receipt.');
     if (email && !isEmail(email))
-        return er('Enter a valid email address, like name@gmail.com, or leave it blank.');
+        return er('Enter a valid email address, like name@gmail.com.');
     if (m === 'a') {
         args.p_booking_ref = $('#or-b').value;
         if (!args.p_booking_ref)
@@ -515,27 +787,43 @@ $('#onr').onsubmit = async e => {
         if (!$('#or-pow').hidden)
             args.p_pay_option = $('#or-po').value;   // 'down' only for a pick-up on a later day
     }
+    if (pm === 'Cash') {
+        const cm = orCash.problem();
+        if (cm) {
+            orCash.focus();
+            return er(cm);
+        }
+    }
     const what = orCart.map(x => `${STK.find(y => y.equipment_id === x.equipment_id).name} x${x.quantity}`).join(', '),
         who = m === 'a' ? `for booking ${args.p_booking_ref}` : `for ${$('#or-n').value.trim()}, pick-up ${longDate($('#or-sd').value)} ${tlabel(+$('#or-st').value)}, return ${longDate($('#or-r').value)} ${tlabel(+$('#or-rt').value)}`;
     const yes = await askConfirm({
         title: 'Record this rental?',
-        message: `${what} ${who}. Received now: ${$('#or-tot').textContent}, paid by ${pm}.${email ? ` The receipt is emailed to ${email}.` : ''}`,
+        message: `${what} ${who}. Received now: ${$('#or-tot').textContent}, paid by ${pm}${pm === 'Cash' ? ` (cash given ${peso(orCash.tendered())}, change ${peso(orCash.tendered() - orDue)})` : ''}.${email ? ` The receipt is emailed to ${email}.` : ''}`,
         ok: 'Yes, record rental'
     });
     if (!yes)
         return;
+    if (pm === 'GCash') {
+        const up = await uploadGcashProof(orProof.file(), g.replace(/\s/g, ''));   // the screenshot goes first, filed under its reference number
+        if (up.error)
+            return er('Could not upload the GCash screenshot: ' + up.error.message);
+    }
     const r = await run(sb.rpc('staff_create_onsite_rental', args));
     if (!r)
         return er('Could not record the rental. See the message above.');
     er('');
     const row = Array.isArray(r.data) ? r.data[0] : r.data;
+    const orGiven = pm === 'Cash' ? orCash.tendered() : null;
     orCart = [];
     await loadCatalog();
     $('#onr').reset();
+    orProof.reset();
+    orCash.reset();
+    $('#or-cash').hidden = false;   // the form is back on Cash
     $('#or-r').value = '';
     $('#or-sd').value = '';
     await refresh();
     // an add-on without a typed address uses the address saved with its onsite booking (if any)
-    const sent = row && row.rental_ref && (email || m === 'a') ? await sendOnsiteReceipt('rental', row.rental_ref, email) : false;
+    const sent = row && row.rental_ref && (email || m === 'a') ? await sendOnsiteReceipt('rental', row.rental_ref, email, orGiven) : false;
     toast(`Rental ${row && row.rental_ref ? row.rental_ref : ''} saved as Verified. It goes In Use when its start time arrives, or press Issue to start it earlier.${sent ? ' Receipt emailed.' : email ? ' The receipt email could not be sent.' : ''}`);
 };

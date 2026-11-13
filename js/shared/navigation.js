@@ -22,14 +22,21 @@ export function navigate(key, params = {}) {
     const q = new URLSearchParams(params).toString();
     const target = new URL(ROOT + path + (q ? '?' + q : '') + (hash ? '#' + hash : ''), location.href);
 
-    if (target.pathname === location.pathname && target.search === location.search) {
-        if (target.hash && target.hash !== location.hash)
-            location.hash = target.hash;
-        else
-            scrollTo({
-                top: 0,
-                behavior: reducedMotion() ? 'auto' : 'smooth'
-            });
+    if (target.pathname === location.pathname) {
+        /* Same page (every customer tab lives in pages/customer.html): switch tab in place, no reload.
+           Query params (?studio=&date=&time=&item=) are handed to the page through the 'tod:route' event. */
+        if (target.search === location.search) {
+            if (target.hash && target.hash !== location.hash)
+                location.hash = target.hash;
+            else
+                scrollTo({
+                    top: 0,
+                    behavior: reducedMotion() ? 'auto' : 'smooth'
+                });
+            return;
+        }
+        history.pushState(null, '', target.href);
+        window.dispatchEvent(new Event('tod:route'));
         return;
     }
     location.href = target.href;

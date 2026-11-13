@@ -1,0 +1,230 @@
+/* =====================================================================
+   print.css - printing a booking or rental receipt
+   ---------------------------------------------------------------------
+   Linked with media="print" on every page. When the receipt window
+   (#okdlg, the success pop-up / receipt) is open, only that window is
+   printed, on white paper, with the studio name on top. With no window
+   open, a plain page prints without the menus.
+   ===================================================================== */
+@page {
+    size: A4;
+    margin: 14mm;
+}
+
+@media print {
+    :root,
+    :root[data-theme="light"],
+    :root[data-theme="dark"] {
+        color-scheme: light;
+        --paper: #fff;
+        --surface: #fff;
+        --dove: #f3f1ee;
+        --line: #cfcac4;
+        --field: #fff;
+        --ink: #111;
+        --mut: #444;
+        --ok: #0b6b4d;
+        --ok-bg: #e4f4ed;
+        --warn: #7a4b00;
+        --warn-bg: #fdf0d3;
+        --bad: #a3202c;
+        --bad-bg: #fbe3e5;
+    }
+
+    html,
+    body {
+        background: #fff !important;
+        color: #111 !important;
+        overflow: visible !important;
+    }
+
+    /* menus, bars, toasts, buttons, animations never print */
+    .topnav,
+    .tn-scrim,
+    .mbar,
+    .scrim,
+    .pubside,
+    .sitefoot,
+    .stickybar,
+    .toast,
+    .pop-toast,
+    .adm-toast,
+    .theme-toggle,
+    .okic::before,
+    .okic::after,
+    #ok-done,
+    #ok-copy,
+    #ok-print,
+    .ok-tools,
+    .ok-calmenu,
+    .okref-copy,
+    .ok-cal-note,
+    [data-extra-action],
+    .acts button,
+    .shot {
+        display: none !important;
+    }
+
+    * {
+        animation: none !important;
+        transition: none !important;
+        box-shadow: none !important;
+        text-shadow: none !important;
+    }
+
+    /* ----- Reports / Room calendar: "Save as PDF" prints only that tab ----- */
+    body[data-print] * {
+        visibility: hidden !important;
+    }
+
+    body[data-print] .pg.printing,
+    body[data-print] .pg.printing * {
+        visibility: visible !important;
+    }
+
+    body[data-print] .pg.printing {
+        position: absolute !important;
+        left: 0;
+        top: 0;
+        width: 100%;
+        display: block !important;
+    }
+
+    body[data-print] .pg.printing .no-print,
+    body[data-print] .pg.printing .tabs,
+    body[data-print] .pg.printing .btn,
+    body[data-print] .pg.printing input,
+    body[data-print] .pg.printing h1,
+    body[data-print] .pg.printing .sub {
+        display: none !important;
+    }
+
+    body[data-print] .pg.printing .rp-head {
+        display: block !important;
+        margin-bottom: 10px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #111;
+    }
+
+    body[data-print] .pg.printing .rp-head b {
+        display: block;
+        font-size: 16px;
+    }
+
+    body[data-print] .pg.printing .card,
+    body[data-print] .pg.printing .tw {
+        break-inside: avoid;
+        border-color: #cfcac4 !important;
+        background: #fff !important;
+        overflow: visible !important;
+    }
+
+    body[data-print] .pg.printing .cal-scroll,
+    body[data-print] .pg.printing .heat {
+        min-width: 0 !important;
+    }
+
+    body[data-print] .pg.printing * {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    /* ----- a receipt window is open: print only that ----- */
+    body:has(dialog#okdlg[open]) > *:not(dialog#okdlg) {
+        display: none !important;
+    }
+
+    body:has(dialog#okdlg[open]) dialog[open]:not(#okdlg) {
+        display: none !important;
+    }
+
+    dialog#okdlg[open] {
+        position: static !important;
+        display: block !important;
+        inset: auto !important;
+        width: 100% !important;
+        max-width: 560px !important;
+        max-height: none !important;
+        margin: 0 auto !important;
+        overflow: visible !important;
+        border: 0 !important;
+        background: #fff !important;
+        color: #111 !important;
+    }
+
+    dialog#okdlg .in {
+        padding: 0 !important;
+    }
+
+    dialog#okdlg .print-head {
+        display: flex !important;
+        align-items: center;
+        gap: 12px;
+        padding-bottom: 12px;
+        margin-bottom: 16px;
+        border-bottom: 2px solid #111;
+        text-align: left;
+    }
+
+    dialog#okdlg .print-head img {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+    }
+
+    dialog#okdlg .print-head b {
+        display: block;
+        font: 700 17px 'Bricolage Grotesque', Georgia, serif;
+    }
+
+    dialog#okdlg .print-head span {
+        font-size: 12px;
+        color: #444;
+    }
+
+    dialog#okdlg .okic {
+        width: 48px;
+        height: 48px;
+        margin-bottom: 8px;
+    }
+
+    dialog#okdlg .okic svg {
+        stroke-dashoffset: 0 !important;
+    }
+
+    dialog#okdlg .okref {
+        border: 1.5px dashed #111 !important;
+        background: #fff !important;
+        color: #111 !important;
+        font-size: 26px;
+        user-select: text;
+    }
+
+    dialog#okdlg .dl {
+        break-inside: avoid;
+    }
+
+    dialog#okdlg .dl dt {
+        color: #444 !important;
+    }
+
+    dialog#okdlg .dl dd {
+        color: #111 !important;
+    }
+
+    dialog#okdlg img {
+        max-width: 100% !important;
+        break-inside: avoid;
+    }
+
+    /* ----- no receipt open: a clean page (nothing is cut in half) ----- */
+    .card,
+    table,
+    tr {
+        break-inside: avoid;
+    }
+
+    a[href^="http"]::after {
+        content: "";
+    }
+}

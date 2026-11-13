@@ -12,6 +12,7 @@
 
 import { sb } from '../config/supabaseClient.js';
 import { $, esc } from './utils.js';
+import { clearFieldError, setFieldError } from './fieldCheck.js';
 
 export const PROOF_BUCKET = 'gcash-screenshots';
 const MAX_BYTES = 5 * 1024 * 1024;                       // same 5 MB limit as the bucket
@@ -127,15 +128,16 @@ function showViewer(url) {
     }
     const u = esc(url);
     viewer.innerHTML = `<div class="in"><h2>Your GCash screenshot</h2>
-    <img class="idfull" src="${u}" alt="GCash screenshot">
+    <img class="idfull" src="${u}" alt="GCash screenshot" loading="lazy" decoding="async">
     <div class="acts"><a class="btn line" href="${u}" target="_blank" rel="noopener">Open in new tab</a>
     <button type="button" class="btn gold" data-close>Close</button></div></div>`;
     viewer.showModal();
 }
 
-/* Wires the field. opts.ref = the reference number input to fill, opts.onChange = called when the file changes,
-   opts.onError = shows a message (for a wrong file type or size). Returns { file(), reset() }. */
-export function initGcashProof(p, { ref, onChange, onError } = {}) {
+/* Wires the field. opts.ref = the reference number input to fill, opts.onChange = called when the file changes.
+   A wrong file type or size is shown under the file box (opts.onError is no longer needed and is ignored).
+   Returns { file(), reset() }. */
+export function initGcashProof(p, { ref, onChange } = {}) {
     const input = $(`#${p}-ss`);
     if (!input)
         return { file: () => null, reset() {} };
@@ -145,8 +147,25 @@ export function initGcashProof(p, { ref, onChange, onError } = {}) {
     const status = (msg, kind) => {
         const el = $(`#${p}-ss-ocr`);
         el.hidden = !msg;
-        el.textContent = msg || '';
+        el.textContent = '';
+        if (msg && kind === 'busy') {                // spinner while the number is being detected
+            const spin = document.createElement('span');
+            spin.className = 'ocr-spin';
+            spin.setAttribute('aria-hidden', 'true');
+            el.append(spin, msg);
+        }
+        else
+            el.textContent = msg || '';
         el.style.color = kind === 'ok' ? 'var(--ok, #1f8a4c)' : kind === 'warn' ? 'var(--warn, #b26a00)' : '';
+        el.classList.toggle('ocr-busy-msg', kind === 'busy');
+    };
+
+    /* the reference number box shimmers while the number is being read */
+    const busy = on => {
+        if (!refInput)
+            return;
+        refInput.classList.toggle('ocr-busy', on);
+        refInput.setAttribute('aria-busy', on ? 'true' : 'false');
     };
 
     const clearAuto = () => {                       // remove a number we filled in ourselves, never one the customer typed
@@ -184,6 +203,7 @@ export function initGcashProof(p, { ref, onChange, onError } = {}) {
         clearAuto();
         drawPreview();
         status('');
+        busy(false);
         if (onChange)
             onChange();
     };
@@ -192,16 +212,19 @@ export function initGcashProof(p, { ref, onChange, onError } = {}) {
         const f = input.files[0];
         const mine = ++run;
         clearAuto();
+        busy(false);
         if (f && (!OK_TYPES.includes(f.type) || f.size > MAX_BYTES)) {
             input.value = '';
             drawPreview();
             status('');
-            if (onError)
-                onError(!OK_TYPES.includes(f.type) ? 'The GCash screenshot must be a JPG, PNG or WEBP picture.' : 'The GCash screenshot is too big. Choose a picture under 5 MB.');
+            const msg = !OK_TYPES.includes(f.type) ? 'The GCash screenshot must be a JPG, PNG or WEBP picture.' : 'The GCash screenshot is too big. Choose a picture under 5 MB.';
+            setFieldError(input, msg);   // shown right under the file box
             if (onChange)
                 onChange();
             return;
         }
+        if (f)
+            clearFieldError(input);
         drawPreview();
         if (onChange)
             onChange();
@@ -209,11 +232,13 @@ export function initGcashProof(p, { ref, onChange, onError } = {}) {
             status('');
             return;
         }
-        status('Reading the reference number from your screenshot...');
+        status('Detecting the reference number from your screenshot...', 'busy');
+        busy(true);
         try {
             const found = await readReference(f);
             if (mine !== run)
                 return;                              // another file was picked meanwhile
+            busy(false);
             if (found && refInput) {
                 refInput.value = found;
                 autoValue = found;
@@ -224,8 +249,10 @@ export function initGcashProof(p, { ref, onChange, onError } = {}) {
                 status('We could not read the reference number. Please type the 13-digit number from your receipt.', 'warn');
         }
         catch (e) {
-            if (mine === run)
+            if (mine === run) {
+                busy(false);
                 status('Automatic reading is not available right now. Please type the 13-digit reference number.', 'warn');
+            }
         }
     });
     $(`#${p}-ss-view`).addEventListener('click', view);

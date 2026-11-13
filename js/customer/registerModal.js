@@ -12,7 +12,9 @@
 import { register } from '../auth/authService.js';
 import { navigate } from '../shared/navigation.js';
 import { setUser } from '../shared/session.js';
-import { $, esc, isEmail, isName } from '../shared/utils.js';
+import { btnBusy, btnReset, btnSuccess } from '../shared/btnState.js';
+import { applyChecks, check, hasFieldError, liveCheck, setFieldError } from '../shared/fieldCheck.js';
+import { $, esc } from '../shared/utils.js';
 
 const dlg = document.createElement('dialog');
 dlg.className = 'dlg';
@@ -54,7 +56,7 @@ export function openRegisterModal({ first = '', last = '', phone = '', savedNote
           <div><label for="rgm-ln">Last name <span class="req" aria-hidden="true">*</span></label><input id="rgm-ln" data-letters autocomplete="family-name" required aria-required="true" value="${esc(last)}"></div>
         </div>
         <label for="rgm-phone">Phone number <span class="req" aria-hidden="true">*</span></label>
-        <input id="rgm-phone" type="tel" placeholder="09XX XXX XXXX" autocomplete="tel" required aria-required="true" value="${esc(phone)}">
+        <input id="rgm-phone" type="tel" data-phone inputmode="tel" maxlength="15" placeholder="e.g. 0917 123 4567" autocomplete="tel" required aria-required="true" value="${esc(phone)}">
         <label for="rgm-email">Email address <span class="req" aria-hidden="true">*</span></label>
         <input id="rgm-email" type="email" placeholder="you@example.com" autocomplete="email" inputmode="email" required aria-required="true">
         <label for="rgm-pass">Password <span class="req" aria-hidden="true">*</span></label>
@@ -87,33 +89,33 @@ export function openRegisterModal({ first = '', last = '', phone = '', savedNote
         navigate('login');
     };
 
+    /* the rules of this form: checked when a field is left, and again when the form is sent */
+    const rules = () => [
+        ['#rgm-fn', () => check.first($('#rgm-fn').value)],
+        ['#rgm-ln', () => check.last($('#rgm-ln').value)],
+        ['#rgm-phone', () => check.phone($('#rgm-phone').value)],
+        ['#rgm-email', () => check.email($('#rgm-email').value)],
+        ['#rgm-pass', () => check.password($('#rgm-pass').value)],
+        ['#rgm-pass2', () => check.confirm($('#rgm-pass2').value, $('#rgm-pass').value)]
+    ];
+    liveCheck(rules());
+    // changing the password changes whether the confirmation matches
+    $('#rgm-pass').addEventListener('input', () => {
+        if (hasFieldError('#rgm-pass2'))
+            setFieldError('#rgm-pass2', check.confirm($('#rgm-pass2').value, $('#rgm-pass').value));
+    });
+
     $('#rgm').onsubmit = async e => {
         e.preventDefault();
         const f = $('#rgm-fn').value.trim(), l = $('#rgm-ln').value.trim(), ph = $('#rgm-phone').value.trim();
-        const email = $('#rgm-email').value.trim(), pass = $('#rgm-pass').value, pass2 = $('#rgm-pass2').value;
+        const email = $('#rgm-email').value.trim(), pass = $('#rgm-pass').value;
 
-        if (!f)
-            return showError('Enter your first name.');
-        if (!isName(f))
-            return showError('The first name can only contain letters.');
-        if (!l)
-            return showError('Enter your last name.');
-        if (!isName(l))
-            return showError('The last name can only contain letters.');
-        if (!/^[\d\s+()-]{7,}$/.test(ph))
-            return showError('Enter a valid phone number.');
-        if (!email)
-            return showError('Enter your email address.');
-        if (!isEmail(email))
-            return showError('Enter a valid email address, like name@example.com.');
-        if (pass.length < 8)
-            return showError('Use a password with at least 8 characters.');
-        if (pass !== pass2)
-            return showError('The two passwords do not match.');
         showError('');
+        if (!applyChecks(rules().map(([t, rule]) => [t, rule()])))
+            return;   // the wrong fields are marked under themselves
 
         const btn = $('#rgm-go');
-        btn.disabled = true;
+        btnBusy(btn, 'Creating…');
         try {
             const r = await register({
                 first: f,
@@ -122,6 +124,7 @@ export function openRegisterModal({ first = '', last = '', phone = '', savedNote
                 email,
                 password: pass
             });
+            await btnSuccess(btn, 'Account created', { keep: true });
             if (onAccount)
                 onAccount();
             if (r.pending)
@@ -129,7 +132,7 @@ export function openRegisterModal({ first = '', last = '', phone = '', savedNote
             setUser(r);
             location.reload();   // now signed in: the page restores the saved booking and adds guest bookings
         } catch (err) {
-            btn.disabled = false;
+            btnReset(btn);
             showError(err.message);
         }
     };

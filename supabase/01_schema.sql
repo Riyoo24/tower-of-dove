@@ -64,7 +64,7 @@ create table if not exists public.customer (
   updated_at    timestamptz  not null default now(),
   constraint customer_status_chk   check (status in ('Active', 'Inactive')),
   constraint customer_username_chk check (username is null or username ~ '^[a-z0-9_.]{3,30}$'),
-  constraint customer_number_chk   check (number is null or number ~ '^[0-9+()\\s-]{7,20}$'),
+  constraint customer_number_chk   check (number is null or number ~ '^[0-9+()\s-]{7,20}$'),
   constraint customer_guest_chk    check (auth_user_id is not null or username is null)
 );
 create unique index if not exists customer_username_uq on public.customer (lower(username)) where username is not null;

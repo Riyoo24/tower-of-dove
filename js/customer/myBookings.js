@@ -6,6 +6,7 @@
 import { state } from './state.js';
 import { SUPABASE_ANON_KEY, SUPABASE_URL, sb } from '../config/supabaseClient.js';
 import { refreshBook } from './book.js';
+import { noShowSentence, releaseNote, runningLate, clock as releaseClock } from './noShow.js';
 import { BK_STATUS, loadMyBookings } from './data.js';
 import {
     askConfirm,
@@ -17,6 +18,7 @@ import {
     whyRejected
 } from './ui.js';
 import { addonSubRows, pastOpen } from './myRentals.js';
+import { calendarEvent, downloadIcs } from '../shared/calendar.js';
 import { closeActionMenu, openActionMenu } from '../shared/actionMenu.js';
 import { BOOKINGS, firstBookableDate, isPastSlot, lastBookableDate, loadBusy, takenSlots } from '../shared/availability.js';
 import { HOLD_TOKEN, holdRescheduleSlots, releaseHold } from '../shared/holds.js';
@@ -25,6 +27,9 @@ import { PAY_DOWN, dueNow, onPayOption, optName, payOptionHtml, readPayOption } 
 import { STUDIOS, gcashQrUrl, studioIndex } from '../shared/catalog.js';
 import { gcashProofHtml, initGcashProof, uploadGcashProof } from '../shared/gcashProof.js';
 import { isMember } from '../shared/session.js';
+import { btnBusy, btnReset, btnSuccess } from '../shared/btnState.js';
+import { applyChecks, check, liveCheck } from '../shared/fieldCheck.js';
+import { emptyState } from '../shared/emptyState.js';
 import {
     $,
     SLOTS,
@@ -78,6 +83,7 @@ function bookingMenuItems(b) {
     if ((b.status === 'Confirmed' || b.status === 'Active') && isMember())
         items.push(pendingExt(b.ref) ? { label: 'Extension pending', disabled: true } : { act: 'extend', label: 'Extend' });
     if (b.status === 'Confirmed' || b.status === 'Pending') {
+        items.push({ act: 'cal', label: 'Add to calendar' });
         items.push({ act: 'resched', label: 'Reschedule' });
         items.push({ act: 'cancel', label: 'Cancel booking', danger: true });
     }
@@ -98,6 +104,10 @@ function runBookingAction(act, ref) {
         return showDetails(b);
     if (act === 'extend')
         return openExtend(b);
+    if (act === 'cal') {
+        downloadIcs(bookingEvent(b));
+        return toast('Calendar file saved. Open it to add the booking to your calendar.');
+    }
     if (insideCutoff(b))
         return toast(CUTOFF_MSG);
     if (act === 'resched')
@@ -110,7 +120,12 @@ export function renderMyBookings() {
     closeActionMenu();
     const mine = BOOKINGS.filter(b => b.mine);
     if (!mine.length) {
-        $('#mybk').innerHTML = '<p class="mut" style="padding:8px">No bookings yet. Book a studio to get started.</p>';
+        $('#mybk').innerHTML = emptyState({
+            icon: 'calendar',
+            title: 'No bookings yet',
+            text: 'Pick a studio and a time. Your bookings will show up here.',
+            action: { label: 'Book a studio', href: '#book' }
+        });
         return;
     }
     const row = (b, closed = false) => {
@@ -127,7 +142,7 @@ export function renderMyBookings() {
                 badge(b.payment),
                 actions
             ],
-            note: [whyRejected(b.status, b.reason), extNote(b)].filter(Boolean).join('<br>'),
+            note: [whyRejected(b.status, b.reason), extNote(b), releaseNote(b)].filter(Boolean).join('<br>'),
             subs: addonSubRows(b.ref, closed),
             dim: ['Cancelled', 'Rejected'].includes(b.status)
         };
@@ -145,6 +160,9 @@ export function renderMyBookings() {
     // while "Past and closed" is open the table scrolls inside its box (like the admin page); the page itself stays put
     $('#mybk').classList.toggle('tw-scroll', groups.some(g => g.toggle && !g.collapsed));
 }
+
+/* The calendar entry of a booking (shared/calendar.js). Pending bookings are marked tentative. */
+const bookingEvent = b => calendarEvent({ ref: b.ref, studio: b.studio, date: b.date, start: b.start, hours: b.hours, pending: b.status === 'Pending' });
 
 /* The booking receipt: the same layout as the success pop-up, so a customer can screenshot it. */
 function showDetails(b) {
@@ -206,11 +224,12 @@ function showDetails(b) {
         lines,
         icon: 'receipt',
         status: badge(b.status),
+        calendar: ['Pending', 'Confirmed'].includes(b.status) ? bookingEvent(b) : null,
         doneLabel: 'Close',
         shot: 'It is your official receipt. Show it to our staff when you arrive so we can verify your reservation.',
         note: hasDown ? (bookFull && balance <= 0.005
             ? 'Bookings are confirmed after staff verify your payment. Nothing is left to pay at the studio. The payment is non-refundable if the booking is cancelled.'
-            : 'Bookings are confirmed after staff verify your down payment. Pay the balance at the studio when you arrive. The down payment is non-refundable if the booking is cancelled.')
+            : 'Bookings are confirmed after staff verify your down payment. Pay the balance at the studio when you arrive. The down payment is non-refundable if the booking is cancelled. ' + noShowSentence())
             : addonOwed > 0.005 ? 'Bookings are confirmed after staff verify your payment. Pay the equipment balance at the studio when you arrive.'
                 : 'Bookings are confirmed after staff verify your payment.'
     });
@@ -261,6 +280,8 @@ async function openExtend(b) {
         return toast(error ? error.message : 'Could not check the schedule. Try again.');
     }
     const rate = +info.hourly_rate || 0, lo = info.min_hours, hi = info.max_hours;
+    // extra hours the add-on equipment of this booking is free for (file 55); longer extensions are still possible, without the add-on
+    const addonHi = info.addon_max_hours == null ? hi : info.addon_max_hours;
     const summary = `<dl class="dl"><dt>Studio</dt><dd>Studio ${esc(b.studio)}</dd><dt>Date</dt><dd>${longDate(b.date)}</dd>
     <dt>Current time</dt><dd>${esc(b.start)} to ${endTime(b.start, b.hours)} (${hrs(b.hours)})</dd><dt>Rate</dt><dd>${peso(rate)} per hour</dd></dl>`;
 
@@ -273,32 +294,70 @@ async function openExtend(b) {
     }
 
     const opts = Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
-    showDialog(`<div class="row"><h2 style="margin:0">Extend ${esc(b.ref)}</h2><span class="mut" id="hold-left" hidden></span></div>${summary}
-    ${info.message ? `<div class="alert" style="background:var(--warn-bg);color:var(--warn)">${esc(info.message)}</div>` : ''}
-    <label for="ex-h">Extra time</label>
-    <select id="ex-h">${opts.map(h => `<option value="${h}">+${hrs(h)} (${peso(rate * h)})</option>`).join('')}</select>
-    <dl class="dl" style="margin-top:10px"><dt>New end time</dt><dd id="ex-end"></dd><dt>Extra cost</dt><dd id="ex-cost"></dd><dt>Studio total after extension</dt><dd id="ex-tot"></dd></dl>
-    <p class="mut" id="ex-hold" style="margin:6px 0">Holding the time for you...</p>
-
-    ${payOptionHtml('ex', 'at the studio')}
-    <div class="bkt" style="margin-top:6px">
-      <div><b style="color:var(--ink)" id="ex-dpl">Down payment due now (50%)</b><b style="color:var(--ink)" id="ex-dp"></b></div>
-      <div id="ex-balrow"><span>Balance of the extension, paid at the studio</span><span id="ex-bal"></span></div>
+    showDialog(`<div class="row"><h2 style="margin:0">Extend ${esc(b.ref)}</h2><span class="mut" id="hold-left" hidden></span></div>
+    <div class="bk-grid">
+      <div class="bk-gl">
+        <div class="bk-dc">
+          <h3 class="co-h">Extension details</h3>
+          ${summary}
+          ${info.message ? `<div class="alert" style="background:var(--warn-bg);color:var(--warn)">${esc(info.message)}</div>` : ''}
+          <div class="alert" id="ex-addon" role="status" style="background:var(--warn-bg);color:var(--warn)" hidden></div>
+          <label for="ex-h">Extra time</label>
+          <select id="ex-h">${opts.map(h => `<option value="${h}">+${hrs(h)} (${peso(rate * h)})</option>`).join('')}</select>
+          <dl class="dl" style="margin-top:10px"><dt>New end time</dt><dd id="ex-end"></dd><dt>Studio total after extension</dt><dd id="ex-tot"></dd></dl>
+          <p class="mut" id="ex-hold" style="margin:6px 0">Holding the time for you...</p>
+        </div>
+        <section class="bk-sumcol" aria-label="Order summary">
+          <h3 class="co-h">Order summary</h3>
+          <div class="co-sum bk-sum">
+            <div class="tot"><span>Extra cost</span><span id="ex-cost"></span></div>
+            <div class="co-due">
+              <div class="co-due-main"><span id="ex-dpl">Down payment due now (50%)</span><b id="ex-dp"></b></div>
+              <div class="co-due-rest" id="ex-balrow"><span>Balance of the extension, paid at the studio</span><span id="ex-bal"></span></div>
+            </div>
+          </div>
+        </section>
+      </div>
+      <div class="bk-gr">
+        <section class="bk-pay" aria-label="Payment">
+          <div>
+            <h3 class="co-h">Payment</h3>
+            <div class="pay-step">
+              <p class="step-t"><span class="step-n" aria-hidden="true">1</span>Choose how much to pay now</p>
+              ${payOptionHtml('ex', 'at the studio')}
+            </div>
+            <div class="pay-step">
+              <p class="step-t"><span class="step-n" aria-hidden="true">2</span>Scan and pay with GCash</p>
+              <div class="gq">
+                <img id="ex-qr" alt="GCash QR code to scan" hidden>
+                <p class="mut" id="ex-qn">Scan this QR code with GCash and pay the <span class="ex-kind">down payment</span> of <b class="ex-qa"></b>. Then enter the reference number from your GCash receipt below.</p>
+              </div>
+            </div>
+            <div class="pay-step">
+              <p class="step-t"><span class="step-n" aria-hidden="true">3</span>Confirm your payment</p>
+              ${gcashProofHtml('ex')}
+              <label for="ex-g" id="ex-gl">GCash reference number (down payment) <span class="req" aria-hidden="true">*</span></label>
+              <input id="ex-g" data-gcash-ref placeholder="13-digit reference" inputmode="numeric" required aria-required="true">
+            </div>
+          </div>
+        </section>
+      </div>
     </div>
-    <div class="gq">
-      <img id="ex-qr" alt="GCash QR code to scan" hidden>
-      <p class="mut" id="ex-qn">Scan this QR code with GCash and pay the <span class="ex-kind">down payment</span> of <b class="ex-qa"></b>. Then enter the reference number from your GCash receipt below.</p>
-    </div>
-    ${gcashProofHtml('ex')}
-    <label for="ex-g" id="ex-gl">GCash reference number (down payment) <span class="req" aria-hidden="true">*</span></label>
-    <input id="ex-g" placeholder="13-digit reference" inputmode="numeric" required aria-required="true">
     <label class="terms" id="ex-terms">
       <input type="checkbox" id="ex-agree">
       <span id="ex-agreetxt">I understand and agree that the <b>50% down payment is non-refundable</b>, and that I pay the <b>remaining balance at the studio</b>.</span>
     </label>
     <div class="alert" id="ex-e" role="alert" hidden></div>
     <p class="hold">Staff verify your payment first. Your end time and total change only after it is verified. Until then the extra hours stay reserved for you.</p>
-    <div class="acts"><button type="button" class="btn line" data-close>Cancel</button><button type="button" class="btn gold" id="ex-go" disabled>Submit extension request</button></div>`);
+    <div class="co-foot bk-foot">
+      <div class="co-foot-due">
+        <span id="ex-foot-lbl">Pay now (50%)</span>
+        <b id="ex-foot-amt"></b>
+      </div>
+      <button type="button" class="btn line" data-close>Cancel</button>
+      <button type="button" class="btn gold" id="ex-go" disabled>Submit extension request</button>
+    </div>`);
+    dlg.classList.add('bookwide');   // same wide window as the booking form
 
     const sel = $('#ex-h'), err = m => {
         $('#ex-e').textContent = m;
@@ -323,7 +382,7 @@ async function openExtend(b) {
         });
         if (done)
             return;
-        $('#ex-go').disabled = !!e;
+        $('#ex-go').disabled = !!e || $('#ex-go').classList.contains('is-busy');
         if (e) {
             err(e.message);
             $('#ex-hold').textContent = 'The time is not held.';
@@ -333,12 +392,22 @@ async function openExtend(b) {
         $('#ex-hold').textContent = `These hours are held for you while this window is open: ${endTime(b.start, b.hours)} to ${endTime(b.start, b.hours + h)}.`;
     });
 
+    const addonNote = () => {
+        const box = $('#ex-addon'), h = +sel.value;
+        box.hidden = !(h > addonHi);
+        if (!box.hidden)
+            box.innerHTML = `<b>Your add-on equipment is not free for the extra time.</b> ${esc(info.addon_message || '')} You can still extend the session, but the add-on will <b>not</b> be included in the extra hours. You will be asked to confirm.`;
+    };
+
     const preview = () => {
+        addonNote();
         const h = +sel.value, cost = rate * h, opt = readPayOption('ex') || PAY_DOWN, dp = dueNow(cost, opt), full = opt === 'full';
         $('#ex-end').textContent = endTime(b.start, b.hours + h);
         $('#ex-cost').textContent = peso(cost);
         $('#ex-tot').textContent = peso(rate * (b.hours + h));
         $('#ex-dp').textContent = peso(dp);
+        $('#ex-foot-lbl').textContent = full ? 'Pay now' : 'Pay now (50%)';
+        $('#ex-foot-amt').textContent = peso(dp);
         $('#ex-bal').textContent = peso(cost - dp);
         $('#ex-balrow').hidden = full;
         $('#ex-dpl').textContent = full ? 'Full payment due now (100%)' : 'Down payment due now (50%)';
@@ -378,6 +447,7 @@ async function openExtend(b) {
     });
     dlg.addEventListener('close', () => {
         // any way of closing the window frees the hold
+        dlg.classList.remove('bookwide');
         done = true;
         clearInterval(timer);
         stopIdle();
@@ -391,7 +461,13 @@ async function openExtend(b) {
         });
     }, { once: true });
 
-    const proof = initGcashProof('ex', { ref: '#ex-g', onError: err });
+    const proof = initGcashProof('ex', { ref: '#ex-g' });
+    const fieldRules = () => [
+        ['#ex-ss', () => check.file(proof.file(), 'Attach a screenshot of your GCash payment.')],
+        ['#ex-g', () => check.gcashRef($('#ex-g').value)],
+        ['#ex-terms', () => $('#ex-agree').checked ? '' : 'Please tick the box to confirm you understand the no-refund policy.']
+    ];
+    liveCheck(fieldRules());   // each field is checked when it is left, and again while a mistake is being fixed
     onPayOption('ex', preview);
     sel.addEventListener('change', () => {
         preview();
@@ -413,13 +489,19 @@ async function openExtend(b) {
         err('');
         if (!payOpt)
             return err('Choose 50% Downpayment or Full Payment.');
-        if (!proof.file())
-            return err('Attach a screenshot of your GCash payment.');
-        if (!/^\d{13}$/.test(gcash))
-            return err('Enter the 13-digit GCash reference number of your payment.');
-        if (!$('#ex-agree').checked) {
-            $('#ex-terms').classList.add('err');
-            return err('Please tick the box to confirm you understand the no-refund policy.');
+        if (!applyChecks(fieldRules().map(([t, rule]) => [t, rule()])))
+            return;   // the wrong fields are marked under themselves
+        // the equipment added to this booking is not free for the extra hours: extend the booking only, without the add-on
+        const noAddon = h > addonHi;
+        if (noAddon) {
+            const okAddon = await askConfirm({
+                title: 'Extend without your add-on?',
+                message: `The equipment added to ${b.ref} is not available for the extra time. If you continue, only the studio session is extended, until ${endTime(b.start, b.hours + h)}. Your add-on is NOT included in the extra hours and must be returned when your current time ends (${endTime(b.start, b.hours)}).`,
+                ok: 'Yes, extend without add-on',
+                cancel: 'No, keep my add-on'
+            });
+            if (!okAddon)
+                return;
         }
         const yes = await askConfirm({
             title: 'Send your extension request?',
@@ -429,10 +511,11 @@ async function openExtend(b) {
         });
         if (!yes)
             return;
-        $('#ex-go').disabled = true;
+        const exGo = $('#ex-go');
+        btnBusy(exGo, 'Sending…');
         const up = await uploadGcashProof(proof.file(), gcash);
         if (up.error) {
-            $('#ex-go').disabled = false;
+            btnReset(exGo);
             return err('Could not upload your GCash screenshot: ' + up.error.message);
         }
         const { data: res, error: e } = await sb.rpc('customer_request_extension', {
@@ -440,15 +523,18 @@ async function openExtend(b) {
             p_extra_hours: h,
             p_token: token,
             p_gcash_reference: gcash,
-            p_pay_option: payOpt
+            p_pay_option: payOpt,
+            p_without_addons: noAddon
         });
         if (e) {
+            btnReset(exGo, false);   // hold() below enables it again when the hours are still held
             err(e.message);
             hold();
             return;
         }       // for example someone booked the hour first, or the GCash reference was already used
         const row = Array.isArray(res) ? res[0] : res;
         const full = (row.pay_option || payOpt) === 'full';
+        await btnSuccess(exGo, 'Sent', { keep: true });   // brief check mark before the window closes
         dlg.close();
         await loadMyBookings();
         await refreshBook();
@@ -470,8 +556,9 @@ async function openExtend(b) {
                 ['Requested on', stampLabel(new Date())]
             ],
             shot: 'Keep it as proof of your extension payment.',
-            note: full ? 'Your end time and total change after staff verify the payment. The extra hours are reserved for you until then. Nothing is left to pay for the extension.'
-                : 'Your end time and total change after staff verify the down payment. The extra hours are reserved for you until then. Pay the balance of the extension at the studio.'
+            note: (full ? 'Your end time and total change after staff verify the payment. The extra hours are reserved for you until then. Nothing is left to pay for the extension.'
+                : 'Your end time and total change after staff verify the down payment. The extra hours are reserved for you until then. Pay the balance of the extension at the studio.')
+                + (row.without_addons ? ` Your add-on equipment is not included in the extra hours: return it when your current time ends (${endTime(b.start, b.hours)}).` : '')
         });
     });
 }
@@ -496,6 +583,16 @@ function confirmCancel(b) {
     };
 }
 
+/* Start times (slot index -> reason) on a day where the equipment added to this booking is not free for the whole
+   session (rpc reschedule_blocked_slots, file 54). Empty when the booking has no equipment or the call fails:
+   the server still refuses a conflicting time when the customer saves, so nothing is lost. */
+async function loadEquipmentBlocked(ref, dateISO) {
+    const { data, error } = await sb.rpc('reschedule_blocked_slots', { p_booking_ref: ref, p_date: dateISO });
+    if (error || !data)
+        return new Map();
+    return new Map(data.map(r => [r.slot, r.reason]));
+}
+
 /* ---- Reschedule ----
    * The current start time cannot be picked again (only on the booking's own date).
    * Only start times that have enough free hours in a row for the booking are enabled.
@@ -513,6 +610,7 @@ function openReschedule(b) {
     <input id="rs-d" type="date" min="${firstBookableDate()}" max="${lastBookableDate()}" value="${b.date}">
     <label>New start time</label>
     <div class="slots" id="rs-slots"></div>
+    <p class="mut" id="rs-eqnote" style="margin:6px 0" hidden>Times marked <b>No equipment</b> are not available because the equipment added to this booking is already reserved by another booking or rental at that time.</p>
     <p class="mut" id="rs-hold" style="margin:6px 0" hidden></p>
     <div class="acts">
       <button class="btn line" data-close>Keep current time</button>
@@ -531,13 +629,28 @@ function openReschedule(b) {
         if (done || my !== drawing)
             return;
         const taken = takenSlots(si, pick.date, b.ref);
+        // start times where the equipment added to this booking is not free (reschedule_blocked_slots, file 54)
+        const eqBlocked = await loadEquipmentBlocked(b.ref, pick.date);
+        if (done || my !== drawing)
+            return;
+        // the picked time just became unavailable for equipment: drop the pick and free the hold
+        if (pick.t >= 0 && eqBlocked.has(pick.t)) {
+            pick.t = -1;
+            note('');
+            releaseHold();
+            toast('The equipment added to this booking is no longer free at that time. Pick another time.');
+        }
         $('#rs-slots').innerHTML = SLOTS.map((t, i) => {
             const isCurrent = pick.date === b.date && i === cur;
             const fits = i + b.hours <= SLOTS.length && !isPastSlot(pick.date, i)
                 && Array.from({ length: b.hours }, (_, j) => !taken.has(i + j)).every(Boolean);
-            const ok = fits && !isCurrent;
+            const noEq = fits && !isCurrent && eqBlocked.has(i);
+            const ok = fits && !isCurrent && !noEq;
+            if (noEq)
+                return `<button type="button" data-i="${i}" class="staff" disabled title="${esc(eqBlocked.get(i))}">${t}<span class="sh">No equipment</span></button>`;
             return `<button type="button" data-i="${i}" class="${i === pick.t ? 'sel' : ''}" ${ok ? '' : 'disabled'}${isCurrent ? ' title="Your current start time"' : ''}>${t}</button>`;
         }).join('');
+        $('#rs-eqnote').hidden = ![...eqBlocked.keys()].some(i => i + b.hours <= SLOTS.length && !isPastSlot(pick.date, i));
         $('#rs-save').disabled = pick.t < 0;
     };
     draw();
@@ -607,10 +720,13 @@ function openReschedule(b) {
         const date = pick.date, t = pick.t;
         if (t < 0)
             return;
-        $('#rs-save').disabled = true;
+        const save = $('#rs-save');
+        btnBusy(save, 'Saving…');
         await hold();   // make sure the hold is still ours right before saving
-        if (pick.t < 0)
+        if (pick.t < 0) {
+            btnReset(save, false);   // the hours were taken: draw() has already refreshed the button
             return;
+        }
         const { error } = await sb.rpc('reschedule_booking', {
             p_booking_ref: b.ref,
             p_start_at: manilaTS(date, 10 + t),
@@ -618,15 +734,50 @@ function openReschedule(b) {
             p_token: HOLD_TOKEN
         });
         if (error) {
-            $('#rs-save').disabled = false;
+            btnReset(save);
             toast(error.message);
             return draw();
         }
+        await btnSuccess(save, 'Moved', { keep: true });   // brief check mark before the window closes
         dlg.close();
         await loadMyBookings();
         await refreshBook();
-        toast(`${b.ref} moved to ${shortDate(date)} at ${SLOTS[t]}.`);
+        toast(`${b.ref} moved to ${shortDate(date)} at ${SLOTS[t]}. Add it to your calendar again to replace the old entry.`);
     };
+}
+
+/* "I'm running late": one extra 15 minutes (database: customer_running_late). The session still ends at its booked time. */
+async function confirmRunningLate(btn) {
+    const ref = btn.dataset.late;
+    if (btn.dataset.busy)
+        return;
+    const ok = await askConfirm({
+        title: 'Tell the studio you are running late?',
+        message: `${ref} will be held for 15 more minutes. You can do this once. Your session still ends at its booked time, so a late start means less time in the studio. Pay the balance when you arrive.`,
+        ok: 'Yes, I am running late',
+        cancel: 'Never mind'
+    });
+    if (!ok)
+        return;
+    btn.dataset.busy = '1';
+    try {
+        const until = await runningLate(ref);
+        await loadMyBookings();
+        toast(`Thank you. We will hold your slot until ${releaseClock(until)}.`);
+    } catch (err) {
+        toast(err.message);
+    } finally {
+        delete btn.dataset.busy;
+    }
+}
+
+/* "Book again" on a released (no-show) booking: opens the Book tab on the same studio */
+async function bookAgain(ref) {
+    const b = findBooking(ref);
+    if (b && b.studio)
+        state.selStudio = studioIndex(b.studio);
+    await refreshBook();
+    location.hash = 'book';
 }
 
 export function initBookingsTab() {
@@ -637,7 +788,13 @@ export function initBookingsTab() {
         }
         const menu = e.target.closest('[data-menu]');
         if (menu)
-            openMenu(menu);
+            return openMenu(menu);
+        const late = e.target.closest('[data-late]');
+        if (late)
+            return confirmRunningLate(late);
+        const again = e.target.closest('[data-rebook]');
+        if (again)
+            bookAgain(again.dataset.rebook);
     });
 
     /* Guest lookup by reference code. */

@@ -13,14 +13,16 @@ export const ASSETS = ROOT + 'assets/';
 /* Where each link goes. Set a URL when you build that page.
    Query params are added automatically, for example
    book -> pages/customer.html?studio=A&date=2026-10-15&time=3:00 PM#book
+   Home, Book, Rent, My Bookings, My Rental and Contact Us are all tabs of ONE page (pages/customer.html), so
+   moving between them never reloads the page and the equipment cart stays exactly as it was.
    A route set to null shows a short "connect this page" message. */
 export const ROUTES = {
-    home: 'index.html#home',
+    home: 'pages/customer.html#home',
     book: 'pages/customer.html#book',
     rent: 'pages/customer.html#rent',
     mybook: 'pages/customer.html#my-bookings',
     myrent: 'pages/customer.html#my-rentals',
-    contact: 'index.html#contact',
+    contact: 'pages/customer.html#contact',
     login: 'pages/login.html#login',
     register: 'pages/login.html#register',
     account: 'pages/account.html',
@@ -28,3 +30,9 @@ export const ROUTES = {
     admin: 'pages/admin.html#a-over'
     // owner and staff dashboard
 };
+
+/* Responsive photos (srcset).
+   Supabase can resize photos on the fly ("Image Transformations"), but that feature is only on the Pro plan.
+   Leave this false on the Free plan: the photos then load as one file, with their size reserved so the page does not jump.
+   Set it to true after you upgrade and the studio and equipment photos switch to small / medium / large versions. */
+export const IMAGE_TRANSFORMS = false;

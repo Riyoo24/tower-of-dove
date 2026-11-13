@@ -2,18 +2,45 @@
 <html lang="en">
     <head>
         <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
         <title>Dashboard | Tower of Dove Music Studio</title>
         <link rel="icon" type="image/png" href="../assets/img/logo.png">
+  <meta name="theme-color" content="#0B0B0D">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Tower of Dove owner and staff dashboard.">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/img/favicon-32.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Tower of Dove">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <!-- Link previews (Facebook, Messenger, Viber...): og:image must be a full web address.
+       Replace https://tidings-unreal-gratuity.ngrok-free.dev with the real domain once the site is hosted. -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Tower of Dove Music Studio">
+  <meta property="og:title" content="Dashboard | Tower of Dove Music Studio">
+  <meta property="og:description" content="Tower of Dove owner and staff dashboard.">
+  <meta property="og:image" content="https://tidings-unreal-gratuity.ngrok-free.dev/assets/img/og-cover.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Tower of Dove Music Studio">
+  <meta name="twitter:card" content="summary_large_image">
+  <script src="../js/shared/themeInit.js"></script>
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
         <!-- Stylesheets: shared first, then this page's own file -->
         <link rel="stylesheet" href="../css/base.css">
         <link rel="stylesheet" href="../css/components.css">
         <link rel="stylesheet" href="../css/layout.css">
         <link rel="stylesheet" href="../css/modals.css">
         <link rel="stylesheet" href="../css/admin.css">
+        <link rel="stylesheet" href="../css/motion.css">
+        <link rel="stylesheet" href="../css/mobile.css">
+        <link rel="stylesheet" href="../css/theme.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+        <script src="../js/shared/modalTop.js"></script>
     </head>
     <body data-role="admin" data-active="a-over">
         <!-- The sidebar and mobile bar are injected by js/shared/layout.js -->
@@ -66,11 +93,11 @@
                                     </div>
                                     <div>
                                         <label for="ob-p">Phone <span class="req" aria-hidden="true">*</span></label>
-                                        <input id="ob-p" type="tel" data-phone inputmode="tel" autocomplete="off" maxlength="20" placeholder="+63 917 123 4567 or 0917 123 4567" required aria-required="true">
+                                        <input id="ob-p" type="tel" data-phone inputmode="tel" autocomplete="off" maxlength="15" placeholder="e.g. 0917 123 4567" required aria-required="true">
                                     </div>
                                     <div>
-                                        <label for="ob-em">Email for the receipt <span class="mut">(optional)</span></label>
-                                        <input id="ob-em" type="email" inputmode="email" autocomplete="off" maxlength="254" placeholder="name@gmail.com">
+                                        <label for="ob-em">Email for the receipt</label>
+                                        <input id="ob-em" type="email" aria-required="true" inputmode="email" autocomplete="off" maxlength="254" placeholder="name@gmail.com">
                                     </div>
                                     <div>
                                         <label for="ob-s">Studio</label>
@@ -83,10 +110,19 @@
                                     <div>
                                         <label for="ob-h">Duration</label>
                                         <select id="ob-h">
+                                            <option value="" selected disabled>Choose duration</option>
                                             <option value="1">1 hour</option>
-                                            <option value="2" selected>2 hours</option>
+                                            <option value="2">2 hours</option>
                                             <option value="3">3 hours</option>
                                             <option value="4">4 hours</option>
+                                            <option value="5">5 hours</option>
+                                            <option value="6">6 hours</option>
+                                            <option value="7">7 hours</option>
+                                            <option value="8">8 hours</option>
+                                            <option value="9">9 hours</option>
+                                            <option value="10">10 hours</option>
+                                            <option value="11">11 hours</option>
+                                            <option value="12">12 hours</option>
                                         </select>
                                     </div>
                                     <div>
@@ -107,10 +143,8 @@
                                             <option value="down">50% down payment (the rest at the studio)</option>
                                         </select>
                                     </div>
-                                    <div id="ob-gw" hidden>
-                                        <label for="ob-g">GCash reference <span class="mut">(optional)</span></label>
-                                        <input id="ob-g">
-                                    </div>
+                                    <div id="ob-cash" class="cash-box" style="grid-column:1/-1"></div>   <!-- cash tendered: drawn by js/admin/onsite.js -->
+                                    <div id="ob-gw" style="grid-column:1/-1" hidden></div>   <!-- GCash QR, screenshot and reference are drawn by js/admin/onsite.js -->
                                 </div>
                                 <div class="tot"><span>Total received</span> <span id="ob-tot"></span></div>
                                 <p class="mut" id="ob-hold" style="margin:6px 0" hidden></p>
@@ -154,10 +188,8 @@
                                             <option value="down">50% down payment (the rest at pick-up)</option>
                                         </select>
                                     </div>
-                                    <div id="or-gw" hidden>
-                                        <label for="or-g">GCash reference <span class="mut">(optional)</span></label>
-                                        <input id="or-g">
-                                    </div>
+                                    <div id="or-cash" class="cash-box" style="grid-column:1/-1"></div>   <!-- cash tendered: drawn by js/admin/onsite.js -->
+                                    <div id="or-gw" style="grid-column:1/-1" hidden></div>   <!-- GCash QR, screenshot and reference are drawn by js/admin/onsite.js -->
                                     <div id="or-aw">
                                         <label for="or-b">Booking</label>
                                         <select id="or-b"></select>
@@ -167,8 +199,8 @@
                                         <input id="or-n" data-letters required aria-required="true">
                                     </div>
                                     <div id="or-emw" hidden>
-                                        <label for="or-em">Email for the receipt <span class="mut">(optional)</span></label>
-                                        <input id="or-em" type="email" inputmode="email" autocomplete="off" maxlength="254" placeholder="name@gmail.com">
+                                        <label for="or-em">Email for the receipt</label>
+                                        <input id="or-em" type="email" aria-required="true" inputmode="email" autocomplete="off" maxlength="254" placeholder="name@gmail.com">
                                     </div>
                                     <div id="or-tw" hidden>
                                         <label for="or-t">ID type</label>
@@ -237,6 +269,11 @@
                         <p class="sub">Every studio and whether it is on session or available. Remaining time refreshes every minute.</p>
                         <div id="asess"></div>
                     </section>
+                    <section id="a-cal" class="pg">
+                        <h1>Room calendar</h1>
+                        <p class="sub">Every studio on one grid, so the gaps are easy to see. Use the day view for who and when, the week view for how full each room is.</p>
+                        <div id="cal"></div>
+                    </section>
                     <section id="a-stud" class="pg">
                         <h1>Studio management</h1>
                         <p class="sub">Studios marked Available show up on the customer booking page.</p>
@@ -247,7 +284,7 @@
                                 <label for="sn">Name or code</label>
                                 <input id="sn" placeholder="Studio E">
                                 <label for="sd">Description</label>
-                                <input id="sd">
+                                <textarea id="sd" rows="6" style="resize:vertical" placeholder="Press Enter for a new line"></textarea>
                                 <label for="sr">Hourly rate (₱)</label>
                                 <input id="sr" type="number">
                                 <label for="sf">Photo</label>
@@ -266,12 +303,14 @@
                         <h1>Equipment Management</h1>
                         <p class="sub">Total stock the studio owns. Stock drops when a rental is approved and returns when it comes back.</p>
                         <div class="row" style="margin-bottom:12px">
-                            <div class="tabs" style="margin:0">
-                                <button class="on" data-eqt="all">Equipment list</button>
-                                <button data-eqt="low">Low stock</button>
+                            <div class="tabs" id="eq-opts" style="margin:0" aria-label="Equipment filters">
+                                <button type="button" data-eqopt="low" aria-pressed="false">Low stock</button>
+                                <button type="button" data-eqopt="new" aria-pressed="false">Newest added</button>
                             </div>
                             <button class="btn gold" id="eq-add">Add equipment</button>
                         </div>
+                        <div class="tabs" id="eq-cats" style="margin:0 0 12px" aria-label="Filter by category"></div>
+                        <p class="mut" id="eq-drag-hint" style="margin:0 0 8px"></p>
                         <div class="card" id="aeq"></div>
                     </section>
                     <section id="a-rent" class="pg">
@@ -293,6 +332,12 @@
                                 <option value="">All accounts</option>
                                 <option value="Registered">Registered accounts</option>
                                 <option value="Guest">Guest accounts</option>
+                            </select>
+                            <select id="cu-sort" style="max-width:240px" aria-label="Sort customers">
+                                <option value="reg-old">Oldest accounts first</option>
+                                <option value="reg-new">Newest accounts first</option>
+                                <option value="name">Name A to Z</option>
+                                <option value="spent">Most spent</option>
                             </select>
                         </div>
                         <div class="card" id="acu"></div>
@@ -366,6 +411,9 @@
         })();
         </script>
         <!-- All site code is ES modules; this one entry file imports the rest -->
+        <script src="../js/shared/skeleton.js"></script>
         <script src="../js/shared/boot.js" data-entry="../js/admin/index.js"></script>
+        <script src="../js/shared/motion.js" defer></script>
+        <script src="../js/shared/datepicker.js" defer></script>
     </body>
 </html>

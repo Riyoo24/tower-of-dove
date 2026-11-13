@@ -3,11 +3,24 @@
 
    ===================================================================== */
 
+import { notifyBadgeCounts } from './alerts.js';
 import { setBookingFilter } from './bookings.js';
 import { setRentalFilter } from './rentals.js';
 import { setReportDay } from './reports.js';
-import { BK, CNT, RL, STK, STU } from './data.js';
-import { KPI, OWNER, dOf, num, tOf } from './helpers.js';
+import { BK, CNT, DMG, RL, STK, STU } from './data.js';
+import { dmgOwed, dmgStatus } from './damage.js';
+
+/* late fees that were left unpaid at the return: refs still owed (unpaid), refs whose GCash payment staff must check (pending), and the total */
+export function openLateFees() {
+    const open = RL.filter(l => l.late_fee_deferred && !l.late_fee_paid_at && num(l.late_fee) > 0);
+    return {
+        refs: new Set(open.map(l => l.rental_ref)),
+        pending: new Set(open.filter(l => l.late_fee_pending_reference).map(l => l.rental_ref)),
+        unpaid: new Set(open.filter(l => !l.late_fee_pending_reference).map(l => l.rental_ref)),
+        amount: sum(open.map(l => num(l.late_fee)))
+    };
+}
+import { KPI, OWNER, dOf, money, num, tOf } from './helpers.js';
 import { $, TODAY, badge, dayOffset, esc, pl, shortDate, sum } from '../shared/utils.js';
 
 /* ============================ 3. OVERVIEW, BOOKINGS, PAYMENTS ============================ */
@@ -43,6 +56,8 @@ export function renderOverview() {
         KPI('To return today', due.length, 'var(--warn)', itemCount(due) + ' still to come back', 'rn:Due today') +
         KPI('Returned today', back.length, 'var(--ok)', itemCount(back) + ' checked in', 'rn:Returned');
 
+    const unpaidDmg = new Set(DMG.filter(d => ['Unpaid', 'Pending'].includes(d.status) && num(d.amount) > 0).map(d => d.rental_ref));
+    const lateOpen = openLateFees();   // late fees left unpaid at the return (83_late_fee_collection.sql)
     const now = Date.now();
     $('#ost').innerHTML = STU.map(s => {
         const live = BK.find(b => b.studio_id === s.studio_id && b.status === 'In Progress');
@@ -55,9 +70,11 @@ export function renderOverview() {
         return `<div class="card go" data-go="ss" role="link" tabindex="0" aria-label="${esc(s.name)}: open Studio sessions"><div class="row"><h3><i class="lamp ${live ? 'live' : ''}"></i>${esc(s.name)}</h3>${badge(status)}</div><p class="mut" style="margin-top:6px">${text}</p></div>`;
     }).join('');
 
-    const low = STK.filter(e => e.stock_status === 'Low' || e.stock_status === 'In Use').map(e => e.name + (e.stock_status === 'In Use' ? ' (none left)' : ''));
+    const low = STK.filter(e => e.stock_status === 'Low' || e.stock_status === 'In Use' || e.stock_status === 'Out of Stock').map(e => e.name + (e.stock_status === 'In Use' || e.stock_status === 'Out of Stock' ? ' (none left)' : ''));
     $('#ovl').innerHTML =
         `<li><span>Pending payments</span><b>${num(CNT.pending_payments)}</b></li>` +
+        `<li><span>Unpaid damage fees</span><b${unpaidDmg.size ? ' style="color:var(--warn)"' : ''}>${unpaidDmg.size ? unpaidDmg.size + ' (' + money(sum([...unpaidDmg].map(dmgOwed))) + ')' : 'None'}</b></li>` +
+        `<li><span>Unpaid late fees</span><b${lateOpen.refs.size ? ' style="color:var(--warn)"' : ''}>${lateOpen.refs.size ? lateOpen.refs.size + ' (' + money(lateOpen.amount) + ')' : 'None'}</b></li>` +
         `<li><span>Rental requests to review</span><b>${num(CNT.rental_requests)}</b></li>` +
         `<li><span>Active sessions</span><b>${num(CNT.active_sessions)}</b></li>` +
         `<li><span>Equipment currently rented</span><b>${itemCount(open)}</b></li>` +
@@ -83,13 +100,23 @@ export function updateNavBadges() {
             returnDue.add(l.rental_ref);   // return time has come
         }
     });
-    [['#rcnt', num(CNT.rental_requests) + startDue.size + returnDue.size], ['#pcnt', num(CNT.pending_payments)], ['#bcnt', num(CNT.pending_bookings)]].forEach(([id, n]) => {
+    const counts = {};
+    // damage fees the customer still owes (an unpaid fee keeps the Payment badge lit until it is collected)
+    const late = openLateFees();
+    const unpaidDmg = new Set(DMG.filter(d => Number(d.amount) > 0 && dmgStatus(d.rental_ref) === 'Unpaid').map(d => d.rental_ref)).size + late.unpaid.size;
+    const payToVerify = num(CNT.pending_payments) + new Set(DMG.filter(d => d.status === 'Pending').map(d => d.rental_ref)).size + late.pending.size;
+    // [badge id, number shown, number the "new item" pop-up counts]. Unpaid damage fees have their own pop-up (alerts.js), so they are not counted twice.
+    [['#rcnt', num(CNT.rental_requests) + startDue.size + returnDue.size], ['#pcnt', payToVerify + unpaidDmg, payToVerify], ['#bcnt', num(CNT.pending_bookings)]].forEach(([id, n, forPopup]) => {
+        counts[id.slice(1)] = forPopup ?? n;
         const c = $(id);
         if (c) {
             c.textContent = n;
             c.hidden = !n;
+            if (id === '#pcnt')
+                c.title = unpaidDmg ? `${payToVerify} to verify, ${unpaidDmg} fee(s) unpaid` : '';
         }
     });
+    notifyBadgeCounts(counts);   // pop-up when a count went up (admin/alerts.js)
 }
 
 

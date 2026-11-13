@@ -101,8 +101,8 @@ async function allStudiosHtml(date, time) {
             if (r.state === 'closed')
                 return `<div class="row" style="margin-top:12px"><b>${where}</b>${badge(r.s.status)}</div>`;
             if (r.state === 'free')
-                return `<div class="row" style="margin-top:12px"><span><b>${where}</b><br><span class="mut">${esc(r.s.desc)}</span></span>
-          <span class="row" style="gap:10px">${badge('Available')}<button class="btn gold sm" data-studio="${r.k}" data-book-time="${esc(time)}">Book this slot</button></span></div>`;
+                return `<div class="av-free" style="margin-top:12px"><span class="av-info"><b>${where}</b><span class="mut">${esc(r.s.desc)}</span></span>
+          <span class="av-act">${badge('Available')}<button class="btn gold sm" data-studio="${r.k}" data-book-time="${esc(time)}">Book this slot</button></span></div>`;
             return `<div style="margin-top:12px"><div class="row"><b>${where}</b><span class="b unavailable">Booked</span></div>
           <p class="mut">${r.open.length ? 'Open that day:' : 'Nothing is open that day.'}</p>
           <div>${r.open.slice(0, 6).map(t => `<button class="chip" data-studio="${r.k}" data-book-time="${esc(t)}">${t}</button>`).join('')}</div></div>`;
