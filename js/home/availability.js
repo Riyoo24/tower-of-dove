@@ -11,6 +11,18 @@ import { $, SLOTS, badge, esc, longDate, manilaDay, peso } from '../shared/utils
 /* ============================ AVAILABILITY ============================ */
 
 async function checkAvailability() {
+    const box = $('#avail');
+    box.hidden = false;
+    if (window.todSkeleton)
+        box.innerHTML = window.todSkeleton.avail();   // shimmer while the request runs
+    try {
+        await runCheck();   // the early "Pick a date" / "passed" messages replace the shimmer in the same tick
+    } catch (e) {
+        box.innerHTML = '<div class="card"><h3>Could not check right now</h3><p class="mut">Check your connection, then press Check availability again.</p></div>';
+    }
+}
+
+async function runCheck() {
     const all = $('#qs').value === 'all';
     const i = all ? 0 : +$('#qs').value, studio = STUDIOS[i];
     const date = $('#qd').value, time = $('#qt').value;

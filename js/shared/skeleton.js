@@ -36,6 +36,22 @@
         return '<div class="card sk sk-panel" aria-hidden="true">' + (i ? '' : SR) + '<div class="sk-row">' + bar('26%', 'sk-h') + bar('16%', 'sk-pill') + '</div>'
             + bar('58%') + bar('40%') + '<div class="sk-row sk-foot">' + bar('22%', 'sk-btn') + bar('22%', 'sk-btn') + '</div></div>';
     }
+    /* the big showcase slide on Home: one picture-sized shimmer with the caption bars on it */
+    function slide(i) {
+        return '<div class="slide sk sk-slide" aria-hidden="true">' + (i ? '' : SR)
+            + '<div class="sk-cap">' + bar('16%', 'sk-pill') + bar('30%', 'sk-title') + bar('48%')
+            + '<div class="sk-row sk-foot">' + bar('18%', 'sk-h') + bar('24%', 'sk-btn') + '</div></div></div>';
+    }
+    /* the carousel dots under the slide */
+    function dots() {
+        return many(5, function () { return '<i class="sk-b sk-dot" aria-hidden="true"></i>'; });
+    }
+    /* what the "Check availability" box shows while the request is running */
+    function avail() {
+        return '<div class="card sk sk-avail" role="status" aria-label="Checking availability">' + SR
+            + '<div class="sk-row">' + bar('50%', 'sk-h') + bar('14%', 'sk-pill') + '</div>' + bar('62%')
+            + '<div class="sk-row sk-chips">' + many(4, function () { return bar('', 'sk-chip'); }) + '</div></div>';
+    }
     /* an overview list row */
     function li(i) {
         return '<li class="sk sk-li" aria-hidden="true">' + (i ? '' : SR) + bar(W[(i * 3) % W.length]) + '</li>';
@@ -72,17 +88,65 @@
         ['#myrent', function () { return table(6, 3); }],
         // home page
         ['#studio-grid', function () { return many(4, card); }],
-        ['#equipment-grid', function () { return many(4, card); }]
+        ['#equipment-grid', function () { return many(4, card); }],
+        ['#slider', function () { return slide(0); }],        // the big showcase slide (the Home "hero" picture)
+        ['#sdots', dots, true]                                // third item: quiet, no message of its own when loading fails
     ];
 
-    var found = [];
+    var found = [], quiet = [];
     PLAN.forEach(function (p) {
         var el = document.querySelector(p[0]);
         if (el && !el.firstElementChild) {   // only an empty container: never touch anything already drawn
             el.innerHTML = p[1]();
-            found.push(el);
+            (p[2] ? quiet : found).push(el);
         }
     });
+
+    /* ---- the studio picker in the hero's "Check a time" card: shimmer until its options are drawn ---- */
+    var qs = document.getElementById('qs');
+    if (qs && !qs.firstElementChild) {
+        qs.classList.add('sk-field');
+        qs.setAttribute('aria-busy', 'true');
+        new MutationObserver(function (_, mo) {
+            if (!qs.firstElementChild)
+                return;
+            qs.classList.remove('sk-field');
+            qs.removeAttribute('aria-busy');
+            mo.disconnect();
+        }).observe(qs, { childList: true });
+    }
+
+    /* ---- pictures: studio photos, equipment photos, slide photos, reviewer faces ----
+       css/components.css shows a shimmer until the photo has really loaded. Here we only mark each <img>.
+       The "load" and "error" events do not bubble, so they are caught in the capture phase, which also covers
+       pictures that are drawn later by the render code. The class on <html> keeps the pictures visible if this
+       script never runs. */
+    var root = document.documentElement;
+    root.classList.add('sk-imgs');
+    function mark(img) {
+        if (!img.complete)
+            return;
+        img.classList.add(img.naturalWidth ? 'is-loaded' : 'is-failed');
+    }
+    function sweep() {   // safety net for a picture whose event was missed (cached images, a very fast load)
+        Array.prototype.forEach.call(document.querySelectorAll('img:not(.is-loaded):not(.is-failed)'), mark);
+    }
+    document.addEventListener('load', function (e) {
+        if (e.target && e.target.tagName === 'IMG') {
+            e.target.classList.remove('is-failed');
+            e.target.classList.add('is-loaded');
+        }
+    }, true);
+    document.addEventListener('error', function (e) {
+        if (e.target && e.target.tagName === 'IMG')
+            e.target.classList.add('is-failed');
+    }, true);
+    sweep();
+    var sweeps = 0, sweeper = setInterval(function () {
+        sweep();
+        if (++sweeps >= 20)
+            clearInterval(sweeper);
+    }, 500);
 
     function pending() {
         return found.filter(function (el) { return el.isConnected && el.firstElementChild && el.firstElementChild.classList.contains('sk'); });
@@ -90,6 +154,12 @@
 
     /* Replace whatever placeholders are still showing with a message and a retry button. */
     function fail() {
+        quiet.forEach(function (el) {
+            if (el.isConnected && el.firstElementChild && el.firstElementChild.classList.contains('sk-b'))
+                el.innerHTML = '';
+        });
+        if (qs)
+            qs.classList.remove('sk-field');
         pending().forEach(function (el) {
             el.innerHTML = '<div class="sk-fail" role="alert"><span>Could not load this yet. Check your connection.</span>'
                 + '<button type="button" class="btn sm line" data-sk-retry>Try again</button></div>';
@@ -101,7 +171,7 @@
             location.reload();
     });
 
-    window.todSkeleton = { fail: fail };
+    window.todSkeleton = { fail: fail, avail: avail };
     if (found.length)
         setTimeout(fail, 25000);
 })();

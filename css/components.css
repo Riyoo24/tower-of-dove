@@ -1199,6 +1199,108 @@ input.ocr-busy {
     font-size: 14px;
 }
 
+/* ---- showcase slide (Home hero picture) + dots ---- */
+.slide.sk-slide {
+    background: linear-gradient(100deg, var(--dove) 30%, #2f2f37 50%, var(--dove) 70%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+    pointer-events: none;
+}
+
+.slide.sk-slide::after {
+    display: none;
+}
+
+.sk-cap {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 28px 32px;
+}
+
+.sk-slide .sk-b {
+    background: #00000040;   /* darker bars on top of the lighter picture shimmer */
+    animation: none;
+}
+
+.sk-title {
+    height: 30px;
+}
+
+.sk-dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    margin: 8px;
+    border-radius: 50%;
+}
+
+/* ---- hero: studio picker while its options load ---- */
+#qs.sk-field {
+    color: transparent;
+    pointer-events: none;
+    background-image: linear-gradient(100deg, var(--dove) 30%, #2f2f37 50%, var(--dove) 70%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+}
+
+/* ---- availability result while the request runs ---- */
+.sk-avail {
+    pointer-events: none;
+}
+
+.sk-row.sk-chips {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+}
+
+.sk-chip {
+    width: 74px;
+    height: 32px;
+    border-radius: 999px;
+}
+
+/* ---- pictures: shimmer until the photo has loaded (.is-loaded is added by js/shared/skeleton.js) ---- */
+html.sk-imgs :is(.ph.has, .eqimg.has, .slide) img:not(.is-loaded) {
+    opacity: 0;
+}
+
+html.sk-imgs :is(.ph.has, .eqimg.has):has(img:not(.is-loaded):not(.is-failed)) {
+    background-image: linear-gradient(100deg, var(--dove) 30%, #2f2f37 50%, var(--dove) 70%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+}
+
+html.sk-imgs .slide:has(img:not(.is-loaded):not(.is-failed))::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, var(--dove) 30%, #2f2f37 50%, var(--dove) 70%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+}
+
+/* reviewer faces in the hero badge */
+.hx-rv-faces img:not(.is-loaded):not(.is-failed) {
+    background-image: linear-gradient(100deg, #1a1a1f 30%, #2f2f37 50%, #1a1a1f 70%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .slide.sk-slide,
+    #qs.sk-field,
+    html.sk-imgs :is(.ph.has, .eqimg.has),
+    html.sk-imgs .slide::before,
+    .hx-rv-faces img {
+        animation: none;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .sk-b {
         animation: none;
