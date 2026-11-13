@@ -171,8 +171,14 @@ html.sb-anim body {
     overflow-x: clip;
 }
 
-/* page area sits to the right of the sidebar */
+/* page area: no margin by default (customer pages use the top bar).
+   Only the admin dashboard has a sidebar. data-role="admin" is in the HTML itself,
+   so the margin is right from the first paint, before any JavaScript has run. */
 .page {
+    margin-left: 0;
+}
+
+body[data-role="admin"] .page {
     margin-left: var(--sw);   /* set once; the slide is done with transform in layout.js */
 }
 
@@ -331,7 +337,7 @@ html.sb-anim body {
         margin-top: 0 !important;
     }
 
-    .page {
+    body[data-role="admin"] .page {
         margin-left: 0;
     }
 }
