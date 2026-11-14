@@ -1570,3 +1570,29 @@ body.hastop .pop-toasts {
     margin-top: 8px;
     font-size: 12.5px;
 }
+
+
+/* ===== No flash of Home when the page is refreshed on another tab =====
+   An inline script in customer.html sets body[data-active] from the #hash before anything is painted; these rules show the
+   matching section at once. After the page's modules load, ui.js keeps data-active and the .on classes in step, so both agree. */
+body[data-active="book"] #home.pg,
+body[data-active="rent"] #home.pg,
+body[data-active="my-bookings"] #home.pg,
+body[data-active="my-rentals"] #home.pg {
+    display: none;
+}
+
+body[data-active="book"] #c-book,
+body[data-active="rent"] #c-rent,
+body[data-active="my-bookings"] #c-bk,
+body[data-active="my-rentals"] #c-rental {
+    display: block;
+}
+
+body[data-active="contact"] #home:not(.on-contact) #contact {
+    display: block;
+}
+
+body[data-active="contact"] #home > :not(#contact):not(.foot) {
+    display: none;
+}

@@ -52,6 +52,15 @@
   <script src="../js/shared/modalTop.js"></script>
 </head>
 <body class="hastop" data-active="home">
+  <script>
+    /* Open on the right tab from the very first paint. The HTML below starts on Home, and js/customer/ui.js only picks the
+       real tab (from the #hash) once the page's modules have loaded, so a refresh on another tab used to flash Home first.
+       The matching rules are at the end of css/customer.css (they key off body[data-active]). */
+    (function () {
+      var t = location.hash.slice(1);
+      if (['book', 'rent', 'my-bookings', 'my-rentals', 'contact'].indexOf(t) > -1) document.body.setAttribute('data-active', t);
+    })();
+  </script>
 
   <!-- The top navigation bar is injected by layout.js -->
   <main class="page" id="customer">
@@ -476,6 +485,17 @@
 
     </div>
   </main>
+  <script>
+    /* Second half of the no-flash start: the sections exist now, so mark the right one as open (ui.js does the same later,
+       finding it already in place, so nothing re-animates). */
+    (function () {
+      var m = { 'book': 'c-book', 'rent': 'c-rent', 'my-bookings': 'c-bk', 'my-rentals': 'c-rental', 'contact': 'home' };
+      var t = document.body.getAttribute('data-active'), id = m[t];
+      if (!id) return;
+      Array.prototype.forEach.call(document.querySelectorAll('.pg'), function (p) { p.classList.toggle('on', p.id === id); });
+      if (t === 'contact') document.getElementById('home').classList.add('on-contact');
+    })();
+  </script>
 
 
   <!-- ============ Rental checkout (wide modal over the main content area) ============ -->
