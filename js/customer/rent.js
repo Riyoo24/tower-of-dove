@@ -20,7 +20,7 @@ import { EQUIPMENT, STUDIOS, dataReady, gcashQrUrl } from '../shared/catalog.js'
 import { gcashProofHtml, initGcashProof, uploadGcashProof } from '../shared/gcashProof.js';
 import { isMember } from '../shared/session.js';
 import { HOLD_TOKEN, holdEquipment, releaseHold } from '../shared/holds.js';
-import { holdCountdown } from '../shared/holdTimer.js';
+import { CUSTOMER_HOLD_TTL, CUSTOMER_IDLE_TTL, holdCountdown } from '../shared/holdTimer.js';
 import { receiptSending, sendReceipt, showReceiptResult } from '../shared/receipt.js';
 import { btnBusy, btnReset, btnSuccess } from '../shared/btnState.js';
 import { applyChecks, check, clearFieldErrors, liveCheck } from '../shared/fieldCheck.js';
@@ -519,7 +519,7 @@ function renderStockNote() {
         el.className = 'mut';
         const w = windowFor(ctx);
         el.textContent = (ctx === 'out' && w ? `Showing what is free from ${fmtDT(w[0])} to ${fmtDT(w[1])}. Change the pick-up or return time in the Rental summary to check another time. ` : 'Numbers are for your hours only. ')
-            + 'Your items are held for 2 minutes while checkout is open, and reserved once you send your request.';
+            + 'Your items are held for up to 10 minutes while checkout is open (released sooner after 2 minutes of inactivity), and reserved once you send your request.';
     }
 }
 
@@ -953,7 +953,7 @@ async function openCheckout() {
         toast(isMember() ? 'Attach the rental to a studio booking first.' : 'Find your booking with its reference code first.');
         return $(isMember() ? '#lb' : '#lb-ref').focus();
     }
-    // Hold the items for 2 minutes (same as the studio booking form) so nobody else can take the last unit meanwhile
+    // Hold the items for 10 minutes (same as the studio booking form) so nobody else can take the last unit meanwhile
     const req = holdRequest();
     if (!req)
         return toast(state.rentMode === 'addon' ? 'Choose the booking this equipment is for first.' : 'Choose a pick-up and return time first.');
@@ -981,14 +981,17 @@ async function openCheckout() {
             toast('Your equipment hold ran out and someone else took it. The list was updated.');
         }
     }, 60000);
-    // same 2-minute idle rule as the booking form: no activity = the window closes and the items are released
+    // same fixed 10-minute countdown as the booking form: not restarted by activity; at zero the window closes and the items are released
     coStop = holdCountdown($('#rcdlg'), {
         label: $('#co-hold'),
         bar: true,
         noun: 'Item',
-        onExpire: () => {
+        ttl: CUSTOMER_HOLD_TTL,
+        fixed: true,
+        idleTtl: CUSTOMER_IDLE_TTL,
+        onExpire: why => {
             $('#rcdlg').close();
-            toast('Checkout closed after 2 minutes of inactivity. The equipment was released.');
+            toast(why === 'idle' ? 'Checkout closed after 2 minutes of inactivity. The equipment was released.' : 'Checkout closed after 10 minutes. The equipment was released.');
         }
     });
     $('#co-title').focus({ preventScroll: true });   // keeps the browser from focusing the close button first

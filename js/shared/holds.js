@@ -9,7 +9,7 @@ import { manilaTS } from './utils.js';
 
 /* ============================ 3. SLOT HOLDS ============================
    While someone fills in a booking form, the hours are held on the server
-   for 2 minutes (hold_slot). One token = one browser = one hold at a time. */
+   (hold_slot; the server hold is short and renewed while the form is open, the visible countdown is a fixed 10 minutes). One token = one browser = one hold at a time. */
 
 /* The token lives in sessionStorage, so reloading the page keeps the same token and the old hold
    is simply replaced (it never shows up as "someone else" to the same person). */
@@ -27,7 +27,7 @@ export const HOLD_TOKEN = (() => {
     }
 })();
 
-export const LOCK_TTL = 2 * 60 * 1000;
+export const LOCK_TTL = 10 * 60 * 1000;   // customer booking form: fixed 10-minute running countdown (the server hold is renewed while it is open)
 
 /* Hold and release calls run one after another. That way a release can never be overtaken by a
    hold request that was still on its way when the form was closed. */

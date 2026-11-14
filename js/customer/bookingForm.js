@@ -29,7 +29,7 @@ import { changeMessage, modalToast } from '../shared/eqModal.js';
 import { matchesSearch } from '../shared/eqFilter.js';
 import { EQUIPMENT, STUDIOS, gcashQrUrl } from '../shared/catalog.js';
 import { gcashProofHtml, initGcashProof, uploadGcashProof } from '../shared/gcashProof.js';
-import { drawHoldTimer as sharedDrawHoldTimer } from '../shared/holdTimer.js';
+import { IDLE_TTL, drawHoldTimer as sharedDrawHoldTimer } from '../shared/holdTimer.js';
 import { HOLD_TOKEN, LOCK_TTL, holdError, holdSlots, releaseHold } from '../shared/holds.js';
 import { rememberGuestBooking, savePendingBooking } from '../shared/guestStore.js';
 import { isMember } from '../shared/session.js';
@@ -233,12 +233,12 @@ function drawSlots() {
         $('#bk-hint').hidden = !SLOTS.some((_, i) => taken.has(i) && held.has(i));
         $('#bk-hint').textContent = SLOTS.some((_, i) => staff.has(i))
             ? 'Times with a dashed outline are being booked by someone else, or are Held by Staff for a session extension. They may open up again in a few minutes.'
-            : 'Times with a dashed outline are being booked by someone else right now. They may open up again in about 2 minutes.';
+            : 'Times with a dashed outline are being booked by someone else right now. They may open up again in a few minutes.';
     }
     updateTotals();
 }
 
-/* Try to hold hours t..t+h for this customer (held on the server for 2 minutes). */
+/* Try to hold hours t..t+h for this customer (held on the server and renewed while the form is open). */
 async function moveDraft(t, h) {
     if (t + h > SLOTS.length) {
         bkError('That runs past closing time. Choose an earlier end time.');
@@ -280,11 +280,12 @@ const syncRentTab = () => {
     renderEquipment();
 };
 
-/* The "slot held" countdown beside the form title: a bar that empties over the 2-minute hold, amber then red near the end.
+/* The "slot held" countdown beside the form title: a bar that empties over the fixed 10-minute hold, amber then red near the end.
    Any activity in the form refills it (see keepAlive). */
-const drawHoldTimer = left => sharedDrawHoldTimer($('#bk-left'), left, LOCK_TTL);
+const drawHoldTimer = (left, idleLeft) => sharedDrawHoldTimer($('#bk-left'), left, LOCK_TTL, 'Slot', true, idleLeft);
+let idleDeadline = 0;   // 2-minute idle countdown of the open booking form: restarted by activity (never the 10-minute hold)
 
-let bumpIdle = null;   // set while the booking form is open, keeps its 2-minute hold alive
+let bumpIdle = null;   // set while the booking form is open, renews its server hold (does not restart the 10-minute countdown)
 
 function renderAddOnSummary() {
     const sel = addOnSelection();
@@ -524,7 +525,7 @@ export async function openBook(startIndex, prefill = null) {
       <form id="bkf" novalidate>
         <div class="row"><h2 style="margin:0">Book Studio ${s.id}</h2>
           <span class="holdtimer" id="bk-left" role="timer" aria-live="off"><span class="ht-row"><span class="ht-dot" aria-hidden="true"></span><span class="ht-txt"></span></span><i class="ht-bar" aria-hidden="true"><b></b></i></span></div>
-        <p class="mut">${longDate(d)}. ${peso(s.rate)} per hour. Your slot is held while this form is open and released after 2 minutes of inactivity.</p>
+        <p class="mut">${longDate(d)}. ${peso(s.rate)} per hour. Your slot is held for up to 10 minutes while you fill in this form, and released sooner after 2 minutes of inactivity.</p>
 
         <div class="bk-grid">
           <div class="bk-gl">
@@ -535,7 +536,7 @@ export async function openBook(startIndex, prefill = null) {
         <div class="slots" id="bk-slots"></div>
         <p class="bk-range" id="bk-range" aria-live="polite"></p>
         <p class="mut" style="margin-top:6px">The studio is open 10:00 AM to 10:00 PM. The last session starts at 9:00 PM, so every session ends by closing time.</p>
-        <p class="mut" id="bk-hint" style="margin-top:6px" hidden>Times with a dashed outline are being booked by someone else right now. They may open up again in about 2 minutes.</p>
+        <p class="mut" id="bk-hint" style="margin-top:6px" hidden>Times with a dashed outline are being booked by someone else right now. They may open up again in a few minutes.</p>
 
         <label>Add-on equipment <span class="mut" style="font-weight:400">(optional)</span></label>
         <div class="adsum" id="bk-ad"></div>
@@ -787,16 +788,26 @@ export async function openBook(startIndex, prefill = null) {
     qr.src = gcashQrUrl();
     updateTotals();
 
-    // any activity keeps the hold alive
+    // the countdown is fixed (10 minutes, never restarted by activity); the server hold is renewed every 30 seconds
+    // while the form is open so it lasts the whole countdown
     let lastHold = Date.now();
     const keepAlive = () => {
-        state.idleUntil = Date.now() + LOCK_TTL;
         if (state.draft && Date.now() - lastHold > 30000) {
             lastHold = Date.now();
             holdSlots(state.draft.si, state.draft.d, state.draft.t, state.draft.h);
         }
     };
     bumpIdle = keepAlive;
+    idleDeadline = Date.now() + IDLE_TTL;
+    const touch = () => {
+        idleDeadline = Date.now() + IDLE_TTL;
+    };
+    ['pointerdown', 'keydown', 'input', 'touchstart'].forEach(ev => bkDlg.addEventListener(ev, touch));
+    bkDlg.addEventListener('scroll', touch, true);
+    const renewTimer = setInterval(() => {
+        if (bkDlg.open)
+            keepAlive();
+    }, 15000);
     // refresh the day every 15 seconds so times someone else was holding open up again
     const slotPoll = setInterval(async () => {
         if (document.hidden || !state.draft || !bkDlg.open)
@@ -804,24 +815,25 @@ export async function openBook(startIndex, prefill = null) {
         await loadBusy(state.draft.si, state.draft.d, state.draft.d);
         drawSlots();
     }, 15000);
-    ['pointerdown', 'keydown', 'input', 'touchstart'].forEach(ev => bkDlg.addEventListener(ev, keepAlive));
-    bkDlg.addEventListener('scroll', keepAlive, true);
 
     clearInterval(state.idleTimer);
     state.idleTimer = setInterval(() => {
-        const left = state.idleUntil - Date.now();
-        if (left <= 0) {
-            state.draft.why = 'timeout';
+        if (eqDlg.open)
+            idleDeadline = Date.now() + IDLE_TTL;   // busy in the add-on window on top: the idle time waits
+        const left = state.idleUntil - Date.now(), idleLeft = idleDeadline - Date.now();
+        if (left <= 0 || idleLeft <= 0) {
+            state.draft.why = left <= 0 ? 'timeout' : 'idle';
             bkDlg.close();
             return;
         }
-        drawHoldTimer(left);
+        drawHoldTimer(left, idleLeft);
     }, 1000);
-    drawHoldTimer(state.idleUntil - Date.now());
+    drawHoldTimer(state.idleUntil - Date.now(), idleDeadline - Date.now());
 
 
     bkDlg.onclose = () => {
         clearInterval(state.idleTimer);
+        clearInterval(renewTimer);
         clearInterval(slotPoll);
         releaseHold();
         bumpIdle = null;
@@ -832,8 +844,10 @@ export async function openBook(startIndex, prefill = null) {
         clearCart('book');   // the form is closed, so its picks no longer reserve stock
         syncRentTab();
         refreshBook();
-        if (why === 'timeout')
+        if (why === 'idle')
             toast('Booking closed after 2 minutes of inactivity. Your slot was released.');
+        else if (why === 'timeout')
+            toast('Your 10-minute slot hold ran out and the booking form was closed. Your slot was released.');
     };
 
     $('#bkf').onsubmit = async ev => {

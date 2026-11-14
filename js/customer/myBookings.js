@@ -22,7 +22,7 @@ import { calendarEvent, downloadIcs } from '../shared/calendar.js';
 import { closeActionMenu, openActionMenu } from '../shared/actionMenu.js';
 import { BOOKINGS, firstBookableDate, isPastSlot, lastBookableDate, loadBusy, takenSlots } from '../shared/availability.js';
 import { HOLD_TOKEN, holdRescheduleSlots, releaseHold } from '../shared/holds.js';
-import { holdCountdown } from '../shared/holdTimer.js';
+import { CUSTOMER_HOLD_TTL, CUSTOMER_IDLE_TTL, holdCountdown } from '../shared/holdTimer.js';
 import { PAY_DOWN, dueNow, onPayOption, optName, payOptionHtml, readPayOption } from '../shared/payOption.js';
 import { STUDIOS, gcashQrUrl, studioIndex } from '../shared/catalog.js';
 import { gcashProofHtml, initGcashProof, uploadGcashProof } from '../shared/gcashProof.js';
@@ -237,8 +237,8 @@ function showDetails(b) {
 
 /* ---- Extend a verified booking (50% down payment, verified by staff) ----
    The database checks the hours after the current end time (next booking, someone holding them, 10:00 PM
-   closing) and says how many extra hours are free. While this window is open those hours are HELD for 2 minutes
-   (renewed every minute), so nobody else can book or extend them.
+   closing) and says how many extra hours are free. While this window is open those hours are HELD for 10 minutes
+   (the server hold is renewed every minute), so nobody else can book or extend them.
    Paying works like a booking: the customer pays 50% of the extension cost by GCash and enters the reference
    number. The request stays Pending, and the hours stay reserved, until staff verify the payment. When they do,
    the booking's end time, total and down payment update by themselves. The other 50% is paid at the studio. */
@@ -437,12 +437,16 @@ async function openExtend(b) {
 
     extToken = token;
     const timer = setInterval(hold, 60000);
-    // same 2-minute idle rule as the booking form: no activity = the window closes and the hours are released
+    // same fixed 10-minute countdown as the booking form: it is not restarted by activity; at zero the window closes and the hours are released
     const stopIdle = holdCountdown(dlg, {
         label: $('#hold-left'),
-        onExpire: () => {
+        bar: true,
+        ttl: CUSTOMER_HOLD_TTL,
+        fixed: true,
+        idleTtl: CUSTOMER_IDLE_TTL,
+        onExpire: why => {
             dlg.close();
-            toast('Extension window closed after 2 minutes of inactivity. The hours were released.');
+            toast(why === 'idle' ? 'Extension window closed after 2 minutes of inactivity. The hours were released.' : 'Extension window closed after 10 minutes. The hours were released.');
         }
     });
     dlg.addEventListener('close', () => {
@@ -596,7 +600,7 @@ async function loadEquipmentBlocked(ref, dateISO) {
 /* ---- Reschedule ----
    * The current start time cannot be picked again (only on the booking's own date).
    * Only start times that have enough free hours in a row for the booking are enabled.
-   * Picking a start time HOLDS those hours for 2 minutes (renewed every minute while this window is open),
+   * Picking a start time HOLDS those hours for up to 10 minutes (renewed every minute while this window is open),
      so nobody else can take them. Closing the window, changing the date or saving frees the hold. */
 function openReschedule(b) {
     const si = studioIndex(b.studio), cur = SLOTS.indexOf(b.start), pick = {
@@ -679,10 +683,14 @@ function openReschedule(b) {
     // timer runs only while hours are actually held (a start time is picked)
     const stopIdle = holdCountdown(dlg, {
         label: $('#hold-left'),
+        bar: true,
         active: () => pick.t >= 0,
-        onExpire: () => {
+        ttl: CUSTOMER_HOLD_TTL,
+        fixed: true,
+        idleTtl: CUSTOMER_IDLE_TTL,
+        onExpire: why => {
             dlg.close();
-            toast('Reschedule window closed after 2 minutes of inactivity. The hours were released.');
+            toast(why === 'idle' ? 'Reschedule window closed after 2 minutes of inactivity. The hours were released.' : 'Reschedule window closed after 10 minutes. The hours were released.');
         }
     });
 

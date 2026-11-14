@@ -1314,7 +1314,7 @@ body.hastop .pop-toasts {
     display: inline-flex;
     flex-direction: column;
     gap: 6px;
-    min-width: 210px;
+    min-width: 240px;
     padding: 8px 12px;
     border: 1px solid var(--field-bd);
     border-radius: 12px;
@@ -1403,6 +1403,34 @@ body.hastop .pop-toasts {
 .holdtimer.crit .ht-bar b {
     background: var(--bad);
     box-shadow: none;
+}
+
+.holdtimer .ht-idle {
+    margin-left: auto;
+    padding-left: 10px;
+    border-left: 1px solid var(--field-bd);
+    font-size: 11px;
+    line-height: 1.2;
+    white-space: nowrap;
+    color: var(--mut, var(--ink));
+}
+
+.holdtimer .ht-idle b {
+    color: var(--ink);
+}
+
+.holdtimer .ht-idle[hidden] {
+    display: none;
+}
+
+.holdtimer .ht-idle.warn,
+.holdtimer .ht-idle.warn b {
+    color: var(--warn);
+}
+
+.holdtimer .ht-idle.crit,
+.holdtimer .ht-idle.crit b {
+    color: var(--bad);
 }
 
 @media (prefers-reduced-motion: no-preference) {
