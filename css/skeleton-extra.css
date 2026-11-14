@@ -145,3 +145,110 @@
         animation: none;
     }
 }
+/* ---------- Contact Us map: click-to-load card (js/home/contact.js) ---------- */
+.ct-mapgate {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    height: 100%;
+    min-height: inherit;
+    padding: 28px 20px;
+    text-align: center;
+}
+
+.ct-mapgate .ct-ico {
+    width: 48px;
+    height: 48px;
+}
+
+.ct-mapgate strong {
+    font-size: 1.05rem;
+}
+
+.ct-mapgate .ct-gate-sub {
+    max-width: 34ch;
+    color: var(--muted, #9a9aa5);
+    font-size: .9rem;
+}
+
+.ct-mapgate small {
+    max-width: 38ch;
+    color: var(--muted, #9a9aa5);
+    font-size: .75rem;
+}
+
+/* =====================================================================
+   Text that waits for its skeleton, then animates in  (js/shared/topSkeleton.js sets the classes on <html>)
+     html.sk-wait    -> the text is invisible while the skeletons shimmer
+     html.sk-play    -> the skeletons are gone: the text fades and rises in, staggered by --sk-d
+     html.sk-nav-in  -> the real navbar has just replaced the skeleton bar
+   Without the script (or with reduced motion) none of these classes is set, so everything simply shows.
+   ===================================================================== */
+@keyframes skTextIn {
+    from {
+        opacity: 0;
+        transform: translateY(14px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* the pieces: Home hero, "Find your room" header, Contact Us */
+html.sk-wait :is(.hx-pill, .hx-copy > h1, .hx-copy > p, .hx-cta, .hx-card > *, .sc-head > div:first-child, .sc-arrows,
+    .ct-head > *, .ct-group > h3, .ct-list > li:not(.sk), .ct-maptools, .ct-mapgate > *) {
+    opacity: 0;
+}
+
+html.sk-play :is(.hx-pill, .hx-copy > h1, .hx-copy > p, .hx-cta, .hx-card > *, .sc-head > div:first-child, .sc-arrows,
+    .ct-head > *, .ct-group > h3, .ct-list > li:not(.sk), .ct-maptools, .ct-mapgate > *) {
+    animation: skTextIn .7s cubic-bezier(.2, .7, .2, 1) both;
+    animation-delay: var(--sk-d, 0ms);
+}
+
+/* Home: one piece after another */
+html.sk-play .hx-pill { --sk-d: 0ms; }
+html.sk-play .hx-copy > h1 { --sk-d: 90ms; }
+html.sk-play .hx-copy > p { --sk-d: 190ms; }
+html.sk-play .hx-cta { --sk-d: 290ms; }
+html.sk-play .hx-card > :nth-child(1) { --sk-d: 160ms; }
+html.sk-play .hx-card > :nth-child(2) { --sk-d: 230ms; }
+html.sk-play .hx-card > :nth-child(3) { --sk-d: 300ms; }
+html.sk-play .hx-card > :nth-child(4) { --sk-d: 370ms; }
+html.sk-play .hx-card > :nth-child(5) { --sk-d: 440ms; }
+html.sk-play .sc-head > div:first-child { --sk-d: 420ms; }
+html.sk-play .sc-arrows { --sk-d: 500ms; }
+
+/* Contact Us */
+html.sk-play .ct-head > :nth-child(1) { --sk-d: 0ms; }
+html.sk-play .ct-head > :nth-child(2) { --sk-d: 80ms; }
+html.sk-play .ct-head > :nth-child(3) { --sk-d: 160ms; }
+html.sk-play .ct-group > h3 { --sk-d: 220ms; }
+html.sk-play .ct-list > li:nth-child(1) { --sk-d: 280ms; }
+html.sk-play .ct-list > li:nth-child(2) { --sk-d: 350ms; }
+html.sk-play .ct-list > li:nth-child(3) { --sk-d: 420ms; }
+html.sk-play .ct-maptools { --sk-d: 300ms; }
+html.sk-play .ct-mapgate > :nth-child(1) { --sk-d: 340ms; }
+html.sk-play .ct-mapgate > :nth-child(2) { --sk-d: 400ms; }
+html.sk-play .ct-mapgate > :nth-child(3) { --sk-d: 460ms; }
+html.sk-play .ct-mapgate > :nth-child(4) { --sk-d: 520ms; }
+html.sk-play .ct-mapgate > :nth-child(5) { --sk-d: 580ms; }
+
+/* top navbar: the real bar's logo, links and buttons play in right after the skeleton bar is removed.
+   Scoped to #topnav so the footer's copy of the logo is left alone. */
+html.sk-nav-in #topnav :is(.tn-brand, .tn-links > li, .tn-auth > li) {
+    animation: skTextIn .6s cubic-bezier(.2, .7, .2, 1) both;
+    animation-delay: var(--sk-d, 0ms);
+}
+
+html.sk-nav-in #topnav .tn-links > :nth-child(1) { --sk-d: 60ms; }
+html.sk-nav-in #topnav .tn-links > :nth-child(2) { --sk-d: 110ms; }
+html.sk-nav-in #topnav .tn-links > :nth-child(3) { --sk-d: 160ms; }
+html.sk-nav-in #topnav .tn-links > :nth-child(4) { --sk-d: 210ms; }
+html.sk-nav-in #topnav .tn-links > :nth-child(5) { --sk-d: 260ms; }
+html.sk-nav-in #topnav .tn-links > :nth-child(6) { --sk-d: 310ms; }
+html.sk-nav-in #topnav .tn-auth > :nth-child(1) { --sk-d: 360ms; }
+html.sk-nav-in #topnav .tn-auth > :nth-child(2) { --sk-d: 410ms; }

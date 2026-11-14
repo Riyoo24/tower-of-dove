@@ -63,31 +63,61 @@ export function initContact() {
 
     /* Interactive map. Opens on the street map (easier to read); the toggle switches to satellite.
        Drag, zoom and pan work inside the frame. The grey shimmer stays over the frame until the iframe has loaded. */
+    /* Interactive map: click to load.
+       Google sets third-party cookies as soon as its iframe loads, which fails the Lighthouse Best Practices
+       audits "Uses third-party cookies" and "Issues logged in the Issues panel".
+       So the frame starts as a small card, and the Google iframe is only created when the visitor clicks
+       "Load interactive map" or the Map / Satellite toggle. The grey shimmer shows only while it loads. */
     if (c.map) {
         const { name, lat, lng, zoom } = c.map;
         const host = $('#ct-map');
         let mapTimer = 0;
+        let current = 'm';        // the view the toggle is on: m = map, k = satellite
+        let loaded = false;       // true once the iframe has been created
+
         const mapLoaded = () => {
             clearTimeout(mapTimer);
             host.classList.remove('sk-map');
             host.removeAttribute('aria-busy');
         };
-        const show = t => {
-            const src = `https://maps.google.com/maps?q=${encodeURIComponent(name)}%40${lat},${lng}&t=${t}&z=${zoom}&output=embed`;
-            clearTimeout(mapTimer);
-            host.classList.add('sk-map');
-            host.setAttribute('aria-busy', 'true');
-            host.innerHTML = `<iframe src="${src}" title="Map showing ${esc(name)}" loading="lazy" allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>`;
-            host.querySelector('iframe').addEventListener('load', mapLoaded, { once: true });
-            mapTimer = setTimeout(mapLoaded, 15000);   // never shimmer forever (a blocked or very slow map)
+        const setToggle = t => {
             document.querySelectorAll('[data-ct-map]').forEach(b => {
                 const on = b.dataset.ctMap === t;
                 b.classList.toggle('on', on);
                 b.setAttribute('aria-pressed', on);
             });
         };
-        show('m');
-        document.querySelectorAll('[data-ct-map]').forEach(b => b.addEventListener('click', () => show(b.dataset.ctMap)));
+        const load = t => {
+            const src = `https://maps.google.com/maps?q=${encodeURIComponent(name)}%40${lat},${lng}&t=${t}&z=${zoom}&output=embed`;
+            loaded = true;
+            clearTimeout(mapTimer);
+            host.classList.add('sk-map');
+            host.setAttribute('aria-busy', 'true');
+            host.innerHTML = `<iframe src="${src}" title="Map showing ${esc(name)}" allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>`;
+            host.querySelector('iframe').addEventListener('load', mapLoaded, { once: true });
+            mapTimer = setTimeout(mapLoaded, 15000);   // never shimmer forever (a blocked or very slow map)
+        };
+
+        /* the card shown before the visitor asks for the map (no request to Google yet) */
+        mapLoaded();   // removes the starting shimmer from skeleton.js
+        host.innerHTML = `<div class="ct-mapgate">
+            <span class="ct-ico ct-logo">${LOGO.maps}</span>
+            <strong>${esc(name)}</strong>
+            <span class="ct-gate-sub">${esc(c.address || '')}</span>
+            <button type="button" class="btn gold sm" data-ct-load>Load interactive map</button>
+            <small>Loading the map connects to Google Maps, which may set cookies.</small>
+        </div>`;
+        host.querySelector('[data-ct-load]').addEventListener('click', () => load(current));
+
+        document.querySelectorAll('[data-ct-map]').forEach(b => b.addEventListener('click', () => {
+            current = b.dataset.ctMap;
+            setToggle(current);
+            if (loaded)
+                load(current);   // already showing the map: switch view
+            // otherwise only the toggle moves; the map loads when the visitor presses "Load interactive map"
+        }));
+        setToggle(current);
+
         const dir = $('#ct-dir');
         if (dir)
             dir.href = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
