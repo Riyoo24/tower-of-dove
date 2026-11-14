@@ -72,6 +72,31 @@
             }) + '</div>';
     }
 
+    /* ---- Rent tab ---- */
+    /* the search box and the "In stock only" switch (same box as shared/eqFilter.js toolbarHtml) */
+    function rentTools() {
+        return '<div class="eq-tools sk-q" aria-hidden="true"><div class="eq-search">' + bar('100%', 'sk-search') + '</div>'
+            + '<span class="sk-swrow">' + bar('', 'sk-sw') + bar('84px') + '</span></div>';
+    }
+    /* the category chips (All, Guitars, Amplifiers ...) */
+    function rentCats() {
+        return many(6, function (i) { return bar(['46px', '84px', '88px', '92px', '70px', '82px'][i], 'sk-tabpill'); });
+    }
+    /* the whole Rental summary card: title, how-will-you-use-it switch, booking picker, empty cart box, total, checkout button.
+       It is put inside the real card (which is hidden meanwhile), so the card keeps its own size and position. */
+    function rentSummary() {
+        return '<div class="sk-in" role="status" aria-label="Loading rental summary">' + SR
+            + bar('46%', 'sk-h2') + '<i class="sk-hr" aria-hidden="true"></i>'
+            + bar('38%')
+            + bar('100%', 'sk-seg')
+            + bar('34%')
+            + bar('100%', 'sk-field')
+            + bar('100%', 'sk-cartbox')
+            + '<div class="sk-row sk-tot">' + bar('16%', 'sk-h') + bar('12%', 'sk-h') + '</div>'
+            + bar('100%', 'sk-cta')
+            + '</div>';
+    }
+
     var PLAN = [
         // admin
         ['#ovk', function () { return many(4, kpi); }],
@@ -92,6 +117,8 @@
         ['#eq', function () { return many(6, card); }],
         ['#mybk', function () { return table(7, 4); }],
         ['#myrent', function () { return table(6, 3); }],
+        ['#c-rent #eq-toolbar', rentTools, true],            // the search box + "In stock only" switch (third item: quiet)
+        ['#c-rent #eq-cats', rentCats, true],                // the category chips
         // home page
         ['#studio-grid', function () { return many(4, card); }],
         ['#equipment-grid', function () { return many(4, card); }],
@@ -111,6 +138,29 @@
             (p[2] ? quiet : found).push(el);
         }
     });
+
+    /* ---- Rent tab: the Rental summary card shows a placeholder until the equipment list has been drawn ---- */
+    var rsum = document.querySelector('#c-rent .rsum-card'), eqBox = document.getElementById('eq');
+    function releaseSummary() {
+        if (!rsum)
+            return;
+        var ph = rsum.querySelector(':scope > .sk-in');
+        if (ph)
+            ph.remove();
+        rsum.classList.remove('sk-hold');
+        rsum.removeAttribute('aria-busy');
+    }
+    if (rsum && eqBox && eqBox.firstElementChild && eqBox.firstElementChild.classList.contains('sk')) {
+        rsum.classList.add('sk-hold');   // css/skeleton-extra.css hides the real card content while this is set
+        rsum.setAttribute('aria-busy', 'true');
+        rsum.insertAdjacentHTML('afterbegin', rentSummary());
+        new MutationObserver(function (_, mo) {
+            if (eqBox.firstElementChild && !eqBox.querySelector('.sk')) {   // the real cards (or the failure message) replaced the placeholders
+                releaseSummary();
+                mo.disconnect();
+            }
+        }).observe(eqBox, { childList: true });
+    }
 
     /* ---- Contact Us map: shimmer over the frame until the map iframe has loaded (js/home/contact.js removes it) ---- */
     var ctMap = document.getElementById('ct-map');
@@ -176,9 +226,10 @@
     /* Replace whatever placeholders are still showing with a message and a retry button. */
     function fail() {
         quiet.forEach(function (el) {
-            if (el.isConnected && el.firstElementChild && el.firstElementChild.classList.contains('sk-b'))
+            if (el.isConnected && el.firstElementChild && (el.firstElementChild.classList.contains('sk-b') || el.firstElementChild.classList.contains('sk-q')))
                 el.innerHTML = '';
         });
+        releaseSummary();
         if (qs)
             qs.classList.remove('sk-field');
         pending().forEach(function (el) {

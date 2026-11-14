@@ -94,6 +94,78 @@
     }
 }
 
+/* ---------- Rent tab: search box, "In stock only", category chips, Rental summary (js/shared/skeleton.js) ---------- */
+.eq-search .sk-search {
+    width: 100%;
+    height: 40px;
+    border-radius: 999px;
+}
+
+.sk-swrow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    pointer-events: none;
+}
+
+.sk-swrow .sk-sw {
+    width: 38px;
+    height: 22px;
+    flex: none;
+    border-radius: 999px;
+}
+
+.sk-tabpill {
+    height: 34px;
+    flex: none;
+    border-radius: 999px;
+}
+
+/* the real card keeps its own box; only its contents are swapped for the placeholder */
+#c-rent .rsum-card.sk-hold > :not(.sk-in) {
+    display: none !important;
+}
+
+#c-rent .rsum-card > .sk-in {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    pointer-events: none;
+    user-select: none;
+}
+
+.sk-in .sk-h2 {
+    height: 22px;
+    border-radius: 8px;
+}
+
+.sk-in .sk-hr {
+    display: block;
+    height: 1px;
+    margin: 0 0 2px;
+    background: var(--line);
+}
+
+.sk-in .sk-seg,
+.sk-in .sk-field {
+    height: 44px;
+    border-radius: 10px;
+}
+
+.sk-in .sk-cartbox {
+    height: 172px;
+    border-radius: 12px;
+}
+
+.sk-in .sk-tot {
+    margin-top: 2px;
+}
+
+.sk-in .sk-cta {
+    height: 48px;
+    border-radius: 12px;
+}
+
 /* ---------- Contact Us (js/shared/skeleton.js + js/home/contact.js) ---------- */
 .sk-ctrow {
     pointer-events: none;
@@ -376,7 +448,7 @@ html.sk-nav-in #topnav .tn-brand {
 
     /* one animation for every placeholder container; its start time comes from --sk-base + position x --sk-step.
        "backwards" fill: held invisible until its turn, and nothing is left pinned when it ends. */
-    :is(.sk-txt, .sk-card, .sk-kpi, .sk-tile, .sk-panel, .sk-li, .sk-tabs, .sk-tr, #ct-map.sk-map, li.sk:has(> .sk-ctrow)) {
+    :is(.sk-txt, .sk-card, .sk-kpi, .sk-tile, .sk-panel, .sk-li, .sk-tabs, .sk-tr, .sk-q, .sk-in, #eq-cats:has(> .sk-tabpill), #ct-map.sk-map, li.sk:has(> .sk-ctrow)) {
         animation: skCascade .5s cubic-bezier(.2, .7, .2, 1) backwards;
         animation-delay: calc(var(--sk-base, 0ms) + var(--i, 0) * var(--sk-step));
     }
@@ -400,7 +472,11 @@ html.sk-nav-in #topnav .tn-brand {
 
     /* the other tabs */
     .pghead .sk-txt { --sk-base: 60ms; }
-    #cs, #eq { --sk-base: 160ms; }
+    #cs { --sk-base: 160ms; }
+    #eq-toolbar { --sk-base: 100ms; }   /* Rent tab: search box + switch, then the chips, then the cards; the summary card is on the same level as the toolbar */
+    #eq-cats { --sk-base: 150ms; }
+    #c-rent .rsum-card { --sk-base: 120ms; }
+    #eq { --sk-base: 220ms; }
     #mybk, #myrent { --sk-base: 200ms; --sk-step: 45ms; }
 
     /* Contact Us */

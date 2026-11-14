@@ -445,6 +445,32 @@ select,
         display: none;
     }
 
+    /* footer layout on phones: with the "Explore" links hidden, the brand and the Studio info each take the FULL width
+       (before, the Studio column was squeezed into half the screen and its lines wrapped after two or three words) */
+    .sitefoot {
+        margin-top: 48px;
+        padding: 28px 0 24px;
+    }
+
+    .sitefoot .sf-in {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 24px;
+    }
+
+    .sitefoot .sf-brand p {
+        max-width: none;
+    }
+
+    .sitefoot .sf-col {
+        gap: 10px;
+    }
+
+    /* the copyright note stops short of the floating back-to-top button (48px wide + its 14px margin), so the button never sits on top of the text */
+    .sitefoot .sf-note {
+        margin-top: 24px;
+        padding-right: 68px;
+    }
+
     /* the floating top bar stays put but leaves more room for content */
     .tn-in {
         height: 52px;
