@@ -2,6 +2,8 @@
    home/contact.js - Contact Us section of index.html
    Edit CONTACT below to change the details. Leave a link empty ('') to hide it.
    Called from home/index.js. Showing #contact on its own is done by showTab() in customer/ui.js.
+   The three lists and the map start as grey shimmer placeholders (js/shared/skeleton.js, css/skeleton-extra.css);
+   the lists are replaced here, and the map shimmer is removed when the map iframe has loaded.
    ===================================================================== */
 
 import { icon } from '../shared/layout.js';
@@ -60,13 +62,24 @@ export function initContact() {
         (c.youtube ? row('youtube', 'YouTube', '@TowerOfDove', c.youtube) : '');
 
     /* Interactive map. Opens on the street map (easier to read); the toggle switches to satellite.
-       Drag, zoom and pan work inside the frame. */
+       Drag, zoom and pan work inside the frame. The grey shimmer stays over the frame until the iframe has loaded. */
     if (c.map) {
         const { name, lat, lng, zoom } = c.map;
         const host = $('#ct-map');
+        let mapTimer = 0;
+        const mapLoaded = () => {
+            clearTimeout(mapTimer);
+            host.classList.remove('sk-map');
+            host.removeAttribute('aria-busy');
+        };
         const show = t => {
             const src = `https://maps.google.com/maps?q=${encodeURIComponent(name)}%40${lat},${lng}&t=${t}&z=${zoom}&output=embed`;
+            clearTimeout(mapTimer);
+            host.classList.add('sk-map');
+            host.setAttribute('aria-busy', 'true');
             host.innerHTML = `<iframe src="${src}" title="Map showing ${esc(name)}" loading="lazy" allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>`;
+            host.querySelector('iframe').addEventListener('load', mapLoaded, { once: true });
+            mapTimer = setTimeout(mapLoaded, 15000);   // never shimmer forever (a blocked or very slow map)
             document.querySelectorAll('[data-ct-map]').forEach(b => {
                 const on = b.dataset.ctMap === t;
                 b.classList.toggle('on', on);

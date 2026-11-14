@@ -169,6 +169,8 @@ function keepSidebarInSyncWithLogin(renderedLoggedIn) {
    --------------------------------------------------------------------- */
 function injectTopNav(user) {
     document.body.classList.add('hastop');
+    if (window.todTopSkeleton)
+        window.todTopSkeleton.remove();   // the grey placeholder bar from js/shared/topSkeleton.js
     const label = user ? (user.username || user.label || 'Account') : '';
     const initial = (label.trim()[0] || 'U').toUpperCase();
     document.body.insertAdjacentHTML('afterbegin', `

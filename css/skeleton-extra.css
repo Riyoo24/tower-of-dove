@@ -1,0 +1,147 @@
+/* =====================================================================
+   skeleton-extra.css - skeletons for the top navbar and the Contact Us page
+   ---------------------------------------------------------------------
+   Uses the .sk-b shimmer block and the `shimmer` keyframes that already exist
+   (components.css and motion.css). Loaded after depth.css in customer.html.
+   ===================================================================== */
+
+/* ---------- top navbar (js/shared/topSkeleton.js) ----------
+   Built on the real .topnav / .tn-in / .tn-nav classes, so size, border and position match the real bar. */
+#sk-top {
+    pointer-events: none;
+    user-select: none;
+}
+
+#sk-top .sk-tn-logo {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    flex: none;
+}
+
+#sk-top .tn-word {
+    gap: 0;
+}
+
+#sk-top .sk-tn-name {
+    width: 112px;
+    height: 14px;
+}
+
+#sk-top .sk-tn-sub {
+    width: 70px;
+    height: 8px;
+    margin-top: 6px;
+}
+
+#sk-top .sk-tn-a {
+    display: flex;
+    align-items: center;
+    height: 38px;
+    padding: 0 13px;
+}
+
+#sk-top .sk-tn-a .sk-b {
+    height: 12px;
+}
+
+#sk-top .sk-tn-btn {
+    width: 92px;
+    height: 38px;
+    border-radius: 12px;
+}
+
+#sk-top .sk-tn-user {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    height: 38px;
+    padding: 0 14px 0 5px;
+    border-radius: 999px;
+    background: #ffffff0d;
+    border: 1px solid #ffffff14;
+}
+
+#sk-top .sk-tn-av {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    flex: none;
+}
+
+#sk-top .sk-tn-uname {
+    width: 80px;
+    height: 12px;
+}
+
+#sk-top .sk-tn-out {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+}
+
+#sk-top .sk-tn-burger {
+    display: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    flex: none;
+}
+
+@media (max-width: 900px) {
+    #sk-top .sk-tn-burger {
+        display: block;
+    }
+}
+
+/* ---------- Contact Us (js/shared/skeleton.js + js/home/contact.js) ---------- */
+.sk-ctrow {
+    pointer-events: none;
+}
+
+.sk-ctrow:hover {
+    transform: none;
+    box-shadow: none;
+    border-color: var(--line);
+    background: var(--field);
+}
+
+.sk-ctrow .sk-ct-ico {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    flex: none;
+}
+
+.sk-ctrow .sk-ct-txt {
+    display: grid;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+.sk-ctrow .sk-ct-txt .sk-b:first-child {
+    height: 10px;
+}
+
+/* the map frame: shimmer on top of the iframe until it has loaded */
+#ct-map.sk-map {
+    position: relative;
+}
+
+#ct-map.sk-map::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background: linear-gradient(100deg, var(--dove) 30%, #2f2f37 50%, var(--dove) 70%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #ct-map.sk-map::before {
+        animation: none;
+    }
+}

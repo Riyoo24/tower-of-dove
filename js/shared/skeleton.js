@@ -56,6 +56,12 @@
     function li(i) {
         return '<li class="sk sk-li" aria-hidden="true">' + (i ? '' : SR) + bar(W[(i * 3) % W.length]) + '</li>';
     }
+    /* a Contact Us row: round icon, a small label and a value line (same box as the real .ct-link) */
+    function ctRow(i) {
+        return '<li class="sk" aria-hidden="true">' + (i ? '' : SR)
+            + '<div class="ct-link sk-ctrow"><i class="sk-b sk-ct-ico"></i>'
+            + '<span class="sk-ct-txt">' + bar('30%') + bar(W[(i * 3 + 1) % W.length]) + '</span></div></li>';
+    }
     /* a table: optional filter tabs, a heading row and n rows of cells */
     function table(cols, rows, tabs) {
         return '<div class="sk sk-table" role="status" aria-label="Loading">' + SR
@@ -90,7 +96,11 @@
         ['#studio-grid', function () { return many(4, card); }],
         ['#equipment-grid', function () { return many(4, card); }],
         ['#slider', function () { return slide(0); }],        // the big showcase slide (the Home "hero" picture)
-        ['#sdots', dots, true]                                // third item: quiet, no message of its own when loading fails
+        ['#sdots', dots, true],                               // third item: quiet, no message of its own when loading fails
+        // Contact Us: the three info lists (filled by js/home/contact.js)
+        ['#ct-touch', function () { return many(2, ctRow); }],
+        ['#ct-follow', function () { return many(2, ctRow); }],
+        ['#ct-visit', function () { return many(3, ctRow); }]
     ];
 
     var found = [], quiet = [];
@@ -101,6 +111,17 @@
             (p[2] ? quiet : found).push(el);
         }
     });
+
+    /* ---- Contact Us map: shimmer over the frame until the map iframe has loaded (js/home/contact.js removes it) ---- */
+    var ctMap = document.getElementById('ct-map');
+    if (ctMap && !ctMap.firstElementChild) {
+        ctMap.classList.add('sk-map');
+        ctMap.setAttribute('aria-busy', 'true');
+        setTimeout(function () {   // safety: never shimmer forever
+            ctMap.classList.remove('sk-map');
+            ctMap.removeAttribute('aria-busy');
+        }, 25000);
+    }
 
     /* ---- the studio picker in the hero's "Check a time" card: shimmer until its options are drawn ---- */
     var qs = document.getElementById('qs');
