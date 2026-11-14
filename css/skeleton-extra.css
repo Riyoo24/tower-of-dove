@@ -1,5 +1,5 @@
 /* =====================================================================
-   skeleton-extra.css - skeletons for the top navbar and the Contact Us page
+   skeleton-extra.css - skeletons for the top navbar and the Contact Us page, and the text reveal after the skeletons
    ---------------------------------------------------------------------
    Uses the .sk-b shimmer block and the `shimmer` keyframes that already exist
    (components.css and motion.css). Loaded after depth.css in customer.html.
@@ -124,7 +124,7 @@
     height: 10px;
 }
 
-/* the map frame: shimmer on top of the iframe until it has loaded */
+/* the map frame: shimmer on top of the iframe until it has loaded (after the visitor presses "Load interactive map") */
 #ct-map.sk-map {
     position: relative;
 }
@@ -145,6 +145,7 @@
         animation: none;
     }
 }
+
 /* ---------- Contact Us map: click-to-load card (js/home/contact.js) ---------- */
 .ct-mapgate {
     display: flex;
@@ -179,10 +180,15 @@
     font-size: .75rem;
 }
 
+/* Contact Us: the toolbar only holds "Get directions" now (the Map / Satellite toggle was removed) */
+.ct-maptools {
+    justify-content: flex-end;
+}
+
 /* =====================================================================
    Text that waits for its skeleton, then animates in  (js/shared/topSkeleton.js sets the classes on <html>)
-     html.sk-wait    -> the text is invisible while the skeletons shimmer
-     html.sk-play    -> the skeletons are gone: the text fades and rises in, staggered by --sk-d
+     html.sk-wait    -> the text is invisible and grey placeholder bars (.sk-txt) stand in for it
+     html.sk-play    -> the skeletons are gone: the bars fade out, the text fades and rises in, staggered by --sk-d
      html.sk-nav-in  -> the real navbar has just replaced the skeleton bar
    Without the script (or with reduced motion) none of these classes is set, so everything simply shows.
    ===================================================================== */
@@ -197,14 +203,17 @@
     }
 }
 
-/* the pieces: Home hero, "Find your room" header, Contact Us */
-html.sk-wait :is(.hx-pill, .hx-copy > h1, .hx-copy > p, .hx-cta, .hx-card > *, .sc-head > div:first-child, .sc-arrows,
-    .ct-head > *, .ct-group > h3, .ct-list > li:not(.sk), .ct-maptools, .ct-mapgate > *) {
+/* the pieces: Home hero, "Find your room" header, Contact Us, page headers, booking and rental tables.
+   (:not(.sk-txt) keeps the grey placeholder bars out of these rules) */
+html.sk-wait :is(.hx-pill, .hx-copy > h1, .hx-copy > p, .hx-cta, .hx-card > :not(.sk-txt), .sc-head > div:first-child > :not(.sk-txt), .sc-arrows,
+    .ct-head > :not(.sk-txt), .ct-group > h3, .ct-list > li:not(.sk), .ct-maptools, .ct-mapgate > *,
+    .pghead > div > :not(.sk-txt), .pg-chips, #mybk > :not(.sk), #myrent > :not(.sk)) {
     opacity: 0;
 }
 
-html.sk-play :is(.hx-pill, .hx-copy > h1, .hx-copy > p, .hx-cta, .hx-card > *, .sc-head > div:first-child, .sc-arrows,
-    .ct-head > *, .ct-group > h3, .ct-list > li:not(.sk), .ct-maptools, .ct-mapgate > *) {
+html.sk-play :is(.hx-pill, .hx-copy > h1, .hx-copy > p, .hx-cta, .hx-card > :not(.sk-txt), .sc-head > div:first-child, .sc-arrows,
+    .ct-head > :not(.sk-txt), .ct-group > h3, .ct-list > li:not(.sk), .ct-maptools, .ct-mapgate > *,
+    .pghead > div > :not(.sk-txt), .pg-chips, #mybk > :not(.sk), #myrent > :not(.sk)) {
     animation: skTextIn .7s cubic-bezier(.2, .7, .2, 1) both;
     animation-delay: var(--sk-d, 0ms);
 }
@@ -236,6 +245,94 @@ html.sk-play .ct-mapgate > :nth-child(2) { --sk-d: 400ms; }
 html.sk-play .ct-mapgate > :nth-child(3) { --sk-d: 460ms; }
 html.sk-play .ct-mapgate > :nth-child(4) { --sk-d: 520ms; }
 html.sk-play .ct-mapgate > :nth-child(5) { --sk-d: 580ms; }
+
+/* Book a studio, Rent equipment, My bookings, My rental: page header, then the table.
+   The studio and equipment cards are left alone: css/motion.css + js/shared/motion.js already reveal them. */
+html.sk-play .pghead > div > :nth-child(1) { --sk-d: 0ms; }
+html.sk-play .pghead > div > :nth-child(2) { --sk-d: 80ms; }
+html.sk-play .pghead > div > :nth-child(3) { --sk-d: 160ms; }
+html.sk-play .pg-chips { --sk-d: 240ms; }
+html.sk-play #mybk > :not(.sk),
+html.sk-play #myrent > :not(.sk) { --sk-d: 280ms; }
+
+/* ---------- grey placeholder bars where the hidden text will appear (js/shared/topSkeleton.js adds and removes them) ---------- */
+.sk-rel {
+    position: relative;
+}
+
+.sk-txt {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    pointer-events: none;
+    user-select: none;
+    transition: opacity .3s ease;
+}
+
+.sk-txt.out {
+    opacity: 0;
+}
+
+.sk-txt .sk-b {
+    display: block;
+    flex: none;
+    max-width: 100%;
+    border-radius: 8px;
+}
+
+.sk-txt .sk-r99 { border-radius: 99px; }
+.sk-txt .sk-r12 { border-radius: 12px; }
+.sk-txt .sk-r10 { border-radius: 10px; }
+
+/* hero buttons row */
+.sk-txt .sk-cta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 24px;
+}
+
+/* the "Check a time" card: same padding and gaps as the real card */
+.hx-card > .sk-txt-card {
+    display: grid;
+    align-content: start;
+    gap: 14px;
+    padding: inherit;
+    box-sizing: border-box;
+}
+
+.sk-txt .sk-grp {
+    display: grid;
+    gap: 8px;
+}
+
+.sk-txt .sk-two {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.sk-txt .sk-mid {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.sk-txt-mid {
+    align-items: center;
+}
+
+.sk-txt-card .sk-mid {
+    margin-top: 2px;
+}
+
+@media (max-width: 720px) {
+    .sk-txt .sk-h1 {
+        height: 32px !important;
+        margin-top: 12px !important;
+    }
+}
 
 /* top navbar: the real bar's logo, links and buttons play in right after the skeleton bar is removed.
    Scoped to #topnav so the footer's copy of the logo is left alone. */
