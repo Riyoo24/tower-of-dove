@@ -88,6 +88,9 @@ const HOME_EQUIPMENT_ROWS = 2;
 export function limitEquipmentRows() {
     const grid = $('#equipment-grid'), more = $('#equipment-more');
     if (!grid) return;
+    // Home is hidden while another tab is open: a hidden grid has no columns to count, so wait until it is shown
+    // (the ResizeObserver below calls this again the moment it appears)
+    if (!grid.clientWidth) return;
     const cards = [...grid.children];
     cards.forEach(c => { c.hidden = false; });
     const cols = getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length || 1;
@@ -98,6 +101,20 @@ export function limitEquipmentRows() {
         const left = cards.length - max, note = $('#equipment-more-note');
         if (note && left > 0) note.textContent = `+${left} more item${left === 1 ? '' : 's'} available to rent`;
     }
+}
+
+/* Recount the columns when the grid becomes visible or changes width: opening Home after a refresh on another tab,
+   a window resize, a phone turning around. */
+const equipmentGrid = $('#equipment-grid');
+if (equipmentGrid && 'ResizeObserver' in window) {
+    let lastWidth = 0;
+    new ResizeObserver(() => {
+        const width = equipmentGrid.clientWidth;
+        if (width !== lastWidth) {
+            lastWidth = width;
+            limitEquipmentRows();
+        }
+    }).observe(equipmentGrid);
 }
 
 let resizeTimer;

@@ -272,6 +272,7 @@ export async function loadMyRentals() {
                 hours: Number(r.rental_hours) || 0,
                 pickup: r.pickup_date,
                 due: r.due_at,
+                returnAt: r.return_date,   // the return time the customer chose (the late fee only starts at due, after the full 8 hours)
                 down: Number(r.down_payment) || 0,
                 late: Number(r.late_fee) || 0,
                 lateDeferred: !!r.late_fee_deferred,                 // staff chose "Not now" at the return

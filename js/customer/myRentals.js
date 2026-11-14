@@ -10,6 +10,7 @@ import { PHOTO_BUCKET } from '../shared/inspectionPhoto.js';
 import { normRef, notFound, startsAt } from './myBookings.js';
 import { fmtDT } from './rent.js';
 import { okDlg } from './book.js';
+import { returnCountdownHtml, startReturnCountdown } from './returnCountdown.js';
 import { loadDamageBlock, onPayDamage } from './damageBlock.js';
 import { awaitingStudio, offersFor, openSwapChoice } from './swapChoice.js';
 import { closeActionMenu, openActionMenu } from '../shared/actionMenu.js';
@@ -240,7 +241,7 @@ export function renderMyRentals() {
                 `<span class="ref-static">${esc(o.ref)}</span>${o.type === 'addon' ? ' <span class="b addon">Add-on</span>' : ''}`,
                 // a returned rental with a fee still to pay (or being checked) shows only the fee status
                 o.rawStatus === 'Returned' && (damageOwed(o.rentalRef) > 0 || damageWaiting(o.rentalRef) > 0 || lateOwed(o.rentalRef) > 0 || lateWaiting(o.rentalRef) > 0)
-                    ? (lateBadge(o.rentalRef) + damageBadge(o.rentalRef)).trim() : statusBadge(o) + swapChip(o.rentalRef) + damageBadge(o.rentalRef),
+                    ? (lateBadge(o.rentalRef) + damageBadge(o.rentalRef)).trim() : (returnCountdownHtml(o) || statusBadge(o)) + swapChip(o.rentalRef) + damageBadge(o.rentalRef),   // an outside rental in use shows the live return countdown instead of "In Use"
                 actions
             ],
             note: whyRejected(o.status, o.reason),
@@ -778,6 +779,7 @@ export function initMyRentals() {
             return renderMyRentals();
         }
     };
+    startReturnCountdown();
     $('#myrent').addEventListener('click', onClick);
     $('#mybk').addEventListener('click', onClick);
 }

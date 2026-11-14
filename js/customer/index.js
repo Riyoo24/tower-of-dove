@@ -26,6 +26,31 @@ import '../shared/qrZoom.js';
 
 injectChrome();   // top navigation bar
 
+/* After logging in, land on Home, not on the Book tab.
+   The login page sends the customer to this page; this runs once for that arrival (a fresh navigation that
+   came from login.html) and switches the URL to #home before any tab is drawn. It leaves alone:
+   - a refresh or Back/Forward (the customer chose that tab themselves),
+   - links that carry ?studio=&date=&time=&item= (an explicit request),
+   - a saved booking from the guest "Register an account" flow, which restorePendingBooking() reopens on #book. */
+(function landOnHomeAfterLogin() {
+    try {
+        const nav = performance.getEntriesByType('navigation')[0];
+        if (nav && nav.type !== 'navigate')
+            return;
+        if (!/\/login\.html$/.test(new URL(document.referrer).pathname))
+            return;
+        if (location.search || readPendingBooking())
+            return;
+        history.replaceState(null, '', location.pathname + '#home');
+    } catch (e) {
+        /* no referrer or blocked: leave the URL as it is */
+    }
+})();
+
+/* Show the right tab straight away. The page's HTML starts on Home, and the catalog takes a moment to load,
+   so waiting for it before choosing the tab made a refresh on #rent (or any other tab) flash Home first. */
+showTab();
+
 /* ============================ 6. START ============================ */
 
 async function applyUrlParams() {
@@ -130,7 +155,6 @@ dataReady.then(async () => {
         if (!$('#oc').value)
             $('#oc').value = state.PROFILE.number;
     });
-    showTab();
     await loadMyBookings();
     await loadMyRentals();
     await loadDamageBlock();
