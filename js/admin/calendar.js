@@ -1,11 +1,15 @@
 /* =====================================================================
-   admin/calendar.js - Calendar tab (owner and staff): every room on one grid.
-   Day view  : hours down the side, one column per studio, a block for each booking. Free time is the empty space.
-   Week view : one row per studio, one column per day, each cell a strip of the 12 open hours (free hours stay blank).
-   Click a block for its details, or a day in the week view to open that day.
+   admin/calendar.js - Calendar tab (owner and staff): two functions on one page.
+   Rooms     : every studio on one grid.
+     Day view  : hours down the side, one column per studio, a block for each booking. Free time is the empty space.
+     Week view : one row per studio, one column per day, each cell a strip of the 12 open hours (free hours stay blank).
+     Click a block for its details, or a day in the week view to open that day.
+   Equipment : which items are still free (day: each hour, week: each day), and the outside rentals that are out.
+     The equipment side is drawn by equipCalendar.js; this file keeps the toolbar, Day / Week and the clicks for both.
    ===================================================================== */
 
 import { BK, STU } from './data.js';
+import { equipLegend, equipView, openEquipCell, openRental } from './equipCalendar.js';
 import { bkStatus, money, num, showDlg } from './helpers.js';
 import { spanOf } from './analytics.js';
 import { printSection } from './export.js';
@@ -16,7 +20,9 @@ const HOURS = Array.from({ length: CLOSE - OPEN }, (_, i) => OPEN + i);
 const SHOWN = ['Pending', 'Approved', 'In Progress', 'Completed'];   // cancelled and rejected bookings free the room
 const KIND = { 'Pending': 'pend', 'Approved': 'conf', 'In Progress': 'live', 'Completed': 'done' };
 
-let view = 'day', day = TODAY;
+let view = 'day', day = TODAY, mode = 'rooms', eqCat = 'All';   // mode: 'rooms' | 'equipment'
+
+const oneDay = () => view === 'day';   // Day and Week work the same way in Rooms and in Equipment
 
 const addDays = (iso, n) => {
     const d = new Date(iso + 'T00:00:00Z');
@@ -50,18 +56,19 @@ const legend = `<div class="cal-legend" aria-label="Colour key">
   <span><i class="k-pend"></i>Pending</span><span><i class="k-conf"></i>Confirmed</span><span><i class="k-live"></i>In session</span><span><i class="k-done"></i>Completed</span><span><i class="k-free"></i>Free</span></div>`;
 
 function toolbar() {
-    const span = view === 'day' ? longDate(day) : `${shortDate(mondayOf(day))} to ${shortDate(addDays(mondayOf(day), 6))}`;
+    const span = oneDay() ? longDate(day) : `${shortDate(mondayOf(day))} to ${shortDate(addDays(mondayOf(day), 6))}`;
     return `<div class="cal-bar no-print">
       <div class="cal-nav">
-        <button class="btn sm line" data-cal="prev" aria-label="Previous ${view}">&#8249;</button>
+        <button class="btn sm line" data-cal="prev" aria-label="Previous ${oneDay() ? 'day' : 'week'}">&#8249;</button>
         <button class="btn sm line" data-cal="today">Today</button>
-        <button class="btn sm line" data-cal="next" aria-label="Next ${view}">&#8250;</button>
+        <button class="btn sm line" data-cal="next" aria-label="Next ${oneDay() ? 'day' : 'week'}">&#8250;</button>
         <input type="date" id="cal-date" value="${day}" aria-label="Jump to date">
       </div>
+      <div class="tabs" style="margin:0" aria-label="Calendar type"><button data-cal-mode="rooms" class="${mode === 'rooms' ? 'on' : ''}">Rooms</button><button data-cal-mode="equipment" class="${mode === 'equipment' ? 'on' : ''}">Equipment</button></div>
       <div class="tabs" style="margin:0"><button data-cal-view="day" class="${view === 'day' ? 'on' : ''}">Day</button><button data-cal-view="week" class="${view === 'week' ? 'on' : ''}">Week</button></div>
       <button class="btn sm line" data-cal="print" title="Opens the print window. Choose Save as PDF as the printer.">Print / PDF</button>
     </div>
-    <div class="row cal-title" style="justify-content:flex-start;gap:14px"><h2>${esc(span)}</h2>${legend}</div>`;
+    <div class="row cal-title" style="justify-content:flex-start;gap:14px"><h2>${esc(span)}</h2>${mode === 'rooms' ? legend : equipLegend}</div>`;
 }
 
 function dayView(list) {
@@ -128,9 +135,11 @@ export function renderCalendar() {
     const host = $('#cal');
     if (!host)
         return;
-    const list = spans();
-    host.innerHTML = `<div class="print-head rp-head" aria-hidden="true"><b>Tower of Dove Music Studio</b><span>Room calendar &middot; ${esc(view === 'day' ? longDate(day) : 'week of ' + shortDate(mondayOf(day)))}</span></div>`
-        + toolbar() + (view === 'day' ? dayView(list) : weekView(list));
+    const list = mode === 'rooms' ? spans() : [];
+    host.innerHTML = `<div class="print-head rp-head" aria-hidden="true"><b>Tower of Dove Music Studio</b><span>Calendar, ${mode === 'rooms' ? 'rooms' : 'equipment'} &middot; ${esc(oneDay() ? longDate(day) : 'week of ' + shortDate(mondayOf(day)))}</span></div>`
+        + toolbar() + (mode === 'equipment'
+            ? equipView({ view, day, dates: Array.from({ length: 7 }, (_, i) => addDays(mondayOf(day), i)), cat: eqCat, today: TODAY })
+            : view === 'day' ? dayView(list) : weekView(list));
 }
 
 /* a booking that is on the Studio Sessions tab: running now, or confirmed and its start time has come */
@@ -166,7 +175,13 @@ $('#a-cal').addEventListener('click', e => {
         return;
     if (t.dataset.ref)
         return openBooking(t.dataset.ref);
-    if (t.dataset.day) {
+    if (t.dataset.eid)
+        return openEquipCell(t.dataset.eid, t.dataset.from, t.dataset.to);
+    if (t.dataset.rn)
+        return openRental(t.dataset.rn);
+    if (t.dataset.calMode) {
+        mode = t.dataset.calMode;
+    } else if (t.dataset.day) {
         day = t.dataset.day;
         view = 'day';
     } else if (t.dataset.calView)
@@ -174,9 +189,9 @@ $('#a-cal').addEventListener('click', e => {
     else if (t.dataset.cal === 'today')
         day = TODAY;
     else if (t.dataset.cal === 'prev')
-        day = addDays(day, view === 'day' ? -1 : -7);
+        day = addDays(day, oneDay() ? -1 : -7);
     else if (t.dataset.cal === 'next')
-        day = addDays(day, view === 'day' ? 1 : 7);
+        day = addDays(day, oneDay() ? 1 : 7);
     else if (t.dataset.cal === 'print')
         return printSection($('#a-cal'));
     else
@@ -188,6 +203,9 @@ $('#a-cal').addEventListener('change', e => {
     if (e.target.id === 'cal-date' && e.target.value) {
         day = e.target.value;
         renderCalendar();
+    } else if (e.target.dataset.eqCatSel !== undefined) {
+        eqCat = e.target.value;
+        renderCalendar();
     }
 });
 
@@ -196,7 +214,7 @@ document.addEventListener('keydown', e => {
     if (location.hash !== '#a-cal' || e.target.closest('input, select, textarea, dialog') || e.altKey || e.ctrlKey || e.metaKey)
         return;
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-        day = addDays(day, (e.key === 'ArrowLeft' ? -1 : 1) * (view === 'day' ? 1 : 7));
+        day = addDays(day, (e.key === 'ArrowLeft' ? -1 : 1) * (oneDay() ? 1 : 7));
         renderCalendar();
     }
 });
