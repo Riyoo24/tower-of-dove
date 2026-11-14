@@ -12,8 +12,10 @@ import {
     OWNER,
     askConfirm,
     bkStatus,
+    btn,
     dOf,
     dlg,
+    emptyState,
     isFull,
     money,
     notifyVerified,
@@ -115,6 +117,19 @@ export function renderBookings() {
         payCell(b),
         bkActions(b)
     ];
+      // nothing to show: say why, and offer the next step
+    const filtered = state.bkF !== 'All' || !!(q || sid || d || src);
+    const empty = filtered
+        ? emptyState({
+            title: d && !q && !sid && !src && state.bkF === 'All' ? `No bookings on ${shortDate(d)}` : 'No bookings match these filters',
+            hint: 'Try a different search, date or status.',
+            action: btn('bk-clear', '', 'Clear filters', 1) + (d ? ' <a class="btn sm gold" href="#a-onb">Record an onsite booking</a>' : '')
+        })
+        : emptyState({
+            title: 'No bookings yet',
+            hint: 'Online bookings appear here as customers book. Walk-ins can be recorded at the counter.',
+            action: '<a class="btn sm gold" href="#a-onb">Record an onsite booking</a>'
+        });
     let table;
     if (state.bkF === 'All') {
         // Like the customer's My bookings: open bookings first, Completed / Cancelled / Rejected tucked into a closed "Past and closed" group.
@@ -129,9 +144,9 @@ export function renderBookings() {
                 rows: past.map(cells),
                 dimmed: i => ['Cancelled', 'Rejected'].includes(bkStatus(past[i].status))
             }
-        ], 'bk-tbl');
+        ], 'bk-tbl', empty);
     } else
-        table = tbl(head, rows.map(cells), 'bk-tbl');   // a status tab is picked on purpose: show all of its rows
+        table = tbl(head, rows.map(cells), 'bk-tbl', empty);   // a status tab is picked on purpose: show all of its rows
     $('#abk').innerHTML = tabsHtml(BK_TABS, state.bkF, 'bf') + table;
 }
 
@@ -156,6 +171,7 @@ $('#abk').addEventListener('click', e => {
    clearing the search box, studio and source filters so the list matches the card's number.
    openPast = also open the "Past and closed" group (the Total bookings card counts every booking). */
 export function setBookingFilter(status, date, openPast) {
+    ACT['bk-clear'] = () => setBookingFilter('All');   // "Clear filters" in the empty state
     state.bkF = BK_TABS.includes(status) ? status : 'All';
     if (openPast)
         state.pastOpen.bk = true;

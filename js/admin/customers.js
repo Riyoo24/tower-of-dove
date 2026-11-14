@@ -5,7 +5,7 @@
 
 import { afterAction } from './bookings.js';
 import { BK, CUS, RL } from './data.js';
-import { ACT, OWNER, bkStatus, btn, dOf, dbtn, dlg, money, num, run, showDlg, tb, tbl } from './helpers.js';
+import { ACT, OWNER, bkStatus, btn, dOf, dbtn, dlg, emptyState, money, num, run, showDlg, tb, tbl } from './helpers.js';
 import { dueB, inspectionPhotoRow, lineStatus } from './rentals.js';
 import { repFlag } from './reputation.js';
 import { sb } from '../config/supabaseClient.js';
@@ -21,9 +21,19 @@ const SORTS = {
     name: (a, b) => (a.customer_name || '').localeCompare(b.customer_name || ''),
     spent: (a, b) => num(b.total_spent) - num(a.total_spent)
 };
-
 export function renderCustomers() {
     const q = ($('#cu-q').value || '').toLowerCase(), type = $('#cu-type').value;
+    const empty = q || type
+        ? emptyState({
+            title: 'No customers match your search',
+            hint: 'Check the spelling, or try a phone number.',
+            action: btn('cu-clear', '', 'Clear search', 1)
+        })
+        : emptyState({
+            title: 'No customers yet',
+            hint: 'Customers appear here when someone books or rents, or when you record an onsite booking.',
+            action: '<a class="btn sm gold" href="#a-onb">Record an onsite booking</a>'
+        });
     tb('acu', ['Name', 'Phone', 'Account', 'Bookings', 'Rentals', 'Total spent', 'Status', ''],
         CUS.filter(c => (!type || c.account_type === type) && (!q || `${c.customer_name} ${c.number}`.toLowerCase().includes(q)))
             .sort(SORTS[$('#cu-sort').value] || SORTS['reg-old'])
@@ -44,8 +54,13 @@ export function renderCustomers() {
                     off ? '<span class="b rejected">Disabled</span>' : esc(c.status || 'Active'),
                     btn('cu-hist', c.customer_id, 'History', 1) + owner
                 ];
-            }));
+            }), empty);
 }
+ACT['cu-clear'] = () => {   // "Clear search" in the empty state
+    $('#cu-q').value = '';
+    $('#cu-type').value = '';
+    renderCustomers();
+};
 
 $('#cu-q').addEventListener('input', renderCustomers);
 

@@ -1820,3 +1820,207 @@ body[data-role="admin"] #mb-user:active .tn-av {
         animation: none;
     }
 }
+/* ===== Top bar: last updated, + New, search ===== */
+.gbar {
+    position: relative;
+    z-index: 60;
+    float: right;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 100%;
+    margin: 4px 0 12px 16px;
+}
+
+/* the search box now lives inside the bar (this overrides its earlier float and width) */
+.gbar .gs {
+    float: none;
+    flex: 1 1 auto;
+    width: 360px;
+    max-width: 100%;
+    margin: 0;
+}
+
+@media (max-width: 1100px) {
+    .gbar {
+        float: none;
+        flex-wrap: wrap;
+        width: 100%;
+        margin: 0 0 16px;
+    }
+
+    .gbar .gs {
+        order: -1;
+        flex: 1 1 100%;
+        width: 100%;
+    }
+
+    .gbar .gu {
+        margin-right: auto;
+    }
+}
+
+/* Updated 12s ago + refresh */
+.gu {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    color: var(--mut);
+    white-space: nowrap;
+}
+
+.gu-dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ok);
+}
+
+.gu.stale {
+    color: var(--warn);
+}
+
+.gu.stale .gu-dot {
+    background: var(--warn);
+}
+
+.gu-r {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--mut);
+    cursor: pointer;
+}
+
+.gu-r:hover {
+    background: var(--dove);
+    color: var(--ink);
+}
+
+.gu-r:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+}
+
+.gu-r:disabled {
+    cursor: default;
+}
+
+.gu.busy .gu-r svg {
+    animation: guSpin .7s linear infinite;
+}
+
+@keyframes guSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+    .gu.busy .gu-r svg {
+        animation: none;
+    }
+}
+
+/* ===== Needs attention: clickable, coloured rows ===== */
+#ovl li.na {
+    margin: 0 -8px;
+    padding-left: 8px;
+    padding-right: 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background .15s ease, opacity .15s ease;
+}
+
+#ovl li.na:not(.on) {
+    opacity: .5;   /* nothing to do here: fades into the background */
+}
+
+#ovl li.na:hover,
+#ovl li.na:focus-visible {
+    opacity: 1;
+    background: var(--dove);
+}
+
+#ovl li.na:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+}
+
+#ovl li.na b {
+    text-align: right;
+}
+
+#ovl li.na.on.warn b {
+    color: var(--warn);
+}
+
+#ovl li.na.on.bad b {
+    color: var(--bad);
+}
+
+#ovl li.na.on.info b {
+    color: var(--ink);
+}
+
+.na-ch {
+    margin-left: 6px;
+    font-style: normal;
+    font-weight: 400;
+    opacity: .5;
+}
+
+/* ===== Empty states in tables ===== */
+#admin .empty-row td,
+#admin .empty-row:hover td {
+    padding: 0;
+    white-space: normal;
+    background: transparent;
+}
+
+.empty {
+    position: sticky;   /* stays in view when a wide table is scrolled sideways */
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    width: fit-content;
+    max-width: min(520px, 90vw);
+    margin: 0 auto;
+    padding: 32px 16px;
+    text-align: center;
+}
+
+.empty b {
+    font-size: 16px;
+    color: var(--ink);
+}
+
+.empty p {
+    margin: 0;
+    max-width: 420px;
+    white-space: normal;
+}
+
+.empty-acts {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.empty a.btn {
+    display: inline-block;
+    text-decoration: none;
+}

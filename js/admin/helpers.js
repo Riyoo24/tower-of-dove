@@ -60,17 +60,25 @@ export const rnStatus = s => ({
 /* Every table is returned inside a .tw box. On a narrow screen the box scrolls sideways
    instead of the table squeezing its text or pushing the whole page wider.
    cls (optional) adds a class to the <table>, e.g. "bk-tbl" for the Bookings table. */
-export const tbl = (head, rows, cls) =>
+/* Every table is returned inside a .tw box. On a narrow screen the box scrolls sideways
+   instead of the table squeezing its text or pushing the whole page wider.
+   cls (optional) adds a class to the <table>, e.g. "bk-tbl" for the Bookings table.
+   empty (optional) is HTML shown when there are no rows, built with emptyState(); the default is "Nothing to show." */
+export const tbl = (head, rows, cls, empty) =>
     `<div class="tw"><table${cls ? ` class="${cls}"` : ''}><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>` +
     (rows.length ? rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')
-        : `<tr><td colspan="${head.length}" class="mut">Nothing to show.</td></tr>`)
+        : `<tr${empty ? ' class="empty-row"' : ''}><td colspan="${head.length}"${empty ? '' : ' class="mut"'}>${empty || 'Nothing to show.'}</td></tr>`)
     + '</tbody></table></div>';
+
+/* A friendly "nothing here" block: title, a short hint and an optional button or link (action = ready HTML). */
+export const emptyState = ({ title, hint = '', action = '' }) =>
+    `<div class="empty"><b>${title}</b>${hint ? `<p class="mut">${hint}</p>` : ''}${action ? `<div class="empty-acts">${action}</div>` : ''}</div>`;
 
 /* Like tbl(), but the rows are split into titled groups, the same way the customer's My bookings / My rental tables work.
    groups = [{ title, toggle, collapsed, rows, dimmed }]. rows = arrays of cells (like tbl).
    A group with a toggle name gets a button (data-toggle) that shows or hides its rows; a collapsed group
    shows only its heading and how many rows it holds. dimmed = (row index) => true greys that row out. */
-export const tblGrouped = (head, groups, cls) => {
+export const tblGrouped = (head, groups, cls, empty) => {
     const n = head.length, shown = groups.filter(g => g.rows.length);
     const body = shown.map(g => {
         const label = `<span class="grp-t">${g.title}</span><span class="grp-n">${g.rows.length}</span>`;
@@ -84,12 +92,12 @@ export const tblGrouped = (head, groups, cls) => {
     // while a "Past and closed" group is open the box gets a height limit and scrolls inside itself (the page stays put)
     const scroll = shown.some(g => g.toggle && !g.collapsed);
     return `<div class="tw${scroll ? ' tw-scroll' : ''}"><table class="grouped${cls ? ' ' + cls : ''}"><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>` +
-        (shown.length ? body : `<tr><td colspan="${n}" class="mut">Nothing to show.</td></tr>`)
+        (shown.length ? body : `<tr${empty ? ' class="empty-row"' : ''}><td colspan="${n}"${empty ? '' : ' class="mut"'}>${empty || 'Nothing to show.'}</td></tr>`)
         + '</tbody></table></div>';
 };
 
-export const tb = (id, head, rows) => {
-    $('#' + id).innerHTML = tbl(head, rows);
+export const tb = (id, head, rows, empty) => {
+    $('#' + id).innerHTML = tbl(head, rows, undefined, empty);
 };
 
 export const dbtn = (act, id, text) => `<button class="btn sm bad" data-act="${act}" data-id="${esc(id)}">${text}</button>`;

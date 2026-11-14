@@ -8,12 +8,12 @@ import { closeOverlays, findBk, pendingAddons, verifiedMsg } from './bookings.js
 import { DMG, PAY, RL, refresh } from './data.js';
 import { dmgOf, dmgStatus } from './damage.js';
 import { repFlag } from './reputation.js';
-import { ACT, btn, money, notifyVerified, num, run, tabsHtml, tbl, tblGrouped, CONFIRM } from './helpers.js';
 import { sb } from '../config/supabaseClient.js';
 import { refLink, rowMark } from './jump.js';
 import { revealBooking } from './bookings.js';
 import { revealRental } from './rentals.js';
 import { $, badge, esc, toast } from '../shared/utils.js';
+import { ACT, btn, emptyState, money, notifyVerified, num, run, tabsHtml, tbl, tblGrouped, CONFIRM } from './helpers.js';
 
 let payKind = '', paySrc = '', payMeth = '';
 
@@ -162,6 +162,18 @@ export function renderPayments() {
             : p.kind === DMG_KIND ? (p.status === 'Unpaid' ? btn('dmg-open', p.reference, 'Collect') : p.status === 'Pending' ? btn('dmg-open', p.reference, 'Verify') : btn('dmg-open', p.reference, 'Details', 1))
             : p.status === 'Pending' ? btn('pay-verify', p.payment_id, 'Verify') : btn('pay-verify', p.payment_id, 'Details', 1)
     ];
+const filtered = state.payF !== 'All' || !!(payKind || paySrc || payMeth);
+    const empty = filtered
+        ? emptyState({
+            title: 'No payments match these filters',
+            hint: 'Try another status, payment type or method.',
+            action: btn('pay-clear', '', 'Clear filters', 1)
+        })
+        : emptyState({
+            title: 'No payments yet',
+            hint: 'Payments show up here when customers pay online, or when you record an onsite booking or rental.',
+            action: '<a class="btn sm gold" href="#a-onb">Record an onsite booking</a>'
+        });
     let table;
     if (state.payF === 'All' || state.payF === 'Verified') {
         // Like the customer tables: payments still in play first, payments of finished bookings / rentals (and rejected ones) in a closed group
@@ -175,9 +187,9 @@ export function renderPayments() {
                 rows: past.map(cells),
                 dimmed: i => past[i].status === 'Rejected'
             }
-        ]);
+        ], undefined, empty);
     } else
-        table = tbl(head, rows.map(cells));   // Pending / Rejected tab: show every row
+        table = tbl(head, rows.map(cells), undefined, empty);   // Pending / Rejected tab: show every row
     const sel = (id, label, opts, cur) => `<select id="${id}" aria-label="${label}" style="max-width:200px">${opts.map(([v, t]) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
     $('#apy').innerHTML = '<div class="row" style="justify-content:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:12px">' +
         sel('pay-kind', 'Payments for', [['', 'All payment types'], ['Booking', 'Bookings'], ['Extension', 'Extensions'], ['Rental', 'Rentals'], [DMG_KIND, 'Damage fees'], [LATE_KIND, 'Late fees']], payKind) +
@@ -187,6 +199,12 @@ export function renderPayments() {
         tabsHtml(['All', 'Pending', 'Unpaid', 'Verified', 'Rejected'], state.payF, 'pf')
         + table;
 }
+
+ACT['pay-clear'] = () => {   // "Clear filters" in the empty state
+    state.payF = 'All';
+    payKind = paySrc = payMeth = '';
+    renderPayments();
+};
 
 $('#apy').addEventListener('change', e => {
     if (e.target.id === 'pay-kind')

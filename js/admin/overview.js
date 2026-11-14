@@ -76,16 +76,18 @@ export function renderOverview() {
     }).join('');
 
     const low = STK.filter(e => e.stock_status === 'Low' || e.stock_status === 'In Use' || e.stock_status === 'Out of Stock').map(e => e.name + (e.stock_status === 'In Use' || e.stock_status === 'Out of Stock' ? ' (none left)' : ''));
+        /* each row opens the tab where the work is done; rows with something to do are coloured, zeros fade back */
+    const na = (label, value, count, go, tone) => `<li class="na${count ? ' on ' + tone : ''}" data-go="${go}" role="link" tabindex="0" aria-label="${esc(label)}: ${esc(String(value))}. Click to view"><span>${esc(label)}</span><b>${esc(String(value))}<i class="na-ch" aria-hidden="true">&rsaquo;</i></b></li>`;
+    const overdueOrders = new Set(overdue.map(l => l.rental_ref)).size;
     $('#ovl').innerHTML =
-        `<li><span>Pending payments</span><b>${num(CNT.pending_payments)}</b></li>` +
-        `<li><span>Unpaid damage fees</span><b${unpaidDmg.size ? ' style="color:var(--warn)"' : ''}>${unpaidDmg.size ? unpaidDmg.size + ' (' + money(sum([...unpaidDmg].map(dmgOwed))) + ')' : 'None'}</b></li>` +
-        `<li><span>Unpaid late fees</span><b${lateOpen.refs.size ? ' style="color:var(--warn)"' : ''}>${lateOpen.refs.size ? lateOpen.refs.size + ' (' + money(lateOpen.amount) + ')' : 'None'}</b></li>` +
-        `<li><span>Rental requests to review</span><b>${num(CNT.rental_requests)}</b></li>` +
-        `<li><span>Active sessions</span><b>${num(CNT.active_sessions)}</b></li>` +
-        `<li><span>Equipment currently rented</span><b>${itemCount(open)}</b></li>` +
-        `<li><span>Overdue rentals</span><b style="color:var(--bad)">${new Set(overdue.map(l => l.rental_ref)).size}</b></li>` +
-        `<li><span>Low-stock equipment</span><b>${esc(low.join(', ') || 'None')}</b></li>`;
-
+        na('Pending payments', num(CNT.pending_payments), num(CNT.pending_payments), 'tab:a-pay', 'warn') +
+        na('Unpaid damage fees', unpaidDmg.size ? unpaidDmg.size + ' (' + money(sum([...unpaidDmg].map(dmgOwed))) + ')' : 'None', unpaidDmg.size, 'tab:a-pay', 'warn') +
+        na('Unpaid late fees', lateOpen.refs.size ? lateOpen.refs.size + ' (' + money(lateOpen.amount) + ')' : 'None', lateOpen.refs.size, 'tab:a-pay', 'warn') +
+        na('Rental requests to review', num(CNT.rental_requests), num(CNT.rental_requests), 'tab:a-rent', 'warn') +
+        na('Active sessions', num(CNT.active_sessions), num(CNT.active_sessions), 'tab:a-sess', 'info') +
+        na('Equipment currently rented', itemCount(open), open.length, 'tab:a-rent', 'info') +
+        na('Overdue rentals', overdueOrders, overdueOrders, 'rn:Overdue', 'bad') +
+        na('Low-stock equipment', low.join(', ') || 'None', low.length, 'tab:a-eqp', 'warn');
     updateNavBadges();
 }
 
@@ -137,6 +139,8 @@ function goFromCard(code) {
     } else if (kind === 'rp') {
         setReportDay(arg);   // Reports is owner-only; the bars are only clickable for the owner
         location.hash = 'a-rep';
+    } else if (kind === 'tab') {
+        location.hash = arg;   // "Needs attention" rows
     } else if (kind === 'ss') {
         location.hash = 'a-sess';
     }

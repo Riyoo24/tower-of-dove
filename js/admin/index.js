@@ -10,6 +10,7 @@ import './noShow.js';   // Sessions tab: no-show countdown, Hold and Release now
 import './checkIn.js';   // Check in: record when the customer arrived (needs 87_booking_check_in.sql)
 import './balance.js';   // Start session / Issue equipment: verify and collect the remaining balance first
 import './globalSearch.js';   // search box at the top: find a customer, booking or rental from any tab
+import './topbar.js';   // "Updated 12s ago" + refresh button and the "+ New" menu
 import { renderCustomers } from './customers.js';
 import { STU, refresh } from './data.js';
 import { renderEquipmentTab } from './equipment.js';
