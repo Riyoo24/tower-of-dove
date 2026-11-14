@@ -7,6 +7,8 @@
                  Click a cell to see who has the item in that hour.
    Week view : the same grid with one cell per item and day. A cell shows the tightest hour of that day, in words
                  (blank = free all day, "2 left", "None left", "Over"). Click a day to open its hourly grid.
+   Click or drag across free hours of an item to start an outside rental, or an add-on for a booking that is running then
+   (the Onsite rental form opens with the item and hours filled in).
    Under both: "Out of the studio", the outside rentals that are out in the period shown, late ones first.
    Nothing here talks to the database: it is worked out from the rental lines (RL), bookings (BK) and stock (STK)
    the dashboard has already loaded, the same way handoff.js does it.
@@ -19,6 +21,8 @@
    ===================================================================== */
 
 import { BK, RL, STK } from './data.js';
+import { startRental } from './onsite.js';
+import { revealRental } from './rentals.js';
 import { dOf, num, showDlg, tOf } from './helpers.js';
 import { $, esc, longDate, shortDate } from '../shared/utils.js';
 
@@ -104,17 +108,19 @@ function tools(cat, view) {
     const names = catNames();
     return `<div class="ec-tools no-print">
       <p class="mut ec-help">${view === 'day'
-        ? 'Blank means every unit is free. A number is how many are still free. Click an hour to see who has it.'
+        ? 'Blank means every unit is free. A number is how many are still free. Click an hour to see who has it. Drag across free hours to rent the item out.'
         : 'Each cell shows the tightest hour of that day. Blank means free all day. Click a day to see the hours.'}</p>
       ${names.length > 1 ? `<select data-eq-cat-sel aria-label="Show equipment from"><option value="All"${cat === 'All' ? ' selected' : ''}>All equipment</option>${names.map(n => `<option value="${esc(n)}"${cat === n ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>` : ''}
     </div>`;
 }
 
-function cellHtml(c, total, from, to, x, now, label) {
-    const free = total - x.n, kind = kindOf(x.n, total);
+/* nowPos = where the red "now" line sits inside this cell, 0 to 1 of its width (null when the current time is not in it);
+   span = how many hour columns the cell covers (hours held by the same customer are joined into one cell) */
+function cellHtml(c, total, from, to, x, nowPos, label, span = 1) {
+    const free = total - x.n, kind = kindOf(x.n, total), now0 = Date.now(), past = to <= now0 || (from < now0 && !x.n);   // over, or started and empty (nothing to rent in the past); a rental still running stays clickable so it can be opened
     const text = kind === 'some' ? String(free) : kind === 'full' ? 'Full' : kind === 'bad' ? 'Over' : '';
     const tip = `${c.name}, ${label}: ${kind === 'bad' ? `over-reserved by ${x.n - total}` : free === total ? `all ${total} free` : `${free} of ${total} free`}${x.pend ? `, ${x.pend} waiting for approval` : ''}${x.late ? ', one is late and still out' : ''}`;
-    return `<button type="button" class="ec-c ec-k-${kind}${x.late ? ' ec-late' : ''}${now ? ' now' : ''}" data-eid="${esc(c.equipment_id)}" data-from="${from}" data-to="${to}" title="${esc(tip)}" aria-label="${esc(tip)}">${text}</button>`;
+    return `<button type="button" class="ec-c ec-k-${kind}${x.late ? ' ec-late' : ''}${nowPos != null ? ' now' : ''}${past ? ' ec-past' : ''}"${past ? ' disabled' : ''}${nowPos != null || span > 1 ? ` style="${span > 1 ? `grid-column:span ${span};` : ''}${nowPos != null ? `--m:${(nowPos * 100).toFixed(1)}%` : ''}"` : ''} data-eid="${esc(c.equipment_id)}" data-from="${from}" data-to="${to}" title="${esc(tip)}" aria-label="${esc(tip)}">${text}</button>`;
 }
 
 /* view = 'day' | 'week', day = ISO date, dates = the 7 ISO days of the week, today = today's ISO date, cat = category name or 'All' */
@@ -123,15 +129,33 @@ export function equipView({ view, day, dates, cat, today }) {
         return '<div class="card"><p class="mut">No equipment yet. Add items in Equipment Management.</p></div>';
     const uses = usesByItem();
     const nowH = Number(new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Manila' }).format(new Date())) % 24;
+    const nowM = Number(new Intl.DateTimeFormat('en-US', { minute: 'numeric', timeZone: 'Asia/Manila' }).format(new Date()));
     const items = STK.filter(c => cat === 'All' || c.category_name === cat).slice().sort(bySort);
     if (view === 'week')
         return weekView(items, uses, dates, cat, today);
     const base = dayStart(day), isToday = day === today;
-    const head = `<div class="ec-h ec-corner"></div>${HOURS.map(h => `<div class="ec-h${isToday && h === nowH ? ' now' : ''}">${hourLabel(h)}</div>`).join('')}`;
+    const head = `<div class="ec-h ec-corner"></div>${HOURS.map(h => `<div class="ec-h${isToday && h === nowH ? ' now' : ''}"${isToday && h === nowH ? ` style="--m:${(nowM / 60 * 100).toFixed(1)}%"` : ''}>${hourLabel(h)}</div>`).join('')}`;
     const body = items.map(c => {
         const total = num(c.total_quantity), u = uses.get(String(c.equipment_id)) || [];
-        return `<div class="ec-n"><b>${esc(c.name)}</b><span>${total} in total</span></div>`
-            + HOURS.map(h => cellHtml(c, total, base + h * H, base + (h + 1) * H, loadOf(u, base + h * H, base + (h + 1) * H), isToday && h === nowH, hourLabel(h))).join('');
+        /* who holds the item in each hour; neighbouring hours held by the same people are joined into one cell */
+        const slots = HOURS.map(h => {
+            const from = base + h * H, to = from + H;
+            const key = u.filter(v => v.s < to && v.e > from).map(v => `${whoRef(v.l)}|${v.l.quantity}|${v.l.status}`).sort().join(',');
+            return { h, from, to, key, x: loadOf(u, from, to) };
+        });
+        let cells = '';
+        for (let i = 0; i < slots.length;) {
+            let j = i + 1;
+            if (slots[i].key)
+                while (j < slots.length && slots[j].key === slots[i].key)
+                    j++;
+            const first = slots[i], last = slots[j - 1], span = j - i;
+            const nowAt = isToday ? slots.slice(i, j).findIndex(s => s.h === nowH) : -1;
+            const label = span > 1 ? `${hourLabel(first.h)} to ${hourLabel((last.h + 1) % 24)}` : hourLabel(first.h);
+            cells += cellHtml(c, total, first.from, last.to, loadOf(u, first.from, last.to), nowAt >= 0 ? (nowAt + nowM / 60) / span : null, label, span);
+            i = j;
+        }
+        return `<div class="ec-n"><b>${esc(c.name)}</b><span>${total} in total</span></div>${cells}`;
     }).join('');
     return tools(cat, 'day')
         + (items.length ? `<div class="tw cal-scroll"><div class="ec-grid" style="--c:${HOURS.length};--w:46px">${head}${body}</div></div>`
@@ -155,7 +179,7 @@ function weekView(items, uses, dates, cat, today) {
             const kind = kindOf(x.n, total), free = total - x.n;
             const text = kind === 'some' ? `${free} left` : kind === 'full' ? 'None left' : kind === 'bad' ? 'Over' : '';
             const tip = `${c.name}, ${shortDate(d)}: ${kind === 'free' ? `all ${total} free all day` : kind === 'bad' ? `over-reserved by ${x.n - total} at the busiest hour` : `at the busiest hour ${free} of ${total} free`}${x.pend ? `, ${x.pend} waiting for approval` : ''}${x.late ? ', one is late and still out' : ''}`;
-            return `<button type="button" class="ec-c ec-k-${kind}${x.late ? ' ec-late' : ''}${d === today ? ' now' : ''}" data-day="${d}" title="${esc(tip)}" aria-label="${esc(tip + '. Open the day')}">${text}</button>`;
+            return `<button type="button" class="ec-c ec-k-${kind}${x.late ? ' ec-late' : ''}${d === today ? ' now' : ''}${d < today ? ' ec-past' : ''}"${d < today ? ' disabled' : ''} data-day="${d}" title="${esc(tip)}" aria-label="${esc(tip + '. Open the day')}">${text}</button>`;
         }).join('');
         return `<div class="ec-n"><b>${esc(c.name)}</b><span>${total} in total</span></div>${cells}`;
     }).join('');
@@ -204,6 +228,17 @@ function outList(d0, d1, cat, title, note) {
         + (rows ? `<div class="ec-out">${rows}</div>` : '<div class="card"><p class="mut">No outside rentals in this period.</p></div>');
 }
 
+/* the tightest hour inside a stretch of time (a window can cover several hours) */
+function peakOf(uses, from, to) {
+    let best = { n: 0, pend: 0, late: false };
+    for (let t = from; t < to; t += H) {
+        const y = loadOf(uses, t, Math.min(to, t + H));
+        if (y.n > best.n || (y.n === best.n && y.late))
+            best = y;
+    }
+    return best;
+}
+
 /* ---------- windows ---------- */
 
 const when = u => `${esc(shortDate(dOf(iso(u.s))))}, ${esc(tOf(iso(u.s)))} to ${esc(shortDate(dOf(iso(u.eTrue))))}, ${esc(tOf(iso(u.eTrue)))}`;
@@ -211,27 +246,62 @@ const whoRef = l => l.rental_type === 'Add-on' && l.booking_ref ? l.booking_ref 
 const kindLabel = l => l.rental_type === 'Add-on' ? 'with a studio booking' : 'outside rental';
 
 /* a cell of the grid: who has this item in that hour */
-export function openEquipCell(eid, from, to) {
+/* dragged = the stretch was picked by dragging across hours; only then are the "rent it out" actions offered */
+export function openEquipCell(eid, from, to, dragged = false) {
     const c = STK.find(x => String(x.equipment_id) === String(eid));
     if (!c)
         return;
     from = Number(from);
     to = Number(to);
-    const hit = (usesByItem().get(String(eid)) || []).filter(u => u.s < to && u.e > from);
-    const x = loadOf(hit, from, to), t = num(c.total_quantity);
+    const all = usesByItem().get(String(eid)) || [];
+    const hit = all.filter(u => u.s < to && u.e > from);
+    const x = peakOf(all, from, to), t = num(c.total_quantity);
+    const free = Math.max(0, t - x.n), live = c.stock_status !== 'Unavailable';
+    /* start a rental from here: a new rental cannot begin in the past, so it starts at the next full hour inside the stretch,
+       and only when at least one unit is free from then on and the item is offered that way */
+    const rf = Math.max(from, Math.ceil(Date.now() / H) * H);
+    const freeFrom = rf < to ? Math.max(0, t - peakOf(all, rf, to).n) : 0;
+    const canOut = dragged && freeFrom > 0 && live && c.allow_outside;
+    const addOns = dragged && live && c.allow_addon
+        ? BK.filter(b => ['Approved', 'In Progress'].includes(b.status)).map(b => ({ b, s: ms(b.start_at), e: ms(b.end_at) }))
+            .filter(y => y.s != null && y.e != null && y.s < to && y.e > from && y.e > Date.now() && t - peakOf(all, y.s, y.e).n > 0)
+        : [];
+    const range = `${hourLabel(new Date(rf + 288e5).getUTCHours())} to ${hourLabel(new Date(to + 288e5).getUTCHours())}`;
+    const outLabel = to - rf > H ? `${hit.length ? 'New outside' : 'Outside'} rental, ${range}` : `${hit.length ? 'New outside' : 'Outside'} rental from ${hourLabel(new Date(rf + 288e5).getUTCHours())}`;
+    const one = hit.length === 1 && hit[0].l.rental_ref ? hit[0].l.rental_ref : null;   // exactly one rental here: its button goes next to Close
+    const start = addOns.length ? `<div class="ec-start no-print">
+        <p class="mut">Add to a running booking</p>
+        ${addOns.map((y, i) => `<button type="button" class="btn line" data-ec-add="${i}"><b>${esc(y.b.customer_name)}</b><span>${esc(y.b.studio_name)}, ${esc(tOf(y.b.start_at))} to ${esc(tOf(y.b.end_at))}</span></button>`).join('')}
+      </div>` : '';
     showDlg(`<h2>${esc(c.name)}</h2>
-      <p class="mut" style="margin:4px 0 10px">${esc(shortDate(dOf(iso(from))))}, ${esc(tOf(iso(from)))} to ${esc(tOf(iso(to)))}: ${Math.max(0, t - x.n)} of ${t} free.</p>
+      <p class="mut" style="margin:4px 0 10px">${esc(shortDate(dOf(iso(from))))}, ${esc(tOf(iso(from)))} to ${esc(tOf(iso(to)))}: ${free} of ${t} free.</p>
       ${hit.length ? hit.map(u => `<dl class="dl" style="margin:0 0 12px">
         <dt>Customer</dt><dd>${esc(u.l.customer_name || 'Customer')}</dd>
-        <dt>Reference</dt><dd>${esc(whoRef(u.l))} (${esc(kindLabel(u.l))})</dd>
+        <dt>Reference</dt><dd>${!one && u.l.rental_ref ? `<button type="button" class="lk" data-ec-rent="${esc(u.l.rental_ref)}" title="Open this rental">${esc(whoRef(u.l))}</button>` : esc(whoRef(u.l))} (${esc(kindLabel(u.l))})</dd>
         <dt>Quantity</dt><dd>${esc(String(u.l.quantity))}</dd>
         <dt>When</dt><dd>${when(u)}${u.late ? ' <b>(late, still out)</b>' : ''}</dd>
         <dt>Status</dt><dd>${esc(u.l.status)}</dd></dl>`).join('') : '<p class="mut">Nobody has this item in this hour.</p>'}
-      <div class="acts"><button class="btn line" data-close>Close</button><button class="btn gold" id="ec-open">Open Rentals</button></div>`);
-    $('#ec-open').onclick = () => {
-        $('#rdlg').close();
-        location.hash = 'a-rent';
-    };
+      ${start}
+      <div class="acts"><button class="btn line" data-close>Close</button>${one ? `<button type="button" class="btn ${canOut ? 'line' : 'gold'}" data-ec-rent="${esc(one)}">Open this rental</button>` : ''}${canOut ? `<button type="button" class="btn gold" data-ec-out>${esc(outLabel)}</button>` : ''}</div>`);
+    const dlg = $('#rdlg'), out = dlg.querySelector('[data-ec-out]');
+    dlg.querySelectorAll('[data-ec-rent]').forEach(b => {   // the rental that holds the item: its record in the Rentals tab, row highlighted
+        b.onclick = () => {
+            dlg.close();
+            location.hash = 'a-rent';
+            revealRental(b.dataset.ecRent);
+        };
+    });
+    if (out)
+        out.onclick = () => {
+            dlg.close();
+            startRental({ mode: 'o', equipmentId: c.equipment_id, from: rf, to: to - rf > H ? to : null });
+        };
+    dlg.querySelectorAll('[data-ec-add]').forEach(b => {
+        b.onclick = () => {
+            dlg.close();
+            startRental({ mode: 'a', equipmentId: c.equipment_id, bookingRef: addOns[+b.dataset.ecAdd].b.booking_ref });
+        };
+    });
 }
 
 /* a row of the list: one outside rental */
@@ -252,9 +322,10 @@ export function openRental(ref) {
         <dt>Due back</dt><dd>${esc(longDate(dOf(iso(e))))}, ${esc(tOf(iso(e)))}${late ? ' <b>(late, still out)</b>' : ''}</dd>
         ${lines.map(l => `<dt>${esc(l.equipment_name)}</dt><dd>x${esc(String(l.quantity))}, ${esc(l.status)}${l.line_returned_at ? ' (returned)' : ''}</dd>`).join('')}
       </dl>
-      <div class="acts"><button class="btn line" data-close>Close</button><button class="btn gold" id="ec-open">Open Rentals</button></div>`);
+      <div class="acts"><button class="btn line" data-close>Close</button><button class="btn gold" id="ec-open">Open this rental</button></div>`);
     $('#ec-open').onclick = () => {
         $('#rdlg').close();
         location.hash = 'a-rent';
+        revealRental(ref);
     };
 }

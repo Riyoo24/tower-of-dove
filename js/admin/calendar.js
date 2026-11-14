@@ -12,6 +12,7 @@ import { BK, STU } from './data.js';
 import { equipLegend, equipView, openEquipCell, openRental } from './equipCalendar.js';
 import { bkStatus, money, num, showDlg } from './helpers.js';
 import { spanOf } from './analytics.js';
+import { startBooking } from './onsite.js';
 import { printSection } from './export.js';
 import { $, TODAY, badge, esc, longDate, manilaParts, shortDate } from '../shared/utils.js';
 
@@ -21,6 +22,7 @@ const SHOWN = ['Pending', 'Approved', 'In Progress', 'Completed'];   // cancelle
 const KIND = { 'Pending': 'pend', 'Approved': 'conf', 'In Progress': 'live', 'Completed': 'done' };
 
 let view = 'day', day = TODAY, mode = 'rooms', eqCat = 'All';   // mode: 'rooms' | 'equipment'
+let pick = null, eqPick = null, ghost = null;   // a click or drag in progress: room hours / equipment cells / the dashed preview block
 
 const oneDay = () => view === 'day';   // Day and Week work the same way in Rooms and in Equipment
 
@@ -86,11 +88,12 @@ function dayView(list) {
             return `<button type="button" class="cal-b k-${KIND[x.b.status]}" style="top:${top}px;height:${h - 2}px" data-ref="${esc(x.b.booking_ref)}" aria-label="${esc(x.b.customer_name)}, ${esc(timeRange(x))}, ${esc(bkStatus(x.b.status))}">
               <b>${esc(x.b.customer_name)}</b><span>${esc(timeRange(x))}</span>${x.len > 1 ? `<small>${esc(x.b.booking_ref)}</small>` : ''}</button>`;
         }).join('');
-        return `<div class="cal-col${off ? ' off' : ''}">
+        return `<div class="cal-col${off ? ' off' : ''}" data-sid="${esc(s.studio_id)}">
           <div class="cal-colh"><b>${esc(s.name)}</b><span>${off ? esc(s.status) : `${used} of ${HOURS.length} h booked`}</span></div>
-          <div class="cal-plot" style="height:${HOURS.length * ROW}px">${blocks}${nowTop !== null ? `<i class="cal-now" style="top:${nowTop}px"></i>` : ''}</div></div>`;
+          <div class="cal-plot${off ? '' : ' can-book'}" style="height:${HOURS.length * ROW}px">${blocks}${nowTop !== null ? `<i class="cal-now" style="top:${nowTop}px"></i>` : ''}</div></div>`;
     }).join('');
-    return `<div class="tw cal-scroll"><div class="cal-day" style="--n:${STU.length};--row:${ROW}px">
+    return `<p class="mut no-print" style="margin:0 0 8px">Tip: click or drag across an empty time to start an onsite booking.</p>
+      <div class="tw cal-scroll"><div class="cal-day" style="--n:${STU.length};--row:${ROW}px">
       <div class="cal-time"><div class="cal-colh" aria-hidden="true"><b>&nbsp;</b><span>&nbsp;</span></div><div class="cal-hours">${HOURS.map(h => `<span style="height:${ROW}px">${hourLabel(h)}</span>`).join('')}</div></div>
       ${cols}</div></div>`;
 }
@@ -133,7 +136,7 @@ function weekView(list) {
 
 export function renderCalendar() {
     const host = $('#cal');
-    if (!host)
+    if (!host || pick || eqPick)   // a drag is in progress: the 15 second refresh must not wipe it
         return;
     const list = mode === 'rooms' ? spans() : [];
     host.innerHTML = `<div class="print-head rp-head" aria-hidden="true"><b>Tower of Dove Music Studio</b><span>Calendar, ${mode === 'rooms' ? 'rooms' : 'equipment'} &middot; ${esc(oneDay() ? longDate(day) : 'week of ' + shortDate(mondayOf(day)))}</span></div>`
@@ -217,4 +220,153 @@ document.addEventListener('keydown', e => {
         day = addDays(day, (e.key === 'ArrowLeft' ? -1 : 1) * (oneDay() ? 1 : 7));
         renderCalendar();
     }
+});
+
+/* ---------- click or drag a free stretch to start an onsite booking (rooms) or pick hours (equipment) ---------- */
+
+const BOOK_CLOSE = 21;   // same rule as the Onsite booking form: nothing more can be booked for today from 9 PM
+function blockedHour(d, h) {
+    if (d < TODAY)
+        return true;
+    if (d > TODAY)
+        return false;
+    const p = manilaParts(new Date()), m = p.hour * 60 + p.minute;
+    return m >= BOOK_CLOSE * 60 || h * 60 < m;
+}
+
+/* hours of a studio that already have a booking on that day */
+function usedHours(studioId, d) {
+    const used = new Set();
+    spans().filter(x => x.b.studio_id === studioId && x.day === d).forEach(x => {
+        for (let h = x.hour; h < x.hour + x.min / 60 + x.len; h++)
+            used.add(h);
+    });
+    return used;
+}
+
+const studioOf = plot => STU.find(s => String(s.studio_id) === plot.closest('.cal-col').dataset.sid);
+const hourAt = (plot, e) => OPEN + Math.max(0, Math.min(HOURS.length - 1, Math.floor((e.clientY - plot.getBoundingClientRect().top) / ROW)));
+const hideGhost = () => {
+    if (ghost)
+        ghost.remove();
+    ghost = null;
+};
+
+function showGhost(plot, lo, hi, text) {
+    if (!ghost || ghost.parentNode !== plot) {
+        hideGhost();
+        ghost = document.createElement('i');
+        ghost.className = 'cal-ghost';
+        plot.appendChild(ghost);
+    }
+    ghost.style.top = (lo - OPEN) * ROW + 1 + 'px';
+    ghost.style.height = (hi - lo + 1) * ROW - 3 + 'px';
+    ghost.textContent = text;
+}
+
+const pickText = () => `${hourLabel(pick.lo)} to ${hourLabel(pick.hi + 1)} (${pick.hi - pick.lo + 1} h)`;
+let hoverAt = '';
+
+$('#a-cal').addEventListener('pointerdown', e => {
+    if (e.button !== 0)
+        return;
+    if (mode === 'equipment' && view === 'day' && e.pointerType !== 'touch') {
+        const c = e.target.closest('.ec-c[data-eid]');
+        if (c && !c.disabled)
+            eqPick = { eid: c.dataset.eid, a: c, b: c, id: e.pointerId, moved: false };
+        return;
+    }
+    const plot = e.target.closest('.cal-plot.can-book');
+    if (mode !== 'rooms' || view !== 'day' || !plot || e.target !== plot)   // a booking block keeps its own click
+        return;
+    const s = studioOf(plot), used = usedHours(s.studio_id, day), h = hourAt(plot, e);
+    if (used.has(h) || blockedHour(day, h))
+        return;
+    pick = { plot, s, used, anchor: h, lo: h, hi: h, id: e.pointerId, touch: e.pointerType === 'touch', x: e.clientX, y: e.clientY };
+    if (!pick.touch && plot.setPointerCapture)
+        plot.setPointerCapture(e.pointerId);
+    showGhost(plot, h, h, pickText());
+});
+
+$('#a-cal').addEventListener('pointermove', e => {
+    if (eqPick && e.pointerId === eqPick.id) {
+        const el = document.elementFromPoint(e.clientX, e.clientY), c = el && el.closest('.ec-c[data-eid]');
+        if (c && !c.disabled && c.dataset.eid === eqPick.eid && c !== eqPick.b) {
+            eqPick.b = c;
+            eqPick.moved = true;
+            const row = [...$('#a-cal').querySelectorAll('.ec-c[data-eid]')].filter(x => x.dataset.eid === eqPick.eid);
+            const i = row.indexOf(eqPick.a), j = row.indexOf(c);
+            row.forEach((x, k) => x.classList.toggle('ec-pick', k >= Math.min(i, j) && k <= Math.max(i, j)));
+        }
+        return;
+    }
+    if (pick) {
+        if (pick.touch || e.pointerId !== pick.id)
+            return;
+        const h = hourAt(pick.plot, e), busy = i => pick.used.has(i) || blockedHour(day, i);
+        pick.lo = pick.hi = pick.anchor;
+        if (h > pick.anchor) {
+            for (let i = pick.anchor + 1; i <= h && !busy(i); i++)
+                pick.hi = i;
+        } else {
+            for (let i = pick.anchor - 1; i >= h && !busy(i); i--)
+                pick.lo = i;
+        }
+        showGhost(pick.plot, pick.lo, pick.hi, pickText());
+        return;
+    }
+    /* no button held: show where a click would book */
+    const plot = mode === 'rooms' && view === 'day' && e.pointerType === 'mouse' ? e.target.closest('.cal-plot.can-book') : null;
+    if (!plot || e.target !== plot) {
+        hoverAt = '';
+        return hideGhost();
+    }
+    const s = studioOf(plot), h = hourAt(plot, e), key = s.studio_id + '|' + h + '|' + day;
+    if (key === hoverAt)
+        return;
+    hoverAt = key;
+    if (usedHours(s.studio_id, day).has(h) || blockedHour(day, h))
+        return hideGhost();
+    showGhost(plot, h, h, '+ Book ' + hourLabel(h));
+});
+
+$('#a-cal').addEventListener('pointerleave', () => {
+    hoverAt = '';
+    if (!pick)
+        hideGhost();
+});
+
+$('#a-cal').addEventListener('pointerup', e => {
+    if (eqPick && e.pointerId === eqPick.id) {
+        const p = eqPick;
+        eqPick = null;
+        $('#a-cal').querySelectorAll('.ec-pick').forEach(c => c.classList.remove('ec-pick'));
+        if (p.moved && p.a !== p.b)   // dragged over several hours: open the window for the whole stretch
+            openEquipCell(p.eid, Math.min(+p.a.dataset.from, +p.b.dataset.from), Math.max(+p.a.dataset.to, +p.b.dataset.to), true);
+        return;
+    }
+    if (!pick || e.pointerId !== pick.id)
+        return;
+    const p = pick;
+    pick = null;
+    hideGhost();
+    if (p.touch && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 10)   // a finger that moved was scrolling
+        return;
+    startBooking({ studioId: p.s.studio_id, studioName: p.s.name, date: day, hour: p.lo, hours: p.hi - p.lo + 1 });
+});
+
+function cancelPick() {
+    pick = null;
+    eqPick = null;
+    hideGhost();
+    $('#a-cal').querySelectorAll('.ec-pick').forEach(c => c.classList.remove('ec-pick'));
+}
+$('#a-cal').addEventListener('pointercancel', cancelPick);
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && (pick || eqPick))
+        cancelPick();
+});
+document.addEventListener('pointerup', () => {   // let go outside the calendar: drop the half-made selection
+    if (pick || eqPick)
+        cancelPick();
 });

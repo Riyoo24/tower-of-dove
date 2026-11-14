@@ -400,6 +400,7 @@ const inCart = id => (orCart.find(x => x.equipment_id === id) || { quantity: 0 }
    during its booking, an outside rental from pick-up to return. Two orders only compete when their hours overlap.
    Until the hours are known (or if file 51 is not installed) the stock right now is used. */
 let winAvail = null, winErr = false, winSeq = 0, winKey = '', winAt = 0;
+let pendingItem = null;   // an item the calendar asked for: added to the rental as soon as the stock for its hours is known
 
 const availOf = e => winAvail && winAvail[e.equipment_id] !== undefined ? winAvail[e.equipment_id] : e.available;
 
@@ -437,10 +438,17 @@ async function refreshOnsiteStock() {
     winAvail = map;
     winErr = failed;
     const m = $('#or-m').value;
+    const asked = pendingItem;
+    if (asked) {   // started from the calendar: the clicked item goes in the list first
+        orCart = [asked];
+        pendingItem = null;
+    }
     orCart = orCart.map(x => {   // cut the chosen quantities to what is free for these hours
         const e = STK.find(y => y.equipment_id === x.equipment_id);
         return e && offered(e, m) ? { ...x, quantity: Math.min(x.quantity, availOf(e)) } : null;
     }).filter(x => x && x.quantity >= 1);
+    if (asked && !orCart.length)
+        toast('That item is no longer free for those hours. Press Browse equipment to pick another.');
     orTot();
     if (eqPrev.open)
         drawBrowse();
@@ -827,3 +835,59 @@ $('#onr').onsubmit = async e => {
     const sent = row && row.rental_ref && (email || m === 'a') ? await sendOnsiteReceipt('rental', row.rental_ref, email, orGiven) : false;
     toast(`Rental ${row && row.rental_ref ? row.rental_ref : ''} saved as Verified. It goes In Use when its start time arrives, or press Issue to start it earlier.${sent ? ' Receipt emailed.' : email ? ' The receipt email could not be sent.' : ''}`);
 };
+
+/* ============================ STARTED FROM THE CALENDAR ============================
+   admin/calendar.js and admin/equipCalendar.js call these when staff click or drag on a free stretch of the grid.
+   Both open the form with the details filled in, so staff only add the customer and confirm. */
+
+/* Manila day and hour of a moment in milliseconds (UTC+8, no daylight saving) */
+const mDay = ms => new Date(ms + 288e5).toISOString().slice(0, 10);
+const mHour = ms => new Date(ms + 288e5).getUTCHours();
+
+/* Onsite booking: { studioId, studioName, date: 'YYYY-MM-DD', hour: first hour, hours: how many } */
+export async function startBooking({ studioId, studioName, date, hour, hours }) {
+    const letter = String(studioName || '').replace(/^studio\s*/i, '');
+    const byId = STUDIOS.findIndex(s => String(s.dbId) === String(studioId));
+    const idx = byId >= 0 ? byId : STUDIOS.findIndex(s => String(s.id) === letter);
+    if (idx < 0)
+        return toast('That studio is not set up for onsite booking.');
+    if (date < firstDay())
+        return toast(pastDateMsg());
+    location.hash = 'a-onb';
+    $('#ob-s').value = String(idx);
+    if ($('#ob-s').value !== String(idx))
+        return toast('That studio is under maintenance, so it cannot be booked.');
+    $('#ob-d').value = date;
+    $('#ob-h').value = String(hours);
+    await onbFree();   // lists the free start times for that studio, date and duration
+    const t = String(hour - 10);
+    if (![...$('#ob-t').options].some(o => o.value === t))
+        return toast('That time was just taken. Pick another start time.');
+    $('#ob-t').value = t;
+    await onbHold();   // held for 2 minutes like any onsite booking
+    if (!matchMedia('(pointer: coarse)').matches)
+        setTimeout(() => $('#ob-n').focus(), 80);
+}
+
+/* Onsite rental. mode 'o' = outside rental (from, to = moments in ms, to may be left out for the usual 8 hours),
+   mode 'a' = add-on to the booking bookingRef. equipmentId goes in the list with qty units. */
+export function startRental({ mode, equipmentId, bookingRef, qty = 1, from, to }) {
+    location.hash = 'a-onr';
+    orCart = [];
+    $('#or-m').value = mode === 'a' ? 'a' : 'o';
+    if (mode !== 'a' && from) {
+        const sd = mDay(from), st = Math.min(22, Math.max(10, mHour(from)));
+        $('#or-sd').value = sd;
+        $('#or-st').value = String(st);
+        $('#or-r').value = to ? mDay(to) : sd;
+        $('#or-rt').value = String(Math.min(22, Math.max(10, to ? mHour(to) : st + 8)));
+    }
+    pendingItem = { equipment_id: equipmentId, quantity: qty };
+    orForm();
+    if (mode === 'a' && bookingRef)
+        $('#or-b').value = bookingRef;
+    $('#or-e').hidden = true;
+    winKey = '';   // ask for the stock again with the hours that were just set
+    refreshOnsiteStock();
+    toast('Filled in from the calendar. Add the customer details, then record it.');
+}
