@@ -41,6 +41,7 @@
         <link rel="stylesheet" href="../css/layout.css">
         <link rel="stylesheet" href="../css/modals.css">
         <link rel="stylesheet" href="../css/admin.css">
+        <link rel="stylesheet" href="../css/holdtimer.css">
         <link rel="stylesheet" href="../css/motion.css">
         <link rel="stylesheet" href="../css/signal.css">
         <link rel="stylesheet" href="../css/mobile.css">
@@ -271,6 +272,7 @@
                                     I checked a valid ID in person
                                 </label>
                                 <div class="tot"><span>Total received</span> <span id="or-tot"></span></div>
+                                <p class="mut" id="or-hold" style="margin:6px 0" hidden></p>   <!-- "Held by Staff" note + idle countdown: drawn by js/admin/onsite.js -->
                                 <div class="alert" id="or-e" hidden></div>
                                 <button class="btn gold full">Record rental</button>
                             </form>

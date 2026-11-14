@@ -1873,8 +1873,24 @@ tbody tr:not(.expand-row):not(.grp-row):not(.why-row):hover td {
     height: 44px;
 }
 
+/* Bookings filter bar: the date button is one 40px line like the search box and the dropdowns beside it
+   (text on the left, arrow on the right), and the four filters sit together on the left instead of spreading apart. */
+#admin #a-book > .row {
+    justify-content: flex-start;
+    align-items: center;
+}
+
 #admin #a-book .row > .dp-trigger {
+    display: flex;
+    flex: 0 1 170px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    width: 170px;
+    height: 40px;
     min-width: 0;
+    padding: 0 10px;
+    text-align: left;
 }
 
 @media (max-width: 560px) {

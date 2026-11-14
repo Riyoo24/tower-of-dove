@@ -7,7 +7,7 @@ import { BK, STK, refresh } from './data.js';
 import { askConfirm, money, notifyVerified, num, run, setOpts, tlabel } from './helpers.js';
 import { sb } from '../config/supabaseClient.js';
 import { loadBusy, takenSlots } from '../shared/availability.js';
-import { HOLD_TOKEN, holdOnsiteSlots, releaseHold } from '../shared/holds.js';
+import { HOLD_TOKEN, holdEquipment, holdOnsiteSlots, releaseHold } from '../shared/holds.js';
 import { holdCountdown } from '../shared/holdTimer.js';
 import { browseHtml, noteHtml, paintBrowse, stockLine, suggestionBlock } from '../shared/eqBrowse.js';
 import { matchesSearch } from '../shared/eqFilter.js';
@@ -396,6 +396,98 @@ let orCart = [];   // [{ equipment_id, quantity }]
 
 const inCart = id => (orCart.find(x => x.equipment_id === id) || { quantity: 0 }).quantity;
 
+/* ---- item hold (same idea as the customer's rental checkout) ----
+   Once items are in the list and the hours are known, those items are held for those hours while this form is open: the
+   a 2-minute idle countdown (any activity in the form restarts it, like the Onsite booking form). The hold is renewed in
+   the background, and released when the time runs out, when staff leave this tab, when the list is emptied, or after the
+   rental is recorded. After a timeout, typing in the form takes the hold back with a fresh countdown. (rpc hold_equipment, file 89; staff are never blocked by holds when recording.) */
+let orHeld = false, orExpired = false, orHoldSeq = 0, orHoldKey = '', orHoldWait = 0;
+const orOn = () => location.hash === '#a-onr';
+
+/* the note under the total, like the Onsite booking form's: "Held by Staff: ... is reserved while this form is open. Closes in 1:59 if idle" */
+function orHoldNote() {
+    const n = $('#or-hold');
+    if (!orHeld) {
+        n.hidden = true;
+        return;
+    }
+    const what = orCart.map(x => {
+        const e = STK.find(y => y.equipment_id === x.equipment_id);
+        return `${esc(e ? e.name : 'Item')} x${x.quantity}`;
+    }).join(', ');
+    n.hidden = false;
+    n.innerHTML = `<b>Held by Staff:</b> ${what} is reserved while this form is open. <span id="or-left"></span>`;
+}
+
+function orRelease() {
+    orHoldSeq++;   // an answer still on its way must not mark the hold as held again
+    clearTimeout(orHoldWait);
+    orHoldKey = '';
+    if (!orHeld) {
+        orHoldNote();
+        return;
+    }
+    orHeld = false;
+    orHoldNote();
+    releaseHold();
+}
+
+async function orHold(force = false) {
+    const w = onsiteWindow();
+    if (!orOn() || !w || !orCart.length)
+        return orRelease();
+    const items = orCart.map(x => ({ equipment_id: x.equipment_id, quantity: x.quantity })),
+        key = JSON.stringify([items, w]);
+    if (!force && orHeld && key === orHoldKey)
+        return;   // nothing changed since the last hold
+    const seq = ++orHoldSeq;
+    const ok = await holdEquipment(items, w[0], w[1]);
+    if (seq !== orHoldSeq)
+        return;   // the list or hours changed again (or the hold was released) while asking
+    if (!orOn())
+        return orRelease();
+    orHeld = ok;
+    orExpired = false;
+    orHoldKey = ok ? key : '';
+    orHoldNote();
+    if (!ok) {
+        toast('Those items were just taken for these hours. Adjust the items or hours.');
+        winKey = '';   // show the stock again
+        refreshOnsiteStock();
+    }
+}
+
+/* wait a moment so a burst of changes (typing a quantity, picking hours) makes one request */
+function orHoldSoon() {
+    clearTimeout(orHoldWait);
+    orHoldWait = setTimeout(() => orHold(), 350);
+}
+
+holdCountdown($('#onr'), {
+    label: () => $('#or-left'),
+    active: () => orHeld,
+    keepRunning: true,
+    onExpire: () => {
+        orRelease();
+        orExpired = true;
+        toast('Item hold released after 2 minutes of inactivity. Change the form to hold the items again.');
+    }
+});
+setInterval(() => {
+    if (orHeld)
+        orHold(true);   // renew: the server keeps a hold for only a short while
+}, 30000);
+$('#onr').addEventListener('input', () => {
+    if (orExpired && !orHeld && orOn())
+        orHold();   // staff are active again after a timeout: take the hold back
+});
+window.addEventListener('hashchange', () => {
+    if (!orOn())
+        orRelease();
+    else
+        orHoldSoon();
+});
+
 /* How many are free for the HOURS of this rental (equipment_available_between, file 51): a studio add-on needs the item
    during its booking, an outside rental from pick-up to return. Two orders only compete when their hours overlap.
    Until the hours are known (or if file 51 is not installed) the stock right now is used. */
@@ -425,7 +517,7 @@ async function refreshOnsiteStock() {
     const seq = ++winSeq;
     let map = null, failed = false;
     if (w) {
-        const { data, error } = await sb.rpc('equipment_available_between', { p_from: w[0], p_to: w[1] });
+        const { data, error } = await sb.rpc('equipment_available_between', { p_from: w[0], p_to: w[1], p_token: HOLD_TOKEN });   // p_token: this form's own hold is not counted as taken
         if (!error && data)
             map = Object.fromEntries(data.map(r => [r.equipment_id, r.available]));
         else
@@ -536,6 +628,7 @@ const onsiteHours = () => {
 };
 
 function orTot() {
+    orHoldSoon();
     const m = $('#or-m').value;
     // outside: the price covers 8 hours (an earlier return costs the same), each extra hour adds price / 8
     const len = m === 'o' ? onsiteHours() : null, hrs = m === 'o' ? Math.max(8, Math.ceil(len || 8)) : 8;
@@ -708,7 +801,10 @@ eqPrev.addEventListener('click', e => {
     if (['or-sd', 'or-st', 'or-r', 'or-rt'].includes(x))
         refreshOnsiteStock();
 }));
-$('#or-b').addEventListener('change', refreshOnsiteStock);
+$('#or-b').addEventListener('change', () => {
+    refreshOnsiteStock();
+    orHoldSoon();   // a different booking = different hours
+});
 
 $('#onr').onsubmit = async e => {
     e.preventDefault();
@@ -823,6 +919,7 @@ $('#onr').onsubmit = async e => {
     const row = Array.isArray(r.data) ? r.data[0] : r.data;
     const orGiven = pm === 'Cash' ? orCash.tendered() : null;
     orCart = [];
+    orRelease();   // the rental is saved: free the held items
     await loadCatalog();
     $('#onr').reset();
     orProof.reset();
