@@ -211,7 +211,7 @@ html.sk-wait :is(.hx-pill, .hx-copy > h1, .hx-copy > p, .hx-cta, .hx-card > :not
     opacity: 0;
 }
 
-html.sk-play :is(.hx-pill, .hx-copy > h1, .hx-copy > p, .hx-cta, .hx-card > :not(.sk-txt), .sc-head > div:first-child, .sc-arrows,
+html.sk-play :is(.hx-pill, .hx-copy > h1, .hx-copy > p, .hx-cta, .hx-card > :not(.sk-txt), .sc-head > div:first-child, .sc-arrows, .slider-wrapper, .sc-foot,
     .ct-head > :not(.sk-txt), .ct-group > h3, .ct-list > li:not(.sk), .ct-maptools, .ct-mapgate > *,
     .pghead > div > :not(.sk-txt), .pg-chips, #mybk > :not(.sk), #myrent > :not(.sk)) {
     animation: skTextIn .7s cubic-bezier(.2, .7, .2, 1) both;
@@ -230,6 +230,9 @@ html.sk-play .hx-card > :nth-child(4) { --sk-d: 370ms; }
 html.sk-play .hx-card > :nth-child(5) { --sk-d: 440ms; }
 html.sk-play .sc-head > div:first-child { --sk-d: 420ms; }
 html.sk-play .sc-arrows { --sk-d: 500ms; }
+html.sk-play .slider-wrapper { --sk-d: 580ms; }
+/* on desktop the dots sit beside the arrows (top right of the header row), so they come in with the arrows */
+html.sk-play .sc-foot { --sk-d: 500ms; }
 
 /* Contact Us */
 html.sk-play .ct-head > :nth-child(1) { --sk-d: 0ms; }
@@ -334,18 +337,101 @@ html.sk-play #myrent > :not(.sk) { --sk-d: 280ms; }
     }
 }
 
-/* top navbar: the real bar's logo, links and buttons play in right after the skeleton bar is removed.
-   Scoped to #topnav so the footer's copy of the logo is left alone. */
-html.sk-nav-in #topnav :is(.tn-brand, .tn-links > li, .tn-auth > li) {
-    animation: skTextIn .6s cubic-bezier(.2, .7, .2, 1) both;
-    animation-delay: var(--sk-d, 0ms);
+/* top navbar: the real bar's LOGO plays in right after the skeleton bar is removed.
+   Scoped to #topnav so the footer's copy of the logo is left alone.
+
+   The links and buttons are NOT animated here on purpose. css/refresh.css already slides them in once
+   (".topnav .tn-links li { animation: slideInLeft ... }"). An earlier version of this file also gave them a
+   skTextIn animation while html.sk-nav-in was on; topSkeleton.js removes that class 1.6 s later, the links
+   fell back to refresh.css's slideInLeft, and the browser played it AGAIN: the navbar animated twice.
+   The logo has no animation of its own on .tn-brand, so removing the class later replays nothing. */
+html.sk-nav-in #topnav .tn-brand {
+    animation: skTextIn .6s cubic-bezier(.2, .7, .2, 1) backwards;
 }
 
-html.sk-nav-in #topnav .tn-links > :nth-child(1) { --sk-d: 60ms; }
-html.sk-nav-in #topnav .tn-links > :nth-child(2) { --sk-d: 110ms; }
-html.sk-nav-in #topnav .tn-links > :nth-child(3) { --sk-d: 160ms; }
-html.sk-nav-in #topnav .tn-links > :nth-child(4) { --sk-d: 210ms; }
-html.sk-nav-in #topnav .tn-links > :nth-child(5) { --sk-d: 260ms; }
-html.sk-nav-in #topnav .tn-links > :nth-child(6) { --sk-d: 310ms; }
-html.sk-nav-in #topnav .tn-auth > :nth-child(1) { --sk-d: 360ms; }
-html.sk-nav-in #topnav .tn-auth > :nth-child(2) { --sk-d: 410ms; }
+
+/* =====================================================================
+   Skeleton hierarchy: the grey placeholders appear from the TOP of the page to the BOTTOM
+   ---------------------------------------------------------------------
+   Order on Home:  navbar, hero text, "Check a time" card, "Find your room" header, showcase picture, dots,
+                   studio cards, equipment cards.  The other tabs follow the same idea: page header first, then the
+                   cards or table (cards one after another, table rows one after another).
+   When the data is ready, the real content fades in in the same top-to-bottom order (see the html.sk-play rules above).
+   Only containers fade (never the .sk-b bars), so the shimmer animation of the bars is not touched.
+   --sk-step is the gap between neighbours; make it bigger for a slower wave, smaller for a faster one.
+   Skipped for visitors who prefer reduced motion.
+   ===================================================================== */
+@keyframes skCascade {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+
+    :root {
+        --sk-step: 70ms;
+    }
+
+    /* one animation for every placeholder container; its start time comes from --sk-base + position x --sk-step.
+       "backwards" fill: held invisible until its turn, and nothing is left pinned when it ends. */
+    :is(.sk-txt, .sk-card, .sk-kpi, .sk-tile, .sk-panel, .sk-li, .sk-tabs, .sk-tr, #ct-map.sk-map, li.sk:has(> .sk-ctrow)) {
+        animation: skCascade .5s cubic-bezier(.2, .7, .2, 1) backwards;
+        animation-delay: calc(var(--sk-base, 0ms) + var(--i, 0) * var(--sk-step));
+    }
+
+    /* the showcase picture and its dots: only while the page is still waiting (once it is released, the
+       html.sk-play rules play the real content in instead; no animation-name is switched back afterwards, so nothing replays) */
+    html.sk-wait :is(.slider-wrapper, .sc-foot) {
+        animation: skCascade .5s cubic-bezier(.2, .7, .2, 1) backwards;
+        animation-delay: var(--sk-base, 0ms);
+    }
+
+    /* ---- top to bottom: where each block starts (ms) ---- */
+    .hx-copy > .sk-txt { --sk-base: 60ms; }
+    .hx-card > .sk-txt { --sk-base: 140ms; }
+    .sc-head .sk-txt { --sk-base: 240ms; }
+    html.sk-wait .slider-wrapper { --sk-base: 320ms; }
+    html.sk-wait .sc-foot { --sk-base: 240ms; }   /* beside the header row on desktop */
+
+    #studio-grid { --sk-base: 480ms; }
+    #equipment-grid { --sk-base: 800ms; }
+
+    /* the other tabs */
+    .pghead .sk-txt { --sk-base: 60ms; }
+    #cs, #eq { --sk-base: 160ms; }
+    #mybk, #myrent { --sk-base: 200ms; --sk-step: 45ms; }
+
+    /* Contact Us */
+    .ct-head .sk-txt { --sk-base: 60ms; }
+    #ct-touch { --sk-base: 200ms; }
+    #ct-follow { --sk-base: 340ms; }
+    #ct-visit { --sk-base: 480ms; }
+    #ct-map.sk-map { --sk-base: 560ms; }
+
+    /* position inside a row of cards / a table / a list (1st = 0, 2nd = 1, ...) */
+    :is(#studio-grid, #equipment-grid, #cs, #eq) > .sk-card:nth-child(1),
+    .sk-table > :nth-child(n):nth-child(-n+2),
+    :is(#ct-touch, #ct-follow, #ct-visit) > li:nth-child(1) { --i: 0; }
+
+    :is(#studio-grid, #equipment-grid, #cs, #eq) > .sk-card:nth-child(2),
+    .sk-table > :nth-child(3),
+    :is(#ct-touch, #ct-follow, #ct-visit) > li:nth-child(2) { --i: 1; }
+
+    :is(#studio-grid, #equipment-grid, #cs, #eq) > .sk-card:nth-child(3),
+    .sk-table > :nth-child(4),
+    :is(#ct-touch, #ct-follow, #ct-visit) > li:nth-child(3) { --i: 2; }
+
+    :is(#studio-grid, #equipment-grid, #cs, #eq) > .sk-card:nth-child(4),
+    .sk-table > :nth-child(5) { --i: 3; }
+
+    :is(#studio-grid, #equipment-grid, #cs, #eq) > .sk-card:nth-child(5),
+    .sk-table > :nth-child(6) { --i: 4; }
+
+    :is(#studio-grid, #equipment-grid, #cs, #eq) > .sk-card:nth-child(6),
+    .sk-table > :nth-child(7) { --i: 5; }
+
+    .sk-table > :nth-child(8) { --i: 6; }
+    .sk-table > :nth-child(n+9) { --i: 7; }
+}
