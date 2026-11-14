@@ -9,6 +9,7 @@ import { renderCalendar } from './calendar.js';
 import './noShow.js';   // Sessions tab: no-show countdown, Hold and Release now (needs 78_no_show_release.sql)
 import './checkIn.js';   // Check in: record when the customer arrived (needs 87_booking_check_in.sql)
 import './balance.js';   // Start session / Issue equipment: verify and collect the remaining balance first
+import './globalSearch.js';   // search box at the top: find a customer, booking or rental from any tab
 import { renderCustomers } from './customers.js';
 import { STU, refresh } from './data.js';
 import { renderEquipmentTab } from './equipment.js';
