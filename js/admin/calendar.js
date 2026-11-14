@@ -21,8 +21,8 @@ const HOURS = Array.from({ length: CLOSE - OPEN }, (_, i) => OPEN + i);
 const SHOWN = ['Pending', 'Approved', 'In Progress', 'Completed'];   // cancelled and rejected bookings free the room
 const KIND = { 'Pending': 'pend', 'Approved': 'conf', 'In Progress': 'live', 'Completed': 'done' };
 
-let view = 'day', day = TODAY, mode = 'rooms', eqCat = 'All';   // mode: 'rooms' | 'equipment'
-let pick = null, eqPick = null, ghost = null;   // a click or drag in progress: room hours / equipment cells / the dashed preview block
+let view = 'day', day = TODAY, mode = 'rooms', eqCat = 'All', eqShow = 'avail';   // mode: 'rooms' | 'equipment'; eqShow: 'avail' (free units) | 'status' (Pending / Verified / In use / Late)
+let pick = null, eqPick = null, ghost = null, eqGhost = null, noClick = false;   // a click or drag in progress: room hours / equipment hours / the dashed previews
 
 const oneDay = () => view === 'day';   // Day and Week work the same way in Rooms and in Equipment
 
@@ -70,7 +70,7 @@ function toolbar() {
       <div class="tabs" style="margin:0"><button data-cal-view="day" class="${view === 'day' ? 'on' : ''}">Day</button><button data-cal-view="week" class="${view === 'week' ? 'on' : ''}">Week</button></div>
       <button class="btn sm line" data-cal="print" title="Opens the print window. Choose Save as PDF as the printer.">Print / PDF</button>
     </div>
-    <div class="row cal-title" style="justify-content:flex-start;gap:14px"><h2>${esc(span)}</h2>${mode === 'rooms' ? legend : equipLegend}</div>`;
+    <div class="row cal-title" style="justify-content:flex-start;gap:14px"><h2>${esc(span)}</h2>${mode === 'rooms' ? legend : equipLegend(eqShow)}</div>`;
 }
 
 function dayView(list) {
@@ -141,7 +141,7 @@ export function renderCalendar() {
     const list = mode === 'rooms' ? spans() : [];
     host.innerHTML = `<div class="print-head rp-head" aria-hidden="true"><b>Tower of Dove Music Studio</b><span>Calendar, ${mode === 'rooms' ? 'rooms' : 'equipment'} &middot; ${esc(oneDay() ? longDate(day) : 'week of ' + shortDate(mondayOf(day)))}</span></div>`
         + toolbar() + (mode === 'equipment'
-            ? equipView({ view, day, dates: Array.from({ length: 7 }, (_, i) => addDays(mondayOf(day), i)), cat: eqCat, today: TODAY })
+            ? equipView({ view, day, dates: Array.from({ length: 7 }, (_, i) => addDays(mondayOf(day), i)), cat: eqCat, today: TODAY, show: eqShow })
             : view === 'day' ? dayView(list) : weekView(list));
 }
 
@@ -209,6 +209,9 @@ $('#a-cal').addEventListener('change', e => {
     } else if (e.target.dataset.eqCatSel !== undefined) {
         eqCat = e.target.value;
         renderCalendar();
+    } else if (e.target.dataset.eqShowSel !== undefined) {
+        eqShow = e.target.value === 'status' ? 'status' : 'avail';
+        renderCalendar();
     }
 });
 
@@ -267,13 +270,65 @@ function showGhost(plot, lo, hi, text) {
 const pickText = () => `${hourLabel(pick.lo)} to ${hourLabel(pick.hi + 1)} (${pick.hi - pick.lo + 1} h)`;
 let hoverAt = '';
 
+/* ---------- equipment: the hour under the pointer ----------
+   A cell of the equipment grid can cover several hours (hours held by the same rental are joined into one cell),
+   so the hour is worked out from the pointer's x position inside the cell, not from the cell's own start time. */
+const HMS = 36e5;
+const hourAtX = (c, x) => {
+    const r = c.getBoundingClientRect(), from = +c.dataset.from, to = +c.dataset.to;
+    const f = Math.min(0.999, Math.max(0, (x - r.left) / (r.width || 1)));
+    return Math.floor((from + f * (to - from)) / HMS) * HMS;
+};
+const eqRow = (grid, eid) => [...grid.querySelectorAll('.ec-c[data-eid]')].filter(c => c.dataset.eid === eid);
+
+/* screen x of a moment inside a row of cells (null when the moment is not in the row) */
+const eqXAt = (row, t) => {
+    const c = row.find(k => +k.dataset.from <= t && t <= +k.dataset.to);
+    if (!c)
+        return null;
+    const r = c.getBoundingClientRect(), from = +c.dataset.from, to = +c.dataset.to;
+    return { x: r.left + (t - from) / (to - from) * r.width, cell: c };
+};
+
+const hideEqGhost = () => {
+    if (eqGhost)
+        eqGhost.remove();
+    eqGhost = null;
+};
+
+/* the dashed preview over exactly the hours that are being dragged */
+function showEqGhost() {
+    const p = eqPick, grid = p.grid, row = p.row;
+    const lo = Math.min(p.a, p.b), hi = Math.max(p.a, p.b) + HMS;
+    const s = eqXAt(row, lo), e = eqXAt(row, hi);
+    if (!s || !e)
+        return;
+    if (!eqGhost || eqGhost.parentNode !== grid) {
+        hideEqGhost();
+        eqGhost = document.createElement('i');
+        eqGhost.className = 'cal-ghost';
+        eqGhost.style.cssText = 'left:0;right:auto;z-index:4';
+        if (getComputedStyle(grid).position === 'static')
+            grid.style.position = 'relative';
+        grid.appendChild(eqGhost);
+    }
+    const g = grid.getBoundingClientRect(), cr = s.cell.getBoundingClientRect(), n = (hi - lo) / HMS;
+    eqGhost.style.left = (s.x - g.left - grid.clientLeft + 1) + 'px';
+    eqGhost.style.width = Math.max(4, e.x - s.x - 2) + 'px';
+    eqGhost.style.top = (cr.top - g.top - grid.clientTop + 1) + 'px';
+    eqGhost.style.height = (cr.height - 2) + 'px';
+    eqGhost.textContent = `${hourLabel(new Date(lo + 288e5).getUTCHours())} to ${hourLabel(new Date(hi + 288e5).getUTCHours())} (${n} h)`;
+}
+
 $('#a-cal').addEventListener('pointerdown', e => {
     if (e.button !== 0)
         return;
     if (mode === 'equipment' && view === 'day' && e.pointerType !== 'touch') {
         const c = e.target.closest('.ec-c[data-eid]');
-        if (c && !c.disabled)
-            eqPick = { eid: c.dataset.eid, a: c, b: c, id: e.pointerId, moved: false };
+        if (c && !c.disabled) {
+            const grid = c.closest('.ec-grid'), h = hourAtX(c, e.clientX);
+            eqPick = { eid: c.dataset.eid, grid, row: eqRow(grid, c.dataset.eid), a: h, b: h, id: e.pointerId };
+        }
         return;
     }
     const plot = e.target.closest('.cal-plot.can-book');
@@ -290,13 +345,19 @@ $('#a-cal').addEventListener('pointerdown', e => {
 
 $('#a-cal').addEventListener('pointermove', e => {
     if (eqPick && e.pointerId === eqPick.id) {
-        const el = document.elementFromPoint(e.clientX, e.clientY), c = el && el.closest('.ec-c[data-eid]');
-        if (c && !c.disabled && c.dataset.eid === eqPick.eid && c !== eqPick.b) {
-            eqPick.b = c;
-            eqPick.moved = true;
-            const row = [...$('#a-cal').querySelectorAll('.ec-c[data-eid]')].filter(x => x.dataset.eid === eqPick.eid);
-            const i = row.indexOf(eqPick.a), j = row.indexOf(c);
-            row.forEach((x, k) => x.classList.toggle('ec-pick', k >= Math.min(i, j) && k <= Math.max(i, j)));
+        const c = eqPick.row.find(k => {
+            const r = k.getBoundingClientRect();
+            return e.clientX >= r.left && e.clientX < r.right;
+        });
+        if (c && !c.disabled) {
+            const h = hourAtX(c, e.clientX);
+            if (h !== eqPick.b) {
+                eqPick.b = h;
+                if (eqPick.a !== eqPick.b)
+                    showEqGhost();
+                else
+                    hideEqGhost();
+            }
         }
         return;
     }
@@ -336,13 +397,25 @@ $('#a-cal').addEventListener('pointerleave', () => {
         hideGhost();
 });
 
+/* a drag over several hours must not also fire the click of the cell it ended on */
+$('#a-cal').addEventListener('click', e => {
+    if (!noClick)
+        return;
+    noClick = false;
+    e.stopPropagation();
+    e.preventDefault();
+}, true);
+
 $('#a-cal').addEventListener('pointerup', e => {
     if (eqPick && e.pointerId === eqPick.id) {
         const p = eqPick;
         eqPick = null;
-        $('#a-cal').querySelectorAll('.ec-pick').forEach(c => c.classList.remove('ec-pick'));
-        if (p.moved && p.a !== p.b)   // dragged over several hours: open the window for the whole stretch
-            openEquipCell(p.eid, Math.min(+p.a.dataset.from, +p.b.dataset.from), Math.max(+p.a.dataset.to, +p.b.dataset.to), true);
+        hideEqGhost();
+        if (p.a !== p.b) {   // dragged over several hours: open the window for exactly those hours
+            noClick = true;
+            setTimeout(() => { noClick = false; }, 0);
+            openEquipCell(p.eid, Math.min(p.a, p.b), Math.max(p.a, p.b) + HMS, true);
+        }
         return;
     }
     if (!pick || e.pointerId !== pick.id)
@@ -359,7 +432,7 @@ function cancelPick() {
     pick = null;
     eqPick = null;
     hideGhost();
-    $('#a-cal').querySelectorAll('.ec-pick').forEach(c => c.classList.remove('ec-pick'));
+    hideEqGhost();
 }
 $('#a-cal').addEventListener('pointercancel', cancelPick);
 document.addEventListener('keydown', e => {

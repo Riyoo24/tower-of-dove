@@ -2422,3 +2422,24 @@ body[data-role="admin"] #mb-user:active .tn-av {
     cursor: default;
     filter: none;
 }
+
+/* Equipment calendar, "Status" view: held hours colored by the stage of the rental (js/admin/equipCalendar.js) */
+.ec-c.ec-s-pend {
+    background: repeating-linear-gradient(135deg, var(--warn-bg) 0 5px, transparent 5px 9px);
+    color: var(--warn);
+}
+
+.ec-c.ec-s-conf {
+    background: var(--info-bg);
+    color: var(--info);
+}
+
+.ec-c.ec-s-live {
+    background: var(--ok-bg);
+    color: var(--ok);
+}
+
+.ec-c.ec-s-late {
+    background: var(--bad-bg);
+    color: var(--bad);
+}

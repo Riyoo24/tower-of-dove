@@ -57,7 +57,7 @@ export const NAV_ITEMS = [
    #hashes handled by admin.js, so they never leave pages/admin.html. */
 export const ADMIN_NAV = [
     ['a-over', 'Overview', 'grid'],
-    ['a-cal', 'Room Calendar', 'week'],
+    ['a-cal', 'Calendar', 'week'],
     ['a-sess', 'Studio Sessions', 'clock'],
     ['a-onb', 'Onsite Booking', 'plus'],
     ['a-onr', 'Onsite Rental', 'tag'],
