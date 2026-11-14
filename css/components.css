@@ -1199,6 +1199,98 @@ input.ocr-busy {
     font-size: 14px;
 }
 
+/* ---- admin sidebar + phone top bar while the page starts up (js/shared/sideSkeleton.js) ----
+   Built on the real .pubside / .mbar, so size, border and position match and nothing jumps when the real sidebar replaces it. */
+#sk-side {
+    display: contents;   /* the top bar and the sidebar behave as direct children of <body> */
+}
+
+#sk-side .sk-side {
+    pointer-events: none;
+    user-select: none;
+}
+
+#sk-side .sk-sd-menu {
+    display: block;
+    padding: 0 26px;
+    margin-bottom: 14px;
+}
+
+#sk-side .sk-sd-ico {
+    width: 22px;
+    height: 22px;
+    flex: none;
+    border-radius: 6px;
+}
+
+#sk-side .sk-sd-list li,
+#sk-side .sk-sd-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 46px;
+    padding: 0 18px;
+    list-style: none;
+    animation: none;   /* beats the slide-in of the real menu rows (motion.css) */
+}
+
+#sk-side .sk-sd-lbl {
+    height: 12px;
+    max-width: 100%;
+}
+
+#sk-side .sk-sd-logo {
+    display: block;
+}
+
+#sk-side .sk-sd-pic {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto;
+    border-radius: 50%;
+}
+
+#sk-side .sk-sd-title {
+    width: 62%;
+    height: 14px;
+    margin: 12px auto 0;
+}
+
+/* phone top bar: menu button, logo + name, account button */
+#sk-side .sk-mb-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    flex: none;
+}
+
+#sk-side .sk-mb-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: auto;
+}
+
+#sk-side .sk-mb-logo {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+}
+
+#sk-side .sk-mb-name {
+    width: 112px;
+    height: 14px;
+}
+
+@media (max-width: 820px) {
+    #sk-side .sk-sd-list li,
+    #sk-side .sk-sd-row {
+        height: auto;
+        padding: 15px 22px;
+        border-bottom: 1px solid var(--graph);
+    }
+}
+
 /* ---- showcase slide (Home hero picture) + dots ---- */
 .slide.sk-slide {
     background: linear-gradient(100deg, var(--dove) 30%, #2f2f37 50%, var(--dove) 70%);

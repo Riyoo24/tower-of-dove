@@ -46,7 +46,12 @@ export function renderOverview() {
     const days = Array.from({ length: 7 }, (_, i) => dayOffset(i - 6));
     const counts = days.map(d => BK.filter(b => dOf(b.start_at) === d && !['Cancelled', 'Rejected'].includes(b.status)).length);
     const max = Math.max(...counts, 1);
-    $('#bars').innerHTML = counts.map((v, i) => `<div${OWNER ? ` class="go" data-go="rp:${days[i]}" role="link" tabindex="0" aria-label="${shortDate(days[i])}: ${pl(v, 'booking')}. Open report"` : ''}><i class="${i === 6 ? 'hi' : ''}" style="height:${Math.max(4, Math.round(v / max * 100))}px"></i>${v}<br>${shortDate(days[i])}</div>`).join('');
+    /* Same markup as before. Extras for phones only (admin.css): --r (bar share of the max), .bn (count) and .bm (month). */
+    const dateHtml = d => {
+        const sd = shortDate(d), i = sd.lastIndexOf(' ');
+        return i > 0 ? `<span class="bm">${sd.slice(0, i + 1)}</span>${sd.slice(i + 1)}` : sd;
+    };
+    $('#bars').innerHTML = counts.map((v, i) => `<div${OWNER ? ` class="go" data-go="rp:${days[i]}" role="link" tabindex="0" aria-label="${shortDate(days[i])}: ${pl(v, 'booking')}. Open report"` : ''}><i class="${i === 6 ? 'hi' : ''}" style="height:${Math.max(4, Math.round(v / max * 100))}px;--r:${(v / max).toFixed(3)}"></i><span class="bn">${v}</span><br>${dateHtml(days[i])}</div>`).join('');
 
     const open = openLines();
     const overdue = open.filter(l => l.days_overdue > 0), due = open.filter(dueToday);

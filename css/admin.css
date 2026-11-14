@@ -168,6 +168,71 @@
     grid-column: 1 / -1;
 }
 
+/* staff / owner account link in the sidebar: the same look as the customer top bar's account pill
+   (round letter avatar + name inside a soft outlined pill) */
+body[data-role="admin"] .ps-links li[data-side="a-prof"] {
+    margin: 8px 21px;   /* the avatar (5px inside the pill) then sits exactly over the icon column of the menu rows above and below */
+}
+
+body[data-role="admin"] #ps-profile {
+    gap: 9px;   /* avatar 28px + gap puts the name on the same line as "Settings" and "Log out" */
+    padding: 5px 16px 5px 5px;
+    border: 1px solid #ffffff1f;
+    border-radius: 999px;
+}
+
+body[data-role="admin"] #ps-profile .ps-av {
+    width: 28px;
+}
+
+/* the small marker bar the other menu rows draw at their left edge would sit on top of the avatar: not used on the pill */
+body[data-role="admin"] #ps-profile::before {
+    display: none;
+}
+
+/* at rest: a faint fill */
+body[data-role="admin"] .ps-links li:not(.active):not(:hover) #ps-profile {
+    background: #ffffff0a;
+}
+
+/* hover and selected: exactly the customer top bar's account pill (a slightly lighter fill and border, no red, no glow) */
+body[data-role="admin"] .ps-links li:hover #ps-profile,
+body[data-role="admin"] .ps-links li.active #ps-profile {
+    background: #ffffff14;
+    border-color: #ffffff29;
+    box-shadow: none;
+    color: #fff;
+}
+
+/* collapsed sidebar (desktop only): just the avatar inside a round outline, centred over the icons */
+@media (min-width: 821px) {
+    body[data-role="admin"] .pubside.collapsed .ps-links li[data-side="a-prof"] {
+        margin: 8px 13px 8px 23px;
+    }
+
+    body[data-role="admin"] .pubside.collapsed #ps-profile {
+        justify-content: center;
+        padding: 5px;
+    }
+}
+
+/* phones: the drawer hides every menu icon, but the account pill (with its avatar) stays */
+@media (max-width: 820px) {
+    body[data-role="admin"] .ps-links li[data-side="a-prof"] {
+        margin: 10px 14px;
+        border-bottom: 0;
+    }
+
+    body[data-role="admin"] #ps-profile {
+        padding: 6px 16px 6px 6px;
+        border-radius: 999px;
+    }
+
+    body[data-role="admin"] #ps-profile .ps-av {
+        display: grid !important;
+    }
+}
+
 body[data-role="admin"] .pubside:not(.collapsed) .lbl {
     white-space: normal;
     overflow-wrap: anywhere;
@@ -240,6 +305,50 @@ body[data-role="admin"] .pubside:not(.collapsed) .lbl {
 
 .bars i.hi {
     background: var(--brand);
+}
+
+/* ---- Phones only (the desktop chart above is unchanged) ----
+   Taller box so the tallest bar can never reach the card title, bars scaled to fit it, dates that never wrap
+   (the month is dropped on small phones), and a clear colour for the counts. */
+@media (max-width: 640px) {
+    .bars {
+        height: 156px;
+        gap: 6px;
+        margin-top: 14px;
+    }
+
+    .bars div {
+        min-width: 0;
+        font-size: 11px;
+        line-height: 1.35;
+        white-space: nowrap;
+    }
+
+    .bars i {
+        height: max(4px, calc(var(--r, 0) * 78px)) !important;   /* overrides the desktop pixel height */
+        max-width: 44px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .bars .bn {
+        color: var(--ink);
+        font-weight: 600;
+    }
+}
+
+@media (max-width: 480px) {
+    .bars {
+        gap: 3px;
+    }
+
+    .bars .bm {
+        display: none;   /* "Nov 10" becomes "10" */
+    }
+
+    .bars i {
+        max-width: none;
+    }
 }
 
 .hb {
@@ -1421,5 +1530,49 @@ tr.row-flash > td:first-child { box-shadow: inset 3px 0 0 color-mix(in srgb, var
         height: 26px;
         font-size: 10px;
         border-radius: 3px;
+    }
+}
+
+/* phone top bar: the account button is the letter avatar (same one as the sidebar and the customer pages) */
+body[data-role="admin"] #mb-user {
+    padding: 4px;
+    cursor: pointer;
+}
+
+body[data-role="admin"] #mb-user .tn-av {
+    width: 32px;
+    height: 32px;
+    font-size: 15px;
+    /* clean and crisp: the same red gradient as every other avatar, one thin light ring, a small neutral shadow */
+    background: linear-gradient(135deg, var(--brand-hi), var(--brand-lo));
+    box-shadow: 0 0 0 1px #ffffff2e, 0 2px 6px #00000080;
+    transition: transform .2s ease, box-shadow .2s ease;
+}
+
+/* the Profile page is open: the ring turns brand red */
+body[data-role="admin"] #mb-user.active .tn-av {
+    box-shadow: 0 0 0 2px var(--brand-hi), 0 2px 6px #00000080;
+}
+
+body[data-role="admin"] #mb-user:active .tn-av {
+    transform: scale(.94);
+}
+
+/* phone drawer: show the menu icons again (layout.css hides them under 820px) */
+@media (max-width: 820px) {
+    body[data-role="admin"] .pubside .ps-links .ico {
+        display: grid !important;
+        width: 24px;
+        flex: none;
+    }
+
+    body[data-role="admin"] .pubside .ps-links a {
+        gap: 14px;
+        padding-left: 24px;
+    }
+
+    /* no hover wobble on touch screens (a tap leaves :hover stuck on the row) */
+    body[data-role="admin"] .pubside .ps-links li:hover .ico {
+        transform: none;
     }
 }

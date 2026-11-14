@@ -51,6 +51,8 @@
     </head>
     <body data-role="admin" data-active="a-over">
         <!-- The sidebar and mobile bar are injected by js/shared/layout.js -->
+        <!-- Grey placeholder sidebar / phone top bar. Runs first so it paints at once; layout.js removes it when the real one is drawn. -->
+        <script src="../js/shared/sideSkeleton.js"></script>
         <main class="page" id="admin">
             <div class="adm">
                 <div class="wrap">

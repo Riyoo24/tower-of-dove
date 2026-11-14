@@ -108,9 +108,10 @@ export function updateSidebarName(displayName) {
     const sidebarNameElement = $('#ps-profile .lbl');
     if (sidebarNameElement)
         sidebarNameElement.textContent = displayName;
-    const avatar = $('#ps-profile .tn-av');   // top bar: first letter of the name
-    if (avatar)
-        avatar.textContent = ((displayName || '').trim()[0] || 'U').toUpperCase();
+    const letter = ((displayName || '').trim()[0] || 'U').toUpperCase();
+    $$('#ps-profile .tn-av, #mb-user .tn-av').forEach(avatar => {   // sidebar / top bar avatar and the phone top bar avatar: first letter of the name
+        avatar.textContent = letter;
+    });
 }
 
 /* Keeps this page honest about who is logged in. The sidebar is drawn once, when the page loads, so it would keep
@@ -295,11 +296,13 @@ export function injectChrome() {
         ? ADMIN_NAV.filter(n => !n[3] || (user && user.role === 'owner'))
         : NAV_ITEMS;
     document.body.classList.add('hasside');
+    if (window.todSideSkeleton)
+        window.todSideSkeleton.remove();   // the grey placeholder sidebar from js/shared/sideSkeleton.js (admin page only)
     document.body.insertAdjacentHTML('afterbegin', `
     <div class="mbar">
       <button id="mb-open" aria-label="Open menu">${icon('menu')}</button>
       <span class="mb-brand"><img src="${ASSETS}img/logo.png" alt="" width="30" height="30"> Tower of Dove</span>
-      <button id="mb-user" aria-label="${getUser() ? 'Account' : 'Log in'}" ${getUser() ? '' : 'data-route="login"'}>${icon('user')}</button>
+      <button id="mb-user" aria-label="${getUser() ? 'Account' : 'Log in'}" ${getUser() ? '' : 'data-route="login"'}>${getUser() ? `<span class="tn-av" aria-hidden="true">${esc(((getUser().username || getUser().label || '').trim()[0] || 'U').toUpperCase())}</span>` : icon('user')}</button>
     </div>
     <div class="scrim" id="scrim"></div>
     <aside class="pubside" id="pubside" aria-label="Main navigation">
@@ -315,7 +318,7 @@ export function injectChrome() {
       </ul>
       <ul class="ps-links ps-auth" id="ps-auth">
         ${getUser() ? `
-        <li data-side="${isAdmin ? 'a-prof' : 'account'}"><a href="${isAdmin ? '#a-prof' : '#'}" id="ps-profile" ${isAdmin ? '' : 'data-route="account"'}><span class="ico">${icon('user')}</span><span class="lbl"></span></a></li>
+        <li data-side="${isAdmin ? 'a-prof' : 'account'}"><a href="${isAdmin ? '#a-prof' : '#'}" id="ps-profile" ${isAdmin ? '' : 'data-route="account"'}><span class="ico ps-av"><span class="tn-av" aria-hidden="true">${esc(((getUser().username || getUser().label || '').trim()[0] || 'U').toUpperCase())}</span></span><span class="lbl"></span></a></li>
         <li><a href="#" id="logout"><span class="ico">${icon('logout')}</span><span class="lbl">Log out</span></a></li>` : `
         <li><a href="#" data-route="login"><span class="ico">${icon('login')}</span><span class="lbl">Log in</span></a></li>
         <li><a href="#" data-route="register"><span class="ico">${icon('edit')}</span><span class="lbl">Register</span></a></li>`}
@@ -362,6 +365,13 @@ export function injectChrome() {
         }
     });
     $('#mb-open').addEventListener('click', () => setDrawer(true));
+    // phone top bar: the avatar opens the account (Profile) page of the dashboard
+    const mbUser = $('#mb-user');
+    if (mbUser && getUser())
+        mbUser.addEventListener('click', () => {
+            setDrawer(false);
+            location.hash = 'a-prof';
+        });
     $('#ps-x').addEventListener('click', () => setDrawer(false));
     $('#scrim').addEventListener('click', () => setDrawer(false));
     $('#pubside').addEventListener('click', e => {
@@ -408,6 +418,9 @@ export function injectChrome() {
 
 /* Highlight a sidebar item by its key (home, book, rent, mybook, myrent). */
 export function setActiveNav(key) {
+    const mobileAvatar = $('#mb-user');   // phone top bar avatar: lit while the Profile page is open
+    if (mobileAvatar)
+        mobileAvatar.classList.toggle('active', key === 'a-prof');
     $$('#ps-main li, #ps-auth li[data-side], #mtabs li').forEach(li => {
         const on = li.dataset.side === key;
         li.classList.toggle('active', on);
