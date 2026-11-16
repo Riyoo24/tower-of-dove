@@ -284,10 +284,16 @@
           <aside class="cal-side">
             <span class="cal-eyebrow">Your selected day</span>
             <h3 class="cal-date" id="cal-date"></h3>
-            <div id="dayocc"></div>
-            <div id="bk-est" class="est"></div>
-            <p class="mut cal-hint">Choose a date on the calendar, then continue to pick your start time and session length.</p>
-            <button class="btn gold lg full" id="bk-now">Book Now &rarr;</button>
+            <p class="cal-room" id="cal-room"></p>
+            <div class="cal-hours-head"><span>Hours on this day</span><b id="cal-free"></b></div>
+            <!-- one chip per start time: green = free, dim = taken (drawn by customer/book.js) -->
+            <div class="hr-grid" id="dayocc"></div>
+            <ul class="hr-key" aria-hidden="true">
+              <li><i class="k-free"></i>Free</li>
+              <li><i class="k-taken"></i>Taken</li>
+            </ul>
+            <p class="cal-rate" id="cal-rate"></p>
+            <button class="btn gold lg full" id="bk-now">Book now &rarr;</button>
           </aside>
         </div>
 

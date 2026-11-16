@@ -4,7 +4,6 @@
    ===================================================================== */
 
 import { state } from './state.js';
-import { estimateTable } from '../shared/estimate.js';
 import { openBook } from './bookingForm.js';
 import { blockMessage, isBlocked } from './damageBlock.js';
 import { firstBookableDate, isPastSlot, lastBookableDate, loadBusy, takenSlots } from '../shared/availability.js';
@@ -108,6 +107,22 @@ async function pickQuick(kind) {
     await refreshBook();
 }
 
+/* "Sat, 21 November" for the selected-day panel */
+const shortDayDate = iso => {
+    const d = new Date(iso + 'T00:00');
+    return `${d.toLocaleDateString('en-US', { weekday: 'short' })}, ${d.getDate()} ${d.toLocaleDateString('en-US', { month: 'long' })}`;
+};
+
+/* "10:00 AM" -> "10 AM" */
+const hourLabel = t => t.replace(':00', '');
+
+/* "Studio A · Drum and full band room": the first plain line of the studio description
+   (headings that end with ":" and "-" list lines are skipped). */
+const roomLine = s => {
+    const line = String(s.desc || '').split(/\r?\n/).map(l => l.trim()).find(l => l && !l.endsWith(':') && !l.startsWith('-'));
+    return `Studio ${s.id}${line ? ' \u00b7 ' + line : ''}`;
+};
+
 let lastDay = null;      // the calendar day that was selected on the last draw
 let lastPicked = null;   // the studio card that was selected on the last draw
 
@@ -135,9 +150,9 @@ function renderBook() {
     $('#cal-t').textContent = state.calMonth.toLocaleDateString('en-US', {
         month: 'long',
         year: 'numeric'
-    }) + ', Studio '
-        + STUDIOS[state.selStudio].id;
+    });
 
+    const first = firstBookableDate(), last = lastBookableDate();
     let html = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => `<small class="mut">${d}</small>`).join('')
         + '<span></span>'.repeat(firstWeekday);
     for (let d = 1; d <= daysInMonth; d++) {
@@ -148,7 +163,7 @@ function renderBook() {
         const isSel = ds === state.selDate;
         const draw = isSel && lastDay !== null && lastDay !== state.selDate ? ' draw' : '';   // the border draws itself only on a day that was just clicked
         const border = isSel ? '<svg class="pk-b" aria-hidden="true" focusable="false"><rect pathLength="1"></rect><rect class="m" pathLength="1"></rect></svg>' : '';
-        html += `<button class="cd ${cls}${draw}" data-d="${ds}" ${ds < firstBookableDate() || ds > lastBookableDate() ? 'disabled' : ''}>${border}${d}<i>${n ? n + 'h' : ''}</i></button>`;
+        html += `<button class="cd ${cls}${draw}" data-d="${ds}" aria-pressed="${isSel}" ${ds < first || ds > last ? 'disabled' : ''}>${border}${d}<i>${n ? n + 'h' : ''}</i></button>`;
     }
     $('#cal').innerHTML = html;
     lastDay = state.selDate;
@@ -164,17 +179,25 @@ function renderBook() {
     }
     renderQuick();
 
-    const occupied = [...takenSlots(state.selStudio, state.selDate)].sort((a, b) => a - b);
-    $('#cal-date').textContent = longDate(state.selDate);
-    $('#dayocc').innerHTML = occupied.length
-        ? `<p class="cal-sub">Occupied times</p><div class="occ-chips">${occupied.map(i => `<span>${SLOTS[i]}</span>`).join('')}</div>`
-        : '<p class="cal-sub">No occupied times. The whole day is open.</p>';
+    // selected-day panel: date, room, one chip per start time (free / taken) and the hourly rate
+    const room = STUDIOS[state.selStudio];
+    const roomClosed = isClosed(room);
+    const taken = takenSlots(state.selStudio, state.selDate);
+    const isTaken = i => roomClosed || taken.has(i) || isPastSlot(state.selDate, i);
+    const free = SLOTS.filter((_, i) => !isTaken(i)).length;
+    $('#cal-date').textContent = shortDayDate(state.selDate);
+    $('#cal-room').textContent = roomLine(room);
+    const freeEl = $('#cal-free');
+    freeEl.textContent = roomClosed ? 'Closed' : `${free} free`;
+    freeEl.classList.toggle('none', roomClosed || free === 0);
+    $('#dayocc').innerHTML = SLOTS.map((t, i) => isTaken(i)
+        ? `<span class="hr taken" title="Taken">${esc(hourLabel(t))}<span class="sr">, taken</span></span>`
+        : `<span class="hr free" title="Free">${esc(hourLabel(t))}<span class="sr">, free</span></span>`).join('');
+    $('#cal-rate').innerHTML = room.rate > 0
+        ? `Rate for this room: <b>${esc(peso(room.rate))}</b> per hour. Choose your start time and length next.`
+        : '';
 
-    const est = $('#bk-est');
-    if (est)
-        est.innerHTML = estimateTable(STUDIOS[state.selStudio].rate);
-
-    const closed = isClosed(STUDIOS[state.selStudio]);
+    const closed = roomClosed;
     $('#bk-now').disabled = closed;
 
     // phone bar: the selected studio, its hourly price and the selected day
