@@ -179,6 +179,23 @@
         clearInterval(poll);
         clearTimeout(cap);
         setTimeout(function () { root.classList.remove('sk-play'); }, 2600);   // then give the elements back to their own styles
+        settleTables();
+    }
+
+    /* The tables fade in only when they are first drawn. Opening or closing "Past and closed" (or a refresh) re-draws
+       the table inside the same box; without this the new table replayed the fade (blank for about a second). The first
+       re-draw after the reveal marks the box .sk-done, which switches the fade off for it (css/skeleton-extra.css). */
+    function settleTables() {
+        ['mybk', 'myrent'].forEach(function (id) {
+            var box = document.getElementById(id);
+            if (!box || !('MutationObserver' in window))
+                return;
+            var mo = new MutationObserver(function () {
+                box.classList.add('sk-done');
+                mo.disconnect();
+            });
+            mo.observe(box, { childList: true });
+        });
     }
 
     function check() {
