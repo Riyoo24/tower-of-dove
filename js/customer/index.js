@@ -11,7 +11,7 @@ import { openBook } from './bookingForm.js';
 import { loadMyBookings, loadMyRentals, profileReady } from './data.js';
 import { initBookingsTab } from './myBookings.js';
 import { initHome } from '../home/index.js';
-import { applyAccessMode, initMyRentals, initRentalLookup } from './myRentals.js';
+import { applyAccessMode, initBookingLookup, initMyRentals, initRentalLookup } from './myRentals.js';
 import { initSwapChoice } from './swapChoice.js';
 import { initRentTab, renderCart, renderEquipment, renderRentMode } from './rent.js';
 import { bkDlg, showTab } from './ui.js';
@@ -119,6 +119,8 @@ initBookingsTab();
 
 initRentalLookup();
 
+initBookingLookup();
+
 initMyRentals();
 initSwapChoice();   // the Choose button of the "choose your replacement item" notice
 initDamageBlock();
@@ -167,3 +169,5 @@ dataReady.then(async () => {
         }
     }, 30000);
 });
+
+

@@ -4,22 +4,21 @@
    Every rule written here is one the system already enforces (booking form
    terms, customer/noShow.js, shared/availability.js, the database). The
    no-show minutes are read from the database through loadGrace(); the other
-   numbers are constants below. If a rule changes, change it here too.
+   rules (booking window, change/cancel cutoff, hold length) come from the
+   database through RULES in shared/availability.js, so they can never drift
+   from what the database enforces.
    ===================================================================== */
 
 import { GRACE, loadGrace } from '../customer/noShow.js';
-import { BOOKING_WINDOW_DAYS } from '../shared/availability.js';
+import { RULES, rulesReady } from '../shared/availability.js';
 import { VENUE } from '../shared/venue.js';
 import { $, esc } from '../shared/utils.js';
-
-const HOLD_MINUTES = 2;     // slot hold while the form is open (shared/holds.js)
-const CUTOFF_HOURS = 24;    // changes and cancellations close this long before the start
 
 const before = () => [
     ['Pay half now, the rest at the studio',
         'Reserve with a 50% GCash down payment, or pay in full. The payment is non-refundable if you cancel.'],
-    [`Change or cancel ${CUTOFF_HOURS} hours ahead`,
-        `Rescheduling and cancelling close ${CUTOFF_HOURS} hours before your start time.`],
+    [`Change or cancel ${RULES.cutoffHours} hours ahead`,
+        `Rescheduling and cancelling close ${RULES.cutoffHours} hours before your start time.`],
     [`Arrive within ${GRACE} minutes`,
         `If you have not arrived or contacted the studio ${GRACE} minutes after your start time, the booking is cancelled and the slot is released.`],
     ['Add gear while you book',
@@ -32,11 +31,11 @@ const faq = () => [
     ['How do I pay?',
         '<p>By GCash. Scan the studio&rsquo;s QR code, then enter the reference number and attach your screenshot. You choose a 50% down payment or full payment. Your booking stays <b>Pending</b> until staff verify the payment, and you get a receipt by email.</p>'],
     ['How long is my time slot held?',
-        `<p>While you fill in the booking form, your hours are held for ${HOLD_MINUTES} minutes. If nothing happens for ${HOLD_MINUTES} minutes, the hold is released so others can book. Have your GCash ready before you start.</p>`],
+        `<p>While you fill in the booking form, your hours are held for ${RULES.holdMinutes} minutes. If nothing happens for ${RULES.holdMinutes} minutes, the hold is released so others can book. Have your GCash ready before you start.</p>`],
     ['When can I book?',
-        `<p>The studio is open daily from 10 AM to 10 PM. Sessions are booked by the hour, and the last start time is 9 PM. You can book up to ${BOOKING_WINDOW_DAYS} days ahead.</p>`],
+        `<p>The studio is open daily from 10 AM to 10 PM. Sessions are booked by the hour, and the last start time is 9 PM. You can book up to ${RULES.windowDays} days ahead.</p>`],
     ['Can I get a refund if I cancel?',
-        `<p>No. The down payment (or full payment) is non-refundable once a booking is cancelled. If your plans change, reschedule instead: you can move a booking to another open time up to ${CUTOFF_HOURS} hours before it starts.</p>`],
+        `<p>No. The down payment (or full payment) is non-refundable once a booking is cancelled. If your plans change, reschedule instead: you can move a booking to another open time up to ${RULES.cutoffHours} hours before it starts.</p>`],
     ['What happens if I am late?',
         `<p>Your slot is held for ${GRACE} minutes after your start time. After that, the booking is cancelled and the slot is released. Logged-in customers can press <b>I&rsquo;m running late</b> in My bookings once to get 15 more minutes. Your session still ends at its booked time.</p>`],
     ['Can I extend my session?',
@@ -68,8 +67,11 @@ export function renderInfo() {
 
 export async function initInfo() {
     renderInfo();
-    const was = GRACE;
-    await loadGrace();   // the studio can change the no-show minutes; redraw only if they differ
-    if (GRACE !== was)
+    const was = GRACE, rules = JSON.stringify(RULES);
+    await Promise.all([rulesReady, loadGrace()]);   // the studio can change the rules and the no-show minutes; redraw only if they differ
+    if (GRACE !== was || JSON.stringify(RULES) !== rules)
         renderInfo();
 }
+
+
+

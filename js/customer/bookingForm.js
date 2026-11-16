@@ -249,9 +249,11 @@ async function moveDraft(t, h) {
         return false;                    // the form was closed while this request was running (the release is queued behind it)
     if (!ok) {
         const refused = holdError;   // keep the database's own reason: the re-hold below resets it
-        await holdSlots(state.draft.si, state.draft.d, state.draft.t, state.draft.h);   // a failed move drops the old hold, so take it back
+        const back = await holdSlots(state.draft.si, state.draft.d, state.draft.t, state.draft.h);   // a failed move drops the old hold, so take it back
         if (!state.draft)
             return false;
+        if (!back)
+            state.draft.holdLost = true;   // even the old hours could not be taken back: the customer must pick again
         await loadBusy(state.draft.si, state.draft.d, state.draft.d);
         if (!state.draft)
             return false;
@@ -262,6 +264,8 @@ async function moveDraft(t, h) {
     }
     state.draft.t = t;
     state.draft.h = h;
+    state.draft.holdLost = false;   // a successful pick holds the hours again
+    $('#bk-left').hidden = false;
     bkError('');
     drawSlots();
     return true;
@@ -791,10 +795,20 @@ export async function openBook(startIndex, prefill = null) {
     // the countdown is fixed (10 minutes, never restarted by activity); the server hold is renewed every 30 seconds
     // while the form is open so it lasts the whole countdown
     let lastHold = Date.now();
-    const keepAlive = () => {
-        if (state.draft && Date.now() - lastHold > 30000) {
+    const keepAlive = async () => {
+        if (!state.draft || Date.now() - lastHold <= 30000)
+            return;
+        lastHold = Date.now();
+        // one retry on failure: a single lost renewal is often a blip, not a lost slot
+        let ok = await holdSlots(state.draft.si, state.draft.d, state.draft.t, state.draft.h);
+        if (!ok && state.draft) {
             lastHold = Date.now();
-            holdSlots(state.draft.si, state.draft.d, state.draft.t, state.draft.h);
+            ok = await holdSlots(state.draft.si, state.draft.d, state.draft.t, state.draft.h);
+        }
+        if (!ok && state.draft) {
+            // the hours are no longer reserved: say so instead of letting the customer submit for a taken time
+            state.draft.holdLost = true;
+            bkError('Your time is no longer held for you, so someone else may book it. Pick a different time, or close the form and start again.');
         }
     };
     bumpIdle = keepAlive;
@@ -826,7 +840,11 @@ export async function openBook(startIndex, prefill = null) {
             bkDlg.close();
             return;
         }
-        drawHoldTimer(left, idleLeft);
+        // the hold was lost (keepAlive): the countdown bar is meaningless now; the error above the form explains
+        if (state.draft.holdLost)
+            $('#bk-left').hidden = true;
+        else
+            drawHoldTimer(left, idleLeft);
     }, 1000);
     drawHoldTimer(state.idleUntil - Date.now(), idleDeadline - Date.now());
 
@@ -878,6 +896,23 @@ export async function openBook(startIndex, prefill = null) {
         // every wrong field is marked under itself and the page jumps to the first one
         if (!applyChecks(fieldRules().filter(([t]) => method === 'GCash' || !PAY_FIELDS.includes(t)).map(([t, rule]) => [t, rule()])))
             return;
+
+        // the hold was lost earlier (keepAlive or a failed time change): try once more before sending,
+        // so a booking for hours someone else took is never submitted
+        if (state.draft.holdLost) {
+            const ok = await holdSlots(state.draft.si, state.draft.d, state.draft.t, state.draft.h);
+            if (!state.draft)
+                return;
+            if (!ok) {
+                await loadBusy(state.draft.si, state.draft.d, state.draft.d);
+                bkError(holdError || heldMsg(conflictKind(state.draft.si, state.draft.d, state.draft.t, state.draft.h)));
+                drawSlots();
+                return;
+            }
+            state.draft.holdLost = false;
+            $('#bk-left').hidden = false;
+            bkError('');
+        }
 
         const items = addOnSelection();
         const snap = {
@@ -992,3 +1027,6 @@ export async function openBook(startIndex, prefill = null) {
 
     bkDlg.showModal();
 }
+
+
+

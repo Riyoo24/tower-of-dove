@@ -76,10 +76,27 @@ export const todayIsClosed = () => SLOTS.every((_, i) => isPastSlot(manilaDay(0)
 
 export const firstBookableDate = () => manilaDay(todayIsClosed() ? 1 : 0);
 
-/* Customers can only book (and rent equipment for pick-up) up to 4 weeks ahead. */
-export const BOOKING_WINDOW_DAYS = 28;
+/* Business rules the studio can change (app_setting in the database). The database enforces them
+   (booking window, 24h change/cancel cutoff, hold length); get_public_settings() sends the same
+   numbers here so the calendar and the FAQ can never drift from what the database actually does.
+   Until the call answers, the defaults below apply (they match the seeded app_setting values). */
+export const RULES = { windowDays: 28, cutoffHours: 24, holdMinutes: 2 };
 
-export const lastBookableDate = () => manilaDay(BOOKING_WINDOW_DAYS);
+export const rulesReady = (async () => {
+    try {
+        const { data } = await sb.rpc('get_public_settings');
+        if (data) {
+            if (Number.isInteger(data.window_days)) RULES.windowDays = data.window_days;
+            if (Number.isInteger(data.cutoff_hours)) RULES.cutoffHours = data.cutoff_hours;
+            if (Number.isInteger(data.hold_minutes)) RULES.holdMinutes = data.hold_minutes;
+        }
+    } catch (e) {
+        /* an older database without the RPC: the defaults above stay in force */
+    }
+})();
+
+/* Customers can only book (and rent equipment for pick-up) up to 4 weeks ahead. */
+export const lastBookableDate = () => manilaDay(RULES.windowDays);
 
 /* Slots held (not booked) by someone else right now. */
 export const heldSlots = (studioIdx, dateISO) => new Set(HELD[STUDIOS[studioIdx].dbId + '|' + dateISO] || []);
@@ -117,3 +134,6 @@ export function takenSlots(studioIdx, dateISO, ignoreRef) {
     }
     return taken;
 }
+
+
+

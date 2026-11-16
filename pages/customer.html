@@ -412,9 +412,10 @@
               <div class="lk-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
               <span class="lk-ico"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9a2 2 0 0 0 0 6v3a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-3a2 2 0 0 1 0-6V6a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1z"/><path d="M14 5v3M14 11v2M14 16v3"/></svg></span>
               <h2>Find your booking</h2>
-              <p>No account needed. Enter the reference code from your confirmation to see your session details.</p>
+              <p>No account needed. Enter the reference code and the phone number from your confirmation to see your session details.</p>
               <ul class="lk-tips">
                 <li>Codes look like <b>TOD-9F3A21C7</b></li>
+                <li>Use the mobile number you gave when booking</li>
                 <li>Changes and cancellations close 24 hours before</li>
               </ul>
             </div>
@@ -424,6 +425,11 @@
                 <div class="lk-field">
                   <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
                   <input id="gb-ref" placeholder="e.g. TOD-9F3A21C7" autocomplete="off" required>
+                </div>
+                <label for="gb-ph">Phone number</label>
+                <div class="lk-field">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                  <input id="gb-ph" type="tel" data-phone placeholder="e.g. 0917 123 4567" autocomplete="tel" required>
                 </div>
                 <button class="btn gold full" type="submit">Find booking</button>
               </form>
@@ -435,7 +441,7 @@
           <aside class="lk-side" aria-label="How it works">
             <h3 class="lk-side-h">How it works</h3>
             <ol>
-            <li><b>1</b><div><h3>Enter your code</h3><p>It is on your booking confirmation and starts with TOD-.</p></div></li>
+            <li><b>1</b><div><h3>Enter your code and number</h3><p>Your code is on the booking confirmation and starts with TOD-. Use the mobile number you gave when booking.</p></div></li>
             <li><b>2</b><div><h3>Check the details</h3><p>Studio, date, time, add-ons and what is left to pay.</p></div></li>
             <li><b>3</b><div><h3>Show up and play</h3><p>Pay any balance at the studio when you arrive.</p></div></li>
             </ol>
@@ -462,10 +468,11 @@
               <div class="lk-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
               <span class="lk-ico"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></span>
               <h2>Find your rental</h2>
-              <p>No account needed. Enter your reference code to see your gear, return time and status.</p>
+              <p>No account needed. Enter your reference code and the phone number you used to see your gear, return time and status.</p>
               <ul class="lk-tips">
                 <li>Outside rentals use an <b>OUT-</b> code, like OUT-5B07E1AA</li>
                 <li>Add-ons use your studio booking code</li>
+                <li>Use the mobile number you gave with the order</li>
               </ul>
             </div>
             <div class="lk-main">
@@ -474,6 +481,11 @@
                 <div class="lk-field">
                   <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
                   <input id="gr-ref" placeholder="e.g. OUT-5B07E1AA" autocomplete="off" required>
+                </div>
+                <label for="gr-ph">Phone number</label>
+                <div class="lk-field">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                  <input id="gr-ph" type="tel" data-phone placeholder="e.g. 0917 123 4567" autocomplete="tel" required>
                 </div>
                 <button class="btn gold full" type="submit">Find rental</button>
               </form>
@@ -661,3 +673,5 @@
   <script src="../js/shared/rollup.js" defer></script>
 </body>
 </html>
+
+

@@ -5,7 +5,7 @@
 
 import { state } from './state.js';
 import { sb } from '../config/supabaseClient.js';
-import { RN_STATUS, loadMyRentals } from './data.js';
+import { BK_STATUS, RN_STATUS, loadMyRentals } from './data.js';
 import { PHOTO_BUCKET } from '../shared/inspectionPhoto.js';
 import { normRef, notFound, startsAt } from './myBookings.js';
 import { fmtDT } from './rent.js';
@@ -38,12 +38,21 @@ export function applyAccessMode() {
     $('#rt-tabs').hidden = !member;
 }
 
+/* Phone as typed: digits only (spaces and dashes are dropped). */
+const phoneDigits = el => String(el.value).replace(/\D/g, '');
+
+const PHONE_HINT = 'Enter the 11-digit mobile number you used (e.g. 0917 123 4567).';
+
 export function initRentalLookup() {
     $('#gr-form').addEventListener('submit', async e => {
         e.preventDefault();
-        const ref = normRef($('#gr-ref').value), box = $('#gr-res');
+        const ref = normRef($('#gr-ref').value), phone = phoneDigits($('#gr-ph')), box = $('#gr-res');
         box.hidden = false;
-        const { data: list, error } = await sb.rpc('lookup_rental', { p_ref: ref });
+        if (!/^09\d{9}$/.test(phone)) {
+            box.innerHTML = `<p class="mut">${PHONE_HINT}</p>`;
+            return;
+        }
+        const { data: list, error } = await sb.rpc('lookup_rental', { p_ref: ref, p_phone: phone });
         if (error || !list || !list.length) {
             box.innerHTML = notFound(ref, 'rental');
             return;
@@ -76,6 +85,45 @@ export function initRentalLookup() {
                 ],
                 note: whyRejected(order.status, order.rejected_reason)
             })))}</div>`;
+    });
+}
+
+const timeAt = ts => {
+    const p = manilaParts(new Date(ts)), h = p.hour % 12 || 12;
+    return `${h}:${String(p.minute).padStart(2, '0')} ${p.hour < 12 ? 'AM' : 'PM'}`;
+};
+
+/* A guest's booking looked up by reference code + the phone number used when booking (QA fix B-01:
+   the reference alone is guessable, so the database requires the phone too). */
+export function initBookingLookup() {
+    $('#gb-form').addEventListener('submit', async e => {
+        e.preventDefault();
+        const ref = normRef($('#gb-ref').value), phone = phoneDigits($('#gb-ph')), box = $('#gb-res');
+        box.hidden = false;
+        if (!/^09\d{9}$/.test(phone)) {
+            box.innerHTML = `<p class="mut">${PHONE_HINT}</p>`;
+            return;
+        }
+        const { data, error } = await sb.rpc('lookup_booking', { p_ref: ref, p_phone: phone });
+        if (error || !data) {
+            box.innerHTML = '<p class="mut">No booking found for that reference and phone number. Check your confirmation receipt, or email the studio.</p>';
+            return;
+        }
+        const addons = data.addons || [];
+        box.innerHTML = `<div class="tw" style="margin-top:8px">${tableNotes(['Reference', 'Studio', 'Date & time', 'Status', 'Add-ons'],
+            [{
+                cells: [
+                    `<span class="ref-static">${esc(data.booking_ref)}</span>`,
+                    esc(data.studio),
+                    data.start_at ? `${shortDate(manilaParts(data.start_at).date)} · ${timeAt(data.start_at)} to ${timeAt(data.end_at)}` : '',
+                    badge(BK_STATUS[data.status] || data.status),
+                    addons.length ? `<span class="itm">${addons.map(x => `${esc(x.equipment)} x${x.quantity}`).join('<br>')}</span>` : '—'
+                ],
+                note: whyRejected(data.status, data.rejected_reason)
+            }])}
+            <p class="mut" style="margin:8px 0 0">${data.balance_due > 0
+                ? `Balance to pay at the studio: <b>${peso(data.balance_due)}</b>`
+                : 'Nothing left to pay at the studio.'}</p></div>`;
     });
 }
 
@@ -938,3 +986,5 @@ export function initMyRentals() {
     $('#myrent').addEventListener('click', onClick);
     $('#mybk').addEventListener('click', onClick);
 }
+
+
