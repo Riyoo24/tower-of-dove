@@ -280,6 +280,7 @@ export async function loadMyRentals() {
                 latePendingRef: r.late_fee_pending_reference || '',  // the customer sent GCash, staff are checking it
                 lateReject: r.late_fee_reject_reason || '',
                 atPickup: Number(r.balance_paid_amount) || 0,   // balance staff collected at pick-up
+                owes: Number(r.balance_due) || 0,   // what is still to pay for this order (also equipment added during a session and paid after it)
                 returnedAt: r.line_returned_at,
                 status: RN_STATUS[r.status] || r.status,
                 created: r.created_at,

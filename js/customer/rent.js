@@ -10,7 +10,7 @@ import { loadMyBookings, loadMyRentals } from './data.js';
 import { normRef } from './myBookings.js';
 import { blockMessage, isBlocked } from './damageBlock.js';
 import { askConfirm, showIdViewer, showStockAlert, showSuccess } from './ui.js';
-import { PAY_DOWN, PAY_FULL, dueNow, onPayOption, optName, payOptionHtml, readPayOption } from '../shared/payOption.js';
+import { PAY_DOWN, PAY_FULL, PAY_LATER, dueNow, onPayOption, optName, payOptionHtml, readPayOption } from '../shared/payOption.js';
 import { allocationMessage, clearCart, qtyIn, remainingFor, setQty, stockOf, trimCartToStock } from './cart.js';
 import { clearSavedCart, saveCart, saveRentMode } from './cartStore.js';
 import { BOOKINGS, firstBookableDate, isPastSlot, lastBookableDate } from '../shared/availability.js';
@@ -105,6 +105,12 @@ function rentalMoney() {
 function renderPayTexts() {
     const m = rentalMoney(), full = m.opt === 'full';
     const kind = full ? 'full payment' : 'down payment';
+    // paying after the session (equipment added to a running session): no GCash QR, screenshot or reference is needed now
+    const payLater = state.rentMode === 'addon' && m.opt === PAY_LATER;
+    ['#apay-s2', '#apay-s3'].forEach(sel => {
+        if ($(sel))
+            $(sel).hidden = payLater;
+    });
     [['oq', 'og', 'rt'], ['aq', 'ag', 'ao']].forEach(([q, g]) => {
         if ($(`#${q}-amt`))
             $(`#${q}-amt`).textContent = peso(m.down);
@@ -124,14 +130,14 @@ function renderSummary() {
         $('#co-foot-due').hidden = true;
         return;
     }
-    const m = rentalMoney(), full = m.opt === 'full', out = state.rentMode === 'out';
+    const m = rentalMoney(), full = m.opt === 'full', later = m.opt === PAY_LATER, out = state.rentMode === 'out';
     // price breakdown (outside rentals only: base 8 hours + extra hours)
     const rows = (out ? `<div><span>Rental (first 8 hours)</span><span>${peso(m.base)}</span></div>` : '') +
         (m.extraHrs ? `<div><span>Extra hours (${m.extraHrs} x ${peso(m.base / 8)})</span><span>${peso(m.extra)}</span></div>` : '');
     box.innerHTML = rows;
     box.hidden = !rows;
     // what is paid now, and what is left (shown under the total)
-    const dueLbl = full ? 'Pay now (full payment)' : 'Pay now (50% down payment)';
+    const dueLbl = later ? 'Pay now' : full ? 'Pay now (full payment)' : 'Pay now (50% down payment)';
     if (!due.querySelector('#co-due-amt'))   // built once, so the amounts keep the same elements and can roll
         due.innerHTML =
             '<div class="co-due-main"><span id="co-due-lbl"></span><b id="co-due-amt"></b></div>' +
@@ -139,10 +145,10 @@ function renderSummary() {
     $('#co-due-lbl').textContent = dueLbl;
     $('#co-due-amt').textContent = peso(m.down);
     $('#co-due-rest').hidden = full;
-    $('#co-due-rl').textContent = `Balance to pay ${out ? 'at pick-up' : 'at the studio'}`;
+    $('#co-due-rl').textContent = later ? 'Balance to pay at the studio when your session ends' : `Balance to pay ${out ? 'at pick-up' : 'at the studio'}`;
     $('#co-due-bal').textContent = peso(m.balance);
     due.hidden = false;
-    $('#co-foot-lbl').textContent = full ? 'Pay now' : 'Pay now (50%)';
+    $('#co-foot-lbl').textContent = full || later ? 'Pay now' : 'Pay now (50%)';
     $('#co-foot-amt').textContent = peso(m.down);
     $('#co-foot-due').hidden = false;
 }
@@ -364,7 +370,7 @@ async function findGuestBooking() {
         info.textContent = `${data.booking_ref} is ${data.status.toLowerCase()}, so equipment can't be added to it.`;
     } else {
         const a = manilaParts(data.start_at), z = manilaParts(data.end_at);
-        attachBooking = { ref: data.booking_ref, studio: data.studio, startAt: data.start_at, endAt: data.end_at, started: data.status === 'In Progress' || new Date(data.start_at) <= new Date() };
+        attachBooking = { ref: data.booking_ref, studio: data.studio, startAt: data.start_at, endAt: data.end_at, started: data.status === 'In Progress' || new Date(data.start_at) <= new Date(), running: data.status === 'In Progress' };
         info.className = 'ok-text';
         info.textContent = `Found ${data.booking_ref}: ${data.studio}, ${longDate(a.date)}, ${hourLabel(a.hour)} to ${hourLabel(z.hour)}. Current total ${peso(+(data.grand_total ?? data.total))}.`;
     }
@@ -393,7 +399,7 @@ export function renderRentMode() {
     $('#apay').hidden = state.rentMode !== 'addon';
     $('#opay-wrap').hidden = state.rentMode !== 'out' || outBlocked();
     $('#rmh').textContent = state.rentMode === 'addon'
-        ? 'Equipment for the studio session you booked. Pay 50% now and the rest at the studio, or pay in full. Once your session has started, equipment is paid in full.'
+        ? 'Equipment for the studio session you booked. Pay 50% now and the rest at the studio, or pay in full. Once your session is running, you can also pay for it after your session.'
         : 'Equipment you take out of the studio, for registered customers. The price covers 8 hours. Pay 50% now and the rest at pick-up, or pay in full. You get an OUT reference.';
     $$('#rm button, #rm-top button').forEach(b => {
         const on = b.dataset.m === state.rentMode;
@@ -561,10 +567,11 @@ export async function refreshWindowStock(force = false) {
         say('Availability changed, so we adjusted your list to what is still free for your hours.');
 }
 
-/* Equipment added to a session that has already started is paid in full (the database enforces it too, file 50):
-   a 50% balance would have to be collected by staff in the middle of the session. Before the session starts the
-   customer still picks 50% or 100%. */
-let addonFullOnly = null;
+/* Equipment added to a session that has already started (but is not running yet) is paid in full (the database enforces it too, file 50):
+   a 50% balance would have to be collected by staff before the session starts. Before the session starts the customer still picks 50% or 100%.
+   Equipment added to a session that is RUNNING (status Active) can be paid after the session (file 90): nothing is paid now, the price is
+   added to the booking's balance and staff collect it at the end, like the extra hours of an extension. Full payment stays possible. */
+let addonPayMode = null;
 
 function selectedBookingStarted() {
     if (isMember()) {
@@ -574,12 +581,21 @@ function selectedBookingStarted() {
     return !!(attachBooking && attachBooking.started);
 }
 
+function selectedBookingRunning() {
+    if (isMember()) {
+        const b = BOOKINGS.find(x => x.ref === $('#lb').value);
+        return !!b && b.status === 'Active';
+    }
+    return !!(attachBooking && attachBooking.running);
+}
+
 export function syncAddonPayOption() {
-    const full = selectedBookingStarted();
-    if (full === addonFullOnly)
+    const mode = selectedBookingRunning() ? 'later' : selectedBookingStarted() ? 'full' : 'down';
+    if (mode === addonPayMode)
         return;   // nothing changed: keep what the customer picked
-    addonFullOnly = full;
-    $('#apay-opt').innerHTML = payOptionHtml('ao', 'at the studio', full ? PAY_FULL : PAY_DOWN, full);
+    addonPayMode = mode;
+    $('#apay-opt').innerHTML = mode === 'later' ? payOptionHtml('ao', 'at the studio', PAY_LATER, false, true)
+        : payOptionHtml('ao', 'at the studio', mode === 'full' ? PAY_FULL : PAY_DOWN, mode === 'full');
     onPayOption('ao', renderCart);
     renderCart();
 }
@@ -1041,34 +1057,50 @@ async function requestRental() {
             }).join(', ');
             const payOpt = readPayOption('ao'), agref = $('#ag').value.replace(/\s/g, '');
             if (!payOpt)
-                return say('Choose 50% Downpayment or Full Payment.');
-            if (!runRules(['addShot', 'addRef']))
+                return say('Choose how you want to pay.');
+            const payLater = payOpt === PAY_LATER;
+            if (!payLater && !runRules(['addShot', 'addRef']))
                 return;   // the wrong fields are marked under themselves
             const money = rentalMoney();
             const yes = await askConfirm({
                 title: 'Add this equipment to your studio booking?',
-                message: `${list} will be added to booking ${ref}. The cost is added to that booking's total. You are paying ${peso(money.down)} now (${optName(payOpt).toLowerCase()})${payOpt === 'full' ? '.' : `, and ${peso(money.balance)} at the studio.`}`,
+                message: payLater
+                    ? `${list} will be added to your running session ${ref} and handed over right away. You pay nothing now. ${peso(money.total)} is added to your balance, which you pay at the studio when your session ends.`
+                    : `${list} will be added to booking ${ref}. The cost is added to that booking's total. You are paying ${peso(money.down)} now (${optName(payOpt).toLowerCase()})${payOpt === 'full' ? '.' : `, and ${peso(money.balance)} at the studio.`}`,
                 ok: 'Yes, add to my booking',
                 cancel: 'Not yet'
             });
             if (!yes)
                 return;
             btnBusy(btn, 'Sending…');
-            const aup = await uploadGcashProof(proofs.ag.file(), agref);
-            if (aup.error)
-                return say('Could not upload your GCash screenshot: ' + aup.error.message);
-            const { data: ares, error } = await sb.rpc('request_addon_rental', {
-                p_booking_ref: ref,
-                p_items: items,
-                p_pay_option: payOpt,
-                p_gcash_reference: agref,
-                p_hold_token: HOLD_TOKEN
-            });
+            let ares, error;
+            if (payLater) {
+                // nothing is paid now: the price becomes part of the booking's balance (supabase/90_addon_balance_in_session.sql)
+                ({ data: ares, error } = await sb.rpc('request_addon_rental_later', {
+                    p_booking_ref: ref,
+                    p_items: items,
+                    p_hold_token: HOLD_TOKEN
+                }));
+                if (error && /request_addon_rental_later|schema cache|does not exist|could not find/i.test(error.message || ''))
+                    error = { message: 'Paying after the session is not set up yet. Please choose Full Payment, or ask staff to record the equipment.' };
+            }
+            else {
+                const aup = await uploadGcashProof(proofs.ag.file(), agref);
+                if (aup.error)
+                    return say('Could not upload your GCash screenshot: ' + aup.error.message);
+                ({ data: ares, error } = await sb.rpc('request_addon_rental', {
+                    p_booking_ref: ref,
+                    p_items: items,
+                    p_pay_option: payOpt,
+                    p_gcash_reference: agref,
+                    p_hold_token: HOLD_TOKEN
+                }));
+            }
             if (error)
                 return rentalFail(error);
             const arow = (Array.isArray(ares) ? ares[0] : ares) || {};
-            const afull = (arow.pay_option || payOpt) === 'full';
-            const apaid = Number(arow.down_payment) || money.down, atotal = Number(arow.total_amount) || money.total;
+            const afull = !payLater && (arow.pay_option || payOpt) === 'full';
+            const apaid = payLater ? 0 : Number(arow.down_payment) || money.down, atotal = Number(arow.total_amount) || money.total;
             const added = items.map(x => {
                 const e = EQUIPMENT.find(y => y.id === x.equipment_id);
                 return ['Added', `${e.name} x${x.quantity}`];
@@ -1078,6 +1110,7 @@ async function requestRental() {
             clearSavedCart();   // wipe persisted cart — rental was submitted successfully
             proofs.ag.reset();
             $('#ag').value = '';
+            addonPayMode = null;   // draw the payment choices again for the next booking
             renderCart();
             renderEquipment();
             await loadMyBookings();
@@ -1091,6 +1124,24 @@ async function requestRental() {
                 $('#lb-info').textContent = 'Enter the reference code from your booking confirmation. The equipment is added to that booking and its total is updated.';
             }
             $('#rcdlg').close();
+            if (payLater) {
+                showSuccess({
+                    title: 'Equipment added to your session!',
+                    label: 'Booking reference code',
+                    ref,
+                    lines: [
+                        ...added,
+                        ['Equipment total', peso(atotal)],
+                        ['Payment option', optName(PAY_LATER)],
+                        ['Paid now', peso(0)],
+                        ['Balance at the studio', peso(atotal)],
+                        ...(bk ? [['Booking total now', peso(+(bk.grand_total ?? bk.total))]] : [])
+                    ],
+                    shot: 'Show this to our staff when you collect the equipment.',
+                    note: 'The equipment is yours to use now. Its price is added to your balance, which you pay at the studio (Cash or GCash) when your session ends.'
+                });
+                return;
+            }
             showSuccess({
                 title: 'Equipment added to your booking!',
                 label: 'Booking reference code',

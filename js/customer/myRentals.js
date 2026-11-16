@@ -328,6 +328,8 @@ function calculateRentalCosts(order) {
         downPayment: firstLine.down,
         paidAtPickup: firstLine.atPickup || 0,
         paidInFull: firstLine.down > 0 && firstLine.down >= totalPrice - 0.01,   // the customer chose Full Payment (100%)
+        // equipment added to a running session and paid after it: no payment was made online, the whole price is a balance (file 90)
+        payAfterSession: firstLine.type === 'addon' && firstLine.down <= 0 && ((firstLine.owes || 0) > 0.005 || (firstLine.atPickup || 0) > 0),
         balanceAtPickup: Math.max(0, totalPrice - firstLine.down - (firstLine.atPickup || 0))
     };
 }
@@ -369,6 +371,12 @@ function buildRentalReceiptLines(order, costs) {
         if (costs.paidAtPickup > 0)
             receiptLines.push(['Balance paid at pick-up', peso(costs.paidAtPickup)]);
         receiptLines.push([isOutsideRental ? 'Balance at pick-up' : 'Balance at the studio', costs.paidInFull ? 'Paid in full' : peso(costs.balanceAtPickup)]);
+    }
+    if (costs.payAfterSession) {
+        receiptLines.push(['Payment option', 'Pay after the session']);
+        if (costs.paidAtPickup > 0)
+            receiptLines.push(['Paid at the studio', peso(costs.paidAtPickup)]);
+        receiptLines.push(['Balance at the studio', costs.balanceAtPickup > 0.005 ? `${peso(costs.balanceAtPickup)}, paid when your session ends` : 'Paid in full']);
     }
     if (isOutsideRental) {
         if (costs.lateFee > 0)

@@ -204,7 +204,14 @@
                                         <label>Items in this rental</label>
                                         <ul class="list" id="or-cart"></ul>
                                     </div>
-                                    <div>
+                                    <div id="or-lw" hidden>
+                                        <label for="or-lt">When is it paid?</label>
+                                        <select id="or-lt">
+                                            <option value="now">Paid now</option>
+                                            <option value="later">After the session (added to the balance)</option>
+                                        </select>
+                                    </div>
+                                    <div id="or-pmw">
                                         <label for="or-pm">Payment</label>
                                         <select id="or-pm">
                                             <option>Cash</option>

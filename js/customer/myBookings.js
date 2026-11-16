@@ -23,7 +23,7 @@ import { closeActionMenu, openActionMenu } from '../shared/actionMenu.js';
 import { BOOKINGS, firstBookableDate, isPastSlot, lastBookableDate, loadBusy, takenSlots } from '../shared/availability.js';
 import { HOLD_TOKEN, holdRescheduleSlots, releaseHold } from '../shared/holds.js';
 import { CUSTOMER_HOLD_TTL, CUSTOMER_IDLE_TTL, holdCountdown } from '../shared/holdTimer.js';
-import { PAY_DOWN, dueNow, onPayOption, optName, payOptionHtml, readPayOption } from '../shared/payOption.js';
+import { PAY_DOWN, PAY_LATER, dueNow, onPayOption, optName, payOptionHtml, readPayOption } from '../shared/payOption.js';
 import { STUDIOS, gcashQrUrl, studioIndex } from '../shared/catalog.js';
 import { gcashProofHtml, initGcashProof, uploadGcashProof } from '../shared/gcashProof.js';
 import { isMember } from '../shared/session.js';
@@ -182,7 +182,8 @@ function showDetails(b) {
     // a booking paid in full at the studio (no down payment): equipment added later with a 50% payment can still owe a balance.
     // Only add-ons whose payment staff verified (Approved / In Use) count; the database uses the same rule (booking_balance_due).
     const owedPer = {};
-    state.RENTALS.filter(r => r.type === 'addon' && r.ref === b.ref && r.down > 0 && ['Approved', 'Active'].includes(r.rawStatus))
+    // (NEW, file 90: equipment added to a running session and paid after it has no down payment but owes its whole price)
+    state.RENTALS.filter(r => r.type === 'addon' && r.ref === b.ref && (r.down > 0 || r.owes > 0.005) && ['Approved', 'Active'].includes(r.rawStatus))
         .forEach(r => {
             owedPer[r.rentalRef] = owedPer[r.rentalRef] || { total: 0, paid: r.down + (r.atPickup || 0) };
             owedPer[r.rentalRef].total += r.unit * r.qty;
@@ -199,7 +200,7 @@ function showDetails(b) {
         ...(hasDown ? [
             ['Payment option', optName(bookFull ? 'full' : 'down')],
             ...(baseDown > 0 ? [[paidFull ? 'Paid before the extension' : (bookFull ? 'Full payment' : 'Down payment (50%)'), `${peso(baseDown)}, ${b.payment}`]] : []),
-            ...okExt.map(x => [x.opt === 'full' ? 'Extension full payment' : 'Extension down payment (50%)', `${peso(x.down)}, Verified`]),
+            ...okExt.filter(x => x.down > 0).map(x => [x.opt === 'full' ? 'Extension full payment' : 'Extension down payment (50%)', `${peso(x.down)}, Verified`]),
             ...(addPaid > 0 ? [['Equipment added later, paid', peso(addPaid)]] : []),
             ...(atStudio > 0 ? [['Balance paid at the studio', peso(atStudio)]] : []),
             ['Balance at the studio', balance > 0.005 ? peso(balance) : 'Paid in full'],
@@ -324,16 +325,16 @@ async function openExtend(b) {
             <h3 class="co-h">Payment</h3>
             <div class="pay-step">
               <p class="step-t"><span class="step-n" aria-hidden="true">1</span>Choose how much to pay now</p>
-              ${payOptionHtml('ex', 'at the studio')}
+              ${payOptionHtml('ex', 'at the studio', PAY_DOWN, false, false, true)}
             </div>
-            <div class="pay-step">
+            <div class="pay-step" id="ex-s2">
               <p class="step-t"><span class="step-n" aria-hidden="true">2</span>Scan and pay with GCash</p>
               <div class="gq">
                 <img id="ex-qr" alt="GCash QR code to scan" hidden>
                 <p class="mut" id="ex-qn">Scan this QR code with GCash and pay the <span class="ex-kind">down payment</span> of <b class="ex-qa"></b>. Then enter the reference number from your GCash receipt below.</p>
               </div>
             </div>
-            <div class="pay-step">
+            <div class="pay-step" id="ex-s3">
               <p class="step-t"><span class="step-n" aria-hidden="true">3</span>Confirm your payment</p>
               ${gcashProofHtml('ex')}
               <label for="ex-g" id="ex-gl">GCash reference number (down payment) <span class="req" aria-hidden="true">*</span></label>
@@ -401,18 +402,22 @@ async function openExtend(b) {
 
     const preview = () => {
         addonNote();
-        const h = +sel.value, cost = rate * h, opt = readPayOption('ex') || PAY_DOWN, dp = dueNow(cost, opt), full = opt === 'full';
+        const h = +sel.value, cost = rate * h, opt = readPayOption('ex') || PAY_DOWN, dp = dueNow(cost, opt), full = opt === 'full', later = opt === PAY_LATER;
+        $('#ex-s2').hidden = later;   // paying after the session: no GCash QR, screenshot or reference now
+        $('#ex-s3').hidden = later;
         $('#ex-end').textContent = endTime(b.start, b.hours + h);
         $('#ex-cost').textContent = peso(cost);
         $('#ex-tot').textContent = peso(rate * (b.hours + h));
         $('#ex-dp').textContent = peso(dp);
-        $('#ex-foot-lbl').textContent = full ? 'Pay now' : 'Pay now (50%)';
+        $('#ex-foot-lbl').textContent = full || later ? 'Pay now' : 'Pay now (50%)';
         $('#ex-foot-amt').textContent = peso(dp);
         $('#ex-bal').textContent = peso(cost - dp);
         $('#ex-balrow').hidden = full;
-        $('#ex-dpl').textContent = full ? 'Full payment due now (100%)' : 'Down payment due now (50%)';
+        $('#ex-dpl').textContent = later ? 'Due now' : full ? 'Full payment due now (100%)' : 'Down payment due now (50%)';
         $('#ex-gl').firstChild.textContent = `GCash reference number (${full ? 'full payment' : 'down payment'}) `;
-        $('#ex-agreetxt').innerHTML = full
+        $('#ex-agreetxt').innerHTML = later
+            ? 'I understand and agree that the <b>cost of the extra time is added to my balance</b>, which I pay at the studio when my session ends.'
+            : full
             ? 'I understand and agree that the <b>full payment is non-refundable</b>.'
             : 'I understand and agree that the <b>50% down payment is non-refundable</b>, and that I pay the <b>remaining balance at the studio</b>.';
         document.querySelectorAll('.ex-qa').forEach(n => {
@@ -466,7 +471,9 @@ async function openExtend(b) {
     }, { once: true });
 
     const proof = initGcashProof('ex', { ref: '#ex-g' });
-    const fieldRules = () => [
+    const fieldRules = () => readPayOption('ex') === PAY_LATER
+        ? [['#ex-terms', () => $('#ex-agree').checked ? '' : 'Please tick the box to confirm you understand.']]
+        : [
         ['#ex-ss', () => check.file(proof.file(), 'Attach a screenshot of your GCash payment.')],
         ['#ex-g', () => check.gcashRef($('#ex-g').value)],
         ['#ex-terms', () => $('#ex-agree').checked ? '' : 'Please tick the box to confirm you understand the no-refund policy.']
@@ -492,7 +499,7 @@ async function openExtend(b) {
         const h = +sel.value, cost = rate * h, dp = dueNow(cost, payOpt || PAY_DOWN), gcash = $('#ex-g').value.replace(/\s/g, '');
         err('');
         if (!payOpt)
-            return err('Choose 50% Downpayment or Full Payment.');
+            return err('Choose how you want to pay.');
         if (!applyChecks(fieldRules().map(([t, rule]) => [t, rule()])))
             return;   // the wrong fields are marked under themselves
         // the equipment added to this booking is not free for the extra hours: extend the booking only, without the add-on
@@ -506,6 +513,54 @@ async function openExtend(b) {
             });
             if (!okAddon)
                 return;
+        }
+        if (payOpt === PAY_LATER) {
+            const okLater = await askConfirm({
+                title: 'Extend and pay after your session?',
+                message: `${b.ref} will be extended by ${hrs(h)}, until ${endTime(b.start, b.hours + h)}, right away. You pay nothing now. ${peso(cost)} is added to your balance, which you pay at the studio when your session ends.`,
+                ok: 'Yes, extend now',
+                cancel: 'Not now'
+            });
+            if (!okLater)
+                return;
+            const exGo = $('#ex-go');
+            btnBusy(exGo, 'Extending…');
+            const { data: res, error: e } = await sb.rpc('customer_extend_pay_later', {
+                p_booking_ref: b.ref,
+                p_extra_hours: h,
+                p_token: token,
+                p_without_addons: noAddon
+            });
+            if (e) {
+                btnReset(exGo, false);
+                err(/customer_extend_pay_later|schema cache|could not find/i.test(e.message || '') ? 'Paying after the session is not set up yet. Please pay with GCash now.' : e.message);
+                hold();
+                return;
+            }
+            const row = (Array.isArray(res) ? res[0] : res) || {};
+            await btnSuccess(exGo, 'Done', { keep: true });
+            dlg.close();
+            await loadMyBookings();
+            await refreshBook();
+            showSuccess({
+                title: 'Your session was extended!',
+                label: 'Booking reference code',
+                ref: b.ref,
+                icon: 'receipt',
+                lines: [
+                    ['Studio', `Studio ${b.studio}`],
+                    ['Date', longDate(b.date)],
+                    ['Extension', `+${hrs(h)}, until ${endTime(b.start, b.hours + h)}`],
+                    ['Extension cost', peso(Number(row.extra_cost) || cost)],
+                    ['Payment option', optName(PAY_LATER)],
+                    ['Paid now', peso(0)],
+                    ['Balance at the studio', peso(Number(row.extra_cost) || cost)]
+                ],
+                shot: 'Keep it as proof of your extension.',
+                note: 'The extra hours are yours. Pay the balance at the studio (Cash or GCash) when your session ends.'
+                    + (row.without_addons ? ` Your add-on equipment is not included in the extra hours: return it when your current time ends (${endTime(b.start, b.hours)}).` : '')
+            });
+            return;
         }
         const yes = await askConfirm({
             title: 'Send your extension request?',

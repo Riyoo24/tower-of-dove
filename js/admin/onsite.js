@@ -627,8 +627,25 @@ const onsiteHours = () => {
     return h > 0 ? h : null;
 };
 
+/* Equipment for a session that is RUNNING (Active) can be paid after the session (supabase/90_addon_balance_in_session.sql):
+   nothing is received now, the price is added to the booking's balance and collected with "Collect balance & complete". */
+const orRunning = () => $('#or-m').value === 'a' && (BK.find(b => b.booking_ref === $('#or-b').value) || {}).status === 'In Progress';
+const orLater = () => orRunning() && $('#or-lt').value === 'later';
+
+function orLaterSync() {
+    const running = orRunning();
+    $('#or-lw').hidden = !running;
+    if (!running)
+        $('#or-lt').value = 'now';
+    const later = orLater();
+    $('#or-pmw').hidden = later;   // no payment method: nothing is received now
+    $('#or-gw').hidden = later || $('#or-pm').value !== 'GCash';
+    $('#or-cash').hidden = later || $('#or-pm').value !== 'Cash';
+}
+
 function orTot() {
     orHoldSoon();
+    orLaterSync();
     const m = $('#or-m').value;
     // outside: the price covers 8 hours (an earlier return costs the same), each extra hour adds price / 8
     const len = m === 'o' ? onsiteHours() : null, hrs = m === 'o' ? Math.max(8, Math.ceil(len || 8)) : 8;
@@ -649,10 +666,10 @@ function orTot() {
     if (!later)
         $('#or-po').value = 'full';
     const half = later && $('#or-po').value === 'down';
-    orDue = half ? Math.round(total * 50) / 100 : total;
+    orDue = orLater() ? 0 : half ? Math.round(total * 50) / 100 : total;
     if (orCash)
         orCash.sync();
-    $('#or-tot').textContent = half ? `${money(Math.round(total * 50) / 100)} now, ${money(total - Math.round(total * 50) / 100)} at pick-up (total ${money(total)})` : money(total);
+    $('#or-tot').textContent = orLater() ? `${money(0)} now, ${money(total)} added to the booking's balance (paid when the session ends)` : half ? `${money(Math.round(total * 50) / 100)} now, ${money(total - Math.round(total * 50) / 100)} at pick-up (total ${money(total)})` : money(total);
     return total;
 }
 
@@ -790,7 +807,7 @@ eqPrev.addEventListener('click', e => {
     changeQty(+b.dataset.id, +b.dataset.qstep);
 });
 
-['or-m', 'or-r', 'or-pm', 'or-po', 'or-sd', 'or-st', 'or-rt'].forEach(x => $('#' + x).addEventListener('change', () => {
+['or-m', 'or-r', 'or-pm', 'or-po', 'or-lt', 'or-sd', 'or-st', 'or-rt'].forEach(x => $('#' + x).addEventListener('change', () => {
     if (x === 'or-m')
         orCart = [];   // the items and prices differ between add-on and outside rent, so start the list again
     if (x === 'or-m' || x === 'or-pm')
@@ -802,6 +819,7 @@ eqPrev.addEventListener('click', e => {
         refreshOnsiteStock();
 }));
 $('#or-b').addEventListener('change', () => {
+    orTot();   // a running session offers "pay after the session"
     refreshOnsiteStock();
     orHoldSoon();   // a different booking = different hours
 });
@@ -822,8 +840,9 @@ $('#onr').onsubmit = async e => {
         if (!eq || x.quantity > availOf(eq))
             return er(`Only ${eq ? availOf(eq) : 0} of ${eq ? eq.name : 'that item'} available.`);
     }
+    const later = orLater();   // equipment for a running session, paid after it: nothing is received now
     // GCash: the payment screenshot and the reference number (13 digits) are required
-    if (pm === 'GCash') {
+    if (pm === 'GCash' && !later) {
         const sm = check.file(orProof.file(), 'Attach a screenshot of the GCash payment.');
         if (sm) {
             $('#or-ss').focus();
@@ -848,9 +867,10 @@ $('#onr').onsubmit = async e => {
         p_return_date: null,
         p_id_type: null,
         p_id_checked: false,
-        p_payment_method: pm,
-        p_gcash_reference: pm === 'GCash' ? g.replace(/\s/g, '') : null,
-        p_pay_option: 'full'
+        p_payment_method: later ? 'Cash' : pm,
+        p_gcash_reference: pm === 'GCash' && !later ? g.replace(/\s/g, '') : null,
+        p_pay_option: 'full',
+        p_pay_later: later
     };
     const email = m === 'a' ? '' : normalizeEmail($('#or-em').value);
     if (m !== 'a' && !email)
@@ -891,7 +911,7 @@ $('#onr').onsubmit = async e => {
         if (!$('#or-pow').hidden)
             args.p_pay_option = $('#or-po').value;   // 'down' only for a pick-up on a later day
     }
-    if (pm === 'Cash') {
+    if (pm === 'Cash' && !later) {
         const cm = orCash.problem();
         if (cm) {
             orCash.focus();
@@ -902,12 +922,14 @@ $('#onr').onsubmit = async e => {
         who = m === 'a' ? `for booking ${args.p_booking_ref}` : `for ${$('#or-n').value.trim()}, pick-up ${longDate($('#or-sd').value)} ${tlabel(+$('#or-st').value)}, return ${longDate($('#or-r').value)} ${tlabel(+$('#or-rt').value)}`;
     const yes = await askConfirm({
         title: 'Record this rental?',
-        message: `${what} ${who}. Received now: ${$('#or-tot').textContent}, paid by ${pm}${pm === 'Cash' ? ` (cash given ${peso(orCash.tendered())}, change ${peso(orCash.tendered() - orDue)})` : ''}.${email ? ` The receipt is emailed to ${email}.` : ''}`,
+        message: later
+            ? `${what} ${who}. Nothing is received now: ${$('#or-tot').textContent}. The equipment is marked In Use right away, and its price is collected with the booking's balance when the session is completed.`
+            : `${what} ${who}. Received now: ${$('#or-tot').textContent}, paid by ${pm}${pm === 'Cash' ? ` (cash given ${peso(orCash.tendered())}, change ${peso(orCash.tendered() - orDue)})` : ''}.${email ? ` The receipt is emailed to ${email}.` : ''}`,
         ok: 'Yes, record rental'
     });
     if (!yes)
         return;
-    if (pm === 'GCash') {
+    if (pm === 'GCash' && !later) {
         const up = await uploadGcashProof(orProof.file(), g.replace(/\s/g, ''));   // the screenshot goes first, filed under its reference number
         if (up.error)
             return er('Could not upload the GCash screenshot: ' + up.error.message);
@@ -917,7 +939,7 @@ $('#onr').onsubmit = async e => {
         return er('Could not record the rental. See the message above.');
     er('');
     const row = Array.isArray(r.data) ? r.data[0] : r.data;
-    const orGiven = pm === 'Cash' ? orCash.tendered() : null;
+    const orGiven = pm === 'Cash' && !later ? orCash.tendered() : null;
     orCart = [];
     orRelease();   // the rental is saved: free the held items
     await loadCatalog();
@@ -929,6 +951,10 @@ $('#onr').onsubmit = async e => {
     $('#or-sd').value = '';
     await refresh();
     // an add-on without a typed address uses the address saved with its onsite booking (if any)
+    if (later) {
+        $('#or-lt').value = 'now';
+        return toast(`Rental ${row && row.rental_ref ? row.rental_ref : ''} saved and In Use. ${money(row && row.total_amount ? num(row.total_amount) : 0)} was added to the booking's balance. Collect it with Collect balance & complete when the session ends.`);
+    }
     const sent = row && row.rental_ref && (email || m === 'a') ? await sendOnsiteReceipt('rental', row.rental_ref, email, orGiven) : false;
     toast(`Rental ${row && row.rental_ref ? row.rental_ref : ''} saved as Verified. It goes In Use when its start time arrives, or press Issue to start it earlier.${sent ? ' Receipt emailed.' : email ? ' The receipt email could not be sent.' : ''}`);
 };

@@ -571,7 +571,7 @@ ACT['bk-det'] = ref => {
     <dt>Time</dt><dd>${tOf(b.start_at)} to ${tOf(b.end_at)} (${pl(Math.round(num(b.hours)), 'hr')})</dd>
     ${checkInReady() ? `<dt>Arrived</dt><dd>${checkInOf(ref) ? `${esc(arrivalText(b))}${checkInOf(ref).by_name ? ` <span class="mut">(checked in by ${esc(checkInOf(ref).by_name)})</span>` : ''}` : '<span class="mut">Not checked in</span>'}</dd>` : ''}
     ${ad.length ? `<dt>Add-ons</dt><dd>${ad.map(l => esc(l.equipment_name) + ' x' + l.quantity + ' (' + money(num(l.unit_price_at_request) * l.quantity) + ')').join('<br>')}</dd>` : ''}
-    ${exts.map(x => `<dt>Extension</dt><dd>+${pl(x.extra_hours, 'hr')} (${money(x.extra_cost)}), ${payWord(x.payment_option)} ${money(x.down_payment)} ${badge(x.status === 'Approved' ? 'Verified' : 'Pending')}${x.status === 'Approved' ? ' <span class="mut">included in the total</span>' : ' <span class="mut">not in the total yet</span>'}</dd>`).join('')}
+    ${exts.map(x => !x.payment_id && x.status === 'Approved' ? `<dt>Extension</dt><dd>+${pl(x.extra_hours, 'hr')} (${money(x.extra_cost)}), pay after the session <span class="mut">included in the total, collected as balance</span></dd>` : `<dt>Extension</dt><dd>+${pl(x.extra_hours, 'hr')} (${money(x.extra_cost)}), ${payWord(x.payment_option)} ${money(x.down_payment)} ${badge(x.status === 'Approved' ? 'Verified' : 'Pending')}${x.status === 'Approved' ? ' <span class="mut">included in the total</span>' : ' <span class="mut">not in the total yet</span>'}</dd>`).join('')}
     <dt>Source</dt><dd>${esc(b.source)}</dd></dl>
     <h3>Amount</h3>${amount}
     <h3>${down > 0 ? (col > 0 ? 'Fully paid' : full ? 'Full payment' : 'Down payment') : 'Payment'}</h3>${payBlock(pay, down > 0 ? down : grand)}

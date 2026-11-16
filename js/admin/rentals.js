@@ -221,8 +221,11 @@ const rnBadge = g => {
         if (fee > 0)
             return badge(s) + ` <span class="b balancedue" title="Late fee so far: price / 8 per hour, per item. It is worked out again when you press Actions > Process return, and collected there.">Late fee ${money(fee)}</span>` + offerChip;
     }
+    // equipment added to a running session and paid after it (supabase/90): in use now, its price is collected with the booking's balance at the end
+    const afterSession = g.type === 'Add-on' && g.status === 'Active' && num(g.lines[0].down_payment) <= 0 && num(g.lines[0].balance_due) > 0.005
+        ? ` <span class="b balancedue" title="Added during the session and paid after it. Collected with the booking's balance when you press Collect balance &amp; complete.">Balance ${money(num(g.lines[0].balance_due))}</span>` : '';
     if (s !== 'Verified')
-        return badge(s) + offerChip + tight;
+        return badge(s) + afterSession + offerChip + tight;
     const bal = rentalBalanceShown(g);
     // equipment ordered with the booking: its balance is the booking's, so say so on hover
     const withBooking = g.type === 'Add-on' && g.booking && num(g.lines[0].down_payment) <= 0;

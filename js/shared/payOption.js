@@ -9,20 +9,27 @@ import { downPayment } from './utils.js';
 
 export const PAY_DOWN = 'down';
 export const PAY_FULL = 'full';
+export const PAY_LATER = 'later';   // equipment added to a session that is running: nothing now, the price is paid at the studio when the session ends (file 90)
 
 /* amount to pay now for a total */
-export const dueNow = (total, opt) => opt === PAY_FULL ? Math.round(total * 100) / 100 : downPayment(total);
+export const dueNow = (total, opt) => opt === PAY_LATER ? 0 : opt === PAY_FULL ? Math.round(total * 100) / 100 : downPayment(total);
 
 /* words used on screens and receipts */
-export const optName = opt => opt === PAY_FULL ? 'Full payment (100%)' : '50% down payment';
-export const optShort = opt => opt === PAY_FULL ? 'Full payment' : 'Down payment (50%)';
+export const optName = opt => opt === PAY_LATER ? 'Pay after the session' : opt === PAY_FULL ? 'Full payment (100%)' : '50% down payment';
+export const optShort = opt => opt === PAY_LATER ? 'Pay after the session' : opt === PAY_FULL ? 'Full payment' : 'Down payment (50%)';
 
 /* The chooser. fullOnly = true shows only the full payment. `id` makes the radio group name unique (bk, rt, ao, ex). `rest` names where the balance is paid
-   ("at the studio" / "at pick-up"). */
-export function payOptionHtml(id, rest, selected = PAY_DOWN, fullOnly = false) {
+   ("at the studio" / "at pick-up"). allowLater = true (a session that is running) offers "Pay after the session" next to the full payment. */
+export function payOptionHtml(id, rest, selected = PAY_DOWN, fullOnly = false, allowLater = false, withLater = false) {
     const row = (v, title, text) =>
         `<label class="acct-opt"><input type="radio" name="${id}-opt" value="${v}"${selected === v ? ' checked' : ''}>` +
         `<span><b>${title}</b><small>${text}</small></span></label>`;
+    if (allowLater)   // equipment added while the session is running: pay nothing now (balance at the end) or pay everything now
+        return `<fieldset class="acct-choice" id="${id}-optbox">
+          <legend>Payment option <span class="req" aria-hidden="true">*</span></legend>
+          ${row(PAY_LATER, 'Pay after my session', `Nothing to pay now. The equipment is handed over right away and its price is added to your balance, which you pay ${rest} when your session ends.`)}
+          ${row(PAY_FULL, 'Full Payment (100%)', 'Pay everything now with GCash. Nothing is left to pay later.')}
+        </fieldset>`;
     if (fullOnly)   // e.g. equipment added after the studio session has started: no 50% option
         return `<fieldset class="acct-choice" id="${id}-optbox">
           <legend>Payment option <span class="req" aria-hidden="true">*</span></legend>
@@ -30,6 +37,7 @@ export function payOptionHtml(id, rest, selected = PAY_DOWN, fullOnly = false) {
         </fieldset>`;
     return `<fieldset class="acct-choice" id="${id}-optbox">
           <legend>Payment option <span class="req" aria-hidden="true">*</span></legend>
+          ${withLater ? row(PAY_LATER, 'Pay after my session', `Nothing to pay now. The extra time starts right away and its cost is added to your balance, which you pay ${rest} when your session ends.`) : ''}
           ${row(PAY_DOWN, '50% Downpayment', `Pay half now with GCash. The other half is paid ${rest}.`)}
           ${row(PAY_FULL, 'Full Payment (100%)', 'Pay everything now with GCash. Nothing is left to pay later.')}
         </fieldset>`;
