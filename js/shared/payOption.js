@@ -19,15 +19,16 @@ export const optName = opt => opt === PAY_LATER ? 'Pay after the session' : opt 
 export const optShort = opt => opt === PAY_LATER ? 'Pay after the session' : opt === PAY_FULL ? 'Full payment' : 'Down payment (50%)';
 
 /* The chooser. fullOnly = true shows only the full payment. `id` makes the radio group name unique (bk, rt, ao, ex). `rest` names where the balance is paid
-   ("at the studio" / "at pick-up"). allowLater = true (a session that is running) offers "Pay after the session" next to the full payment. */
-export function payOptionHtml(id, rest, selected = PAY_DOWN, fullOnly = false, allowLater = false, withLater = false) {
+   ("at the studio" / "at pick-up"). allowLater = true (a session that is running) offers "Pay after the session" next to the full payment, with no 50% option.
+   laterText (optional) replaces the sentence under "Pay after my session" in that mode (the extension window words it for extra time, not equipment). */
+export function payOptionHtml(id, rest, selected = PAY_DOWN, fullOnly = false, allowLater = false, withLater = false, laterText = '') {
     const row = (v, title, text) =>
         `<label class="acct-opt"><input type="radio" name="${id}-opt" value="${v}"${selected === v ? ' checked' : ''}>` +
         `<span><b>${title}</b><small>${text}</small></span></label>`;
     if (allowLater)   // equipment added while the session is running: pay nothing now (balance at the end) or pay everything now
         return `<fieldset class="acct-choice" id="${id}-optbox">
           <legend>Payment option <span class="req" aria-hidden="true">*</span></legend>
-          ${row(PAY_LATER, 'Pay after my session', `Nothing to pay now. The equipment is handed over right away and its price is added to your balance, which you pay ${rest} when your session ends.`)}
+          ${row(PAY_LATER, 'Pay after my session', laterText || `Nothing to pay now. The equipment is handed over right away and its price is added to your balance, which you pay ${rest} when your session ends.`)}
           ${row(PAY_FULL, 'Full Payment (100%)', 'Pay everything now with GCash. Nothing is left to pay later.')}
         </fieldset>`;
     if (fullOnly)   // e.g. equipment added after the studio session has started: no 50% option

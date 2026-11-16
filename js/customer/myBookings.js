@@ -237,6 +237,9 @@ function showDetails(b) {
 }
 
 /* ---- Extend a verified booking (50% down payment, verified by staff) ----
+   While the session is ACTIVE (status Active / In Progress) there is no 50% down payment: the customer can only choose
+   "Pay after my session" (nothing now, the cost is added to the balance paid at the studio) or "Full Payment (100%)" with GCash.
+   The 50% option is still offered before the session starts (Confirmed). The database enforces the same rule (file 92).
    The database checks the hours after the current end time (next booking, someone holding them, 10:00 PM
    closing) and says how many extra hours are free. While this window is open those hours are HELD for 10 minutes
    (the server hold is renewed every minute), so nobody else can book or extend them.
@@ -281,6 +284,9 @@ async function openExtend(b) {
         return toast(error ? error.message : 'Could not check the schedule. Try again.');
     }
     const rate = +info.hourly_rate || 0, lo = info.min_hours, hi = info.max_hours;
+    // the session is running: no 50% down payment, only "Pay after my session" or "Full Payment (100%)"
+    const active = b.status === 'Active';
+    const defaultOpt = active ? PAY_LATER : PAY_DOWN;
     // extra hours the add-on equipment of this booking is free for (file 55); longer extensions are still possible, without the add-on
     const addonHi = info.addon_max_hours == null ? hi : info.addon_max_hours;
     const summary = `<dl class="dl"><dt>Studio</dt><dd>Studio ${esc(b.studio)}</dd><dt>Date</dt><dd>${longDate(b.date)}</dd>
@@ -313,7 +319,7 @@ async function openExtend(b) {
           <div class="co-sum bk-sum">
             <div class="tot"><span>Extra cost</span><span id="ex-cost"></span></div>
             <div class="co-due">
-              <div class="co-due-main"><span id="ex-dpl">Down payment due now (50%)</span><b id="ex-dp"></b></div>
+              <div class="co-due-main"><span id="ex-dpl">${active ? 'Due now' : 'Down payment due now (50%)'}</span><b id="ex-dp"></b></div>
               <div class="co-due-rest" id="ex-balrow"><span>Balance of the extension, paid at the studio</span><span id="ex-bal"></span></div>
             </div>
           </div>
@@ -325,7 +331,10 @@ async function openExtend(b) {
             <h3 class="co-h">Payment</h3>
             <div class="pay-step">
               <p class="step-t"><span class="step-n" aria-hidden="true">1</span>Choose how much to pay now</p>
-              ${payOptionHtml('ex', 'at the studio', PAY_DOWN, false, false, true)}
+              ${active
+                ? payOptionHtml('ex', 'at the studio', PAY_LATER, false, true, false,
+                    'Nothing to pay now. The extra time starts right away and its cost is added to your balance, which you pay at the studio when your session ends.')
+                : payOptionHtml('ex', 'at the studio', PAY_DOWN, false, false, true)}
             </div>
             <div class="pay-step" id="ex-s2">
               <p class="step-t"><span class="step-n" aria-hidden="true">2</span>Scan and pay with GCash</p>
@@ -346,13 +355,17 @@ async function openExtend(b) {
     </div>
     <label class="terms" id="ex-terms">
       <input type="checkbox" id="ex-agree">
-      <span id="ex-agreetxt">I understand and agree that the <b>50% down payment is non-refundable</b>, and that I pay the <b>remaining balance at the studio</b>.</span>
+      <span id="ex-agreetxt">${active
+            ? 'I understand and agree that the <b>cost of the extra time is added to my balance</b>, which I pay at the studio when my session ends.'
+            : 'I understand and agree that the <b>50% down payment is non-refundable</b>, and that I pay the <b>remaining balance at the studio</b>.'}</span>
     </label>
     <div class="alert" id="ex-e" role="alert" hidden></div>
-    <p class="hold">Staff verify your payment first. Your end time and total change only after it is verified. Until then the extra hours stay reserved for you.</p>
+    <p class="hold">${active
+            ? 'Pay after my session extends your time right away. With Full Payment, staff verify your payment first: your end time and total change only after it is verified, and until then the extra hours stay reserved for you.'
+            : 'Staff verify your payment first. Your end time and total change only after it is verified. Until then the extra hours stay reserved for you.'}</p>
     <div class="co-foot bk-foot">
       <div class="co-foot-due">
-        <span id="ex-foot-lbl">Pay now (50%)</span>
+        <span id="ex-foot-lbl">${active ? 'Pay now' : 'Pay now (50%)'}</span>
         <b id="ex-foot-amt"></b>
       </div>
       <button type="button" class="btn line" data-close>Cancel</button>
@@ -402,7 +415,7 @@ async function openExtend(b) {
 
     const preview = () => {
         addonNote();
-        const h = +sel.value, cost = rate * h, opt = readPayOption('ex') || PAY_DOWN, dp = dueNow(cost, opt), full = opt === 'full', later = opt === PAY_LATER;
+        const h = +sel.value, cost = rate * h, opt = readPayOption('ex') || defaultOpt, dp = dueNow(cost, opt), full = opt === 'full', later = opt === PAY_LATER;
         $('#ex-s2').hidden = later;   // paying after the session: no GCash QR, screenshot or reference now
         $('#ex-s3').hidden = later;
         $('#ex-end').textContent = endTime(b.start, b.hours + h);
@@ -496,10 +509,12 @@ async function openExtend(b) {
 
     $('#ex-go').addEventListener('click', async () => {
         const payOpt = readPayOption('ex');
-        const h = +sel.value, cost = rate * h, dp = dueNow(cost, payOpt || PAY_DOWN), gcash = $('#ex-g').value.replace(/\s/g, '');
+        const h = +sel.value, cost = rate * h, dp = dueNow(cost, payOpt || defaultOpt), gcash = $('#ex-g').value.replace(/\s/g, '');
         err('');
         if (!payOpt)
             return err('Choose how you want to pay.');
+        if (active && payOpt === PAY_DOWN)
+            return err('While your session is active, choose Pay after my session or Full Payment (100%).');
         if (!applyChecks(fieldRules().map(([t, rule]) => [t, rule()])))
             return;   // the wrong fields are marked under themselves
         // the equipment added to this booking is not free for the extra hours: extend the booking only, without the add-on

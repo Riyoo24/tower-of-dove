@@ -40,6 +40,10 @@ import { holdCountdown } from '../shared/holdTimer.js';
 import { SUPABASE_ANON_KEY, SUPABASE_URL, sb } from '../config/supabaseClient.js';
 import { $, badge, esc, longDate, pl, shortDate, toast } from '../shared/utils.js';
 import { btnBusy, btnReset, btnSuccess } from '../shared/btnState.js';
+import { gcashProofHtml, initGcashProof, uploadGcashProof } from '../shared/gcashProof.js';
+import { gcashQrUrl } from '../shared/catalog.js';
+import { check } from '../shared/fieldCheck.js';
+import { cashBox } from './cashBox.js';
 
 /* Row order in the Bookings table: Pending bookings first, then the other open ones, the soonest session on top inside each;
    finished ones (Completed, Cancelled, Rejected) after them, the most recent first. */
@@ -358,7 +362,11 @@ ACT['bk-cx'] = async ref => {
 /* ---- Extend a Confirmed or Active booking (the Studio sessions tab uses this same button) ----
    The database checks the schedule after the current end time (next booking, someone holding the slot,
    studio closed or 10:00 PM closing) and says how many extra hours are free. Cost = hourly rate x extra hours,
-   added to the bill. The customer's booking page shows the new end time and total on its own. */
+   added to the bill. The customer's booking page shows the new end time and total on its own.
+   A session that is RUNNING (Active) also asks "When is it paid?", like equipment added to a running session:
+   Full payment now (Cash or GCash, recorded as a verified payment) or After the session (added to the booking's balance,
+   collected with Collect balance & complete). Saved by staff_extend_session() (supabase/93_staff_extend_session_payment.sql).
+   A Confirmed booking is extended as before. */
 const hrs = h => `${h} hour${h > 1 ? 's' : ''}`;
 
 /* While the Extend window is open the extra hours are HELD on the server (2 minutes, renewed every minute).
@@ -413,6 +421,7 @@ ACT['bk-ext'] = async ref => {
         return;
     }
 
+    const active = b.status === 'In Progress';   // the session is running: ask when the extra time is paid
     const opts = Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
     showDlg(`<div class="row" style="margin-bottom:8px"><h2 style="margin:0">Extend ${esc(ref)}</h2><span class="mut" id="hold-left" hidden></span></div>${summary}
     ${info.message ? `<div class="alert" style="background:var(--warn-bg);color:var(--warn)">${esc(info.message)}</div>` : ''}
@@ -421,6 +430,25 @@ ACT['bk-ext'] = async ref => {
     <select id="ex-h">${opts.map(h => `<option value="${h}">+${hrs(h)} (${money(rate * h)})</option>`).join('')}</select>
     <dl class="dl" style="margin-top:10px"><dt>New end time</dt><dd id="ex-end"></dd><dt>Extra cost</dt><dd id="ex-cost"></dd><dt>New studio total</dt><dd id="ex-tot"></dd></dl>
     <p class="mut" id="ex-hold" style="margin:6px 0">Holding the time...</p>
+    ${active ? `<div id="ex-paybox">
+      <label for="ex-lt">When is it paid?</label>
+      <select id="ex-lt">
+        <option value="now">Full payment (paid now)</option>
+        <option value="later">After the session (added to the balance)</option>
+      </select>
+      <div id="ex-nowbox">
+        <label for="ex-pm">Payment</label>
+        <select id="ex-pm"><option>Cash</option><option>GCash</option></select>
+        <div id="ex-cash"></div>
+        <div id="ex-gw" hidden>
+          <div class="gq"><img id="xp-qr" alt="GCash QR code to scan" hidden><p class="mut" id="xp-qn">Ask the customer to scan this QR code with GCash and pay the extension cost shown above.</p></div>
+          ${gcashProofHtml('xp')}
+          <label for="xp-g">GCash reference number <span class="req" aria-hidden="true">*</span></label>
+          <input id="xp-g" data-gcash-ref inputmode="numeric" required aria-required="true" placeholder="13-digit reference" autocomplete="off">
+        </div>
+      </div>
+      <p class="mut" id="ex-laternote" style="margin:6px 0" hidden>Nothing is received now. The extra cost is added to the booking's balance and collected with Collect balance &amp; complete when the session ends.</p>
+    </div>` : ''}
     <div class="alert" id="ex-e" role="alert" hidden></div>
     <div class="acts"><button type="button" class="btn line" data-close>Cancel</button><button type="button" class="btn gold" id="ex-go" disabled>Extend session</button></div>`);
 
@@ -459,6 +487,35 @@ ACT['bk-ext'] = async ref => {
         $('#ex-hold').innerHTML = `<b>Held by Staff:</b> ${tOf(end)} to ${tOf(end + h * 36e5)} is reserved for you while this window is open. Customers and other staff see it as held.`;
     });
 
+    /* a running session: Full payment now (Cash or GCash) or After the session. Nothing is received for "after the session". */
+    const payLater = () => active && $('#ex-lt').value === 'later';
+    let exDue = 0, exCash = null, exProof = null;
+    if (active) {
+        exCash = cashBox($('#ex-cash'), () => exDue);
+        exProof = initGcashProof('xp', { ref: '#xp-g' });
+        const qr = $('#xp-qr');
+        qr.onload = () => {
+            qr.hidden = false;
+        };
+        qr.onerror = () => {
+            qr.hidden = true;
+            $('#xp-qn').textContent = 'The studio GCash QR code is not set yet (Settings). Ask the customer to pay to the studio\'s GCash account.';
+        };
+        qr.src = gcashQrUrl();
+    }
+    function paySync() {
+        if (!active)
+            return;
+        const later = payLater(), gcash = $('#ex-pm').value === 'GCash';
+        exDue = later ? 0 : rate * +sel.value;
+        $('#ex-nowbox').hidden = later;
+        $('#ex-laternote').hidden = !later;
+        $('#ex-gw').hidden = later || !gcash;
+        $('#ex-cash').hidden = later || gcash;
+        $('#ex-go').textContent = later ? 'Extend session' : 'Extend & record payment';
+        exCash.sync();
+    }
+
     const preview = () => {
         const h = +sel.value, box = $('#ex-addon');
         box.hidden = !(h > addonHi);
@@ -467,6 +524,7 @@ ACT['bk-ext'] = async ref => {
         $('#ex-end').textContent = tOf(end + h * 36e5);
         $('#ex-cost').textContent = money(rate * h);
         $('#ex-tot').textContent = money(num(b.total_amount) + rate * h);
+        paySync();
     };
 
     extToken = token;
@@ -499,6 +557,10 @@ ACT['bk-ext'] = async ref => {
         $('#ex-go').disabled = true;
         hold();
     });
+    if (active) {
+        $('#ex-lt').addEventListener('change', paySync);
+        $('#ex-pm').addEventListener('change', paySync);
+    }
     preview();
     hold();
 
@@ -515,6 +577,74 @@ ACT['bk-ext'] = async ref => {
             });
             if (!okAddon)
                 return;
+        }
+        if (active) {
+            const later = payLater(), pm = $('#ex-pm').value, cost = rate * h, gref = $('#xp-g').value.replace(/\s/g, '');
+            if (!later) {
+                if (pm === 'GCash') {
+                    const sm = check.file(exProof.file(), 'Attach a screenshot of the GCash payment.');
+                    if (sm) {
+                        $('#xp-ss').focus();
+                        return err(sm);
+                    }
+                    const gm = check.gcashRef(gref);
+                    if (gm) {
+                        $('#xp-g').focus();
+                        return err(gm);
+                    }
+                } else {
+                    const cm = exCash.problem();
+                    if (cm) {
+                        exCash.focus();
+                        return err(cm);
+                    }
+                }
+            }
+            const okPay = await askConfirm({
+                title: later ? 'Extend and collect after the session?' : 'Extend and record the payment?',
+                message: later
+                    ? `${ref} (${b.customer_name}, ${b.studio_name}) will be extended by ${hrs(h)}, until ${tOf(end + h * 36e5)}. Nothing is received now. ${money(cost)} is added to the booking's balance, collected with Collect balance & complete when the session ends.`
+                    : `${ref} (${b.customer_name}, ${b.studio_name}) will be extended by ${hrs(h)}, until ${tOf(end + h * 36e5)}. Full payment received now: ${money(cost)} by ${pm}${pm === 'Cash' ? ` (cash given ${money(exCash.tendered())}, change ${money(exCash.tendered() - cost)})` : ''}.`,
+                ok: later ? 'Yes, extend session' : 'Yes, extend and record payment'
+            });
+            if (!okPay)
+                return;
+            const exGo = $('#ex-go');
+            btnBusy(exGo, 'Extending…');
+            if (!later && pm === 'GCash') {
+                const up = await uploadGcashProof(exProof.file(), gref);   // the screenshot goes first, filed under its reference number
+                if (up.error) {
+                    btnReset(exGo, false);
+                    hold();
+                    return err('Could not upload the GCash screenshot: ' + up.error.message);
+                }
+            }
+            const { data, error } = await sb.rpc('staff_extend_session', {
+                p_booking_ref: ref,
+                p_extra_hours: h,
+                p_token: token,
+                p_without_addons: noAddon,
+                p_pay_later: later,
+                p_payment_method: later ? 'Cash' : pm,
+                p_gcash_reference: !later && pm === 'GCash' ? gref : null,
+                p_tendered: !later && pm === 'Cash' ? exCash.tendered() : null
+            });
+            if (error) {
+                btnReset(exGo, false);   // hold() below enables it again when the hours are still held
+                err(/staff_extend_session|schema cache|could not find/i.test(error.message || '')
+                    ? 'Extending with a payment choice is not set up yet. Run supabase/93_staff_extend_session_payment.sql first.'
+                    : error.message);
+                hold();
+                return;
+            }
+            await btnSuccess(exGo, 'Extended', { keep: true });
+            const row = (Array.isArray(data) ? data[0] : data) || {};
+            await refresh();
+            closeOverlays();
+            toast(`${ref} extended by ${hrs(h)} until ${tOf(row.new_end_at)}. ${later
+                ? `${money(row.extra_cost)} added to the balance, collected when the session ends.`
+                : `Full payment of ${money(row.extra_cost)} received (${pm}).`}${row.addon_dropped ? ` The add-on was not extended: collect the equipment back at ${tOf(end)}.` : ''}`);
+            return;
         }
         const yes = await askConfirm({
             title: 'Extend this session?',
@@ -580,4 +710,3 @@ ACT['bk-det'] = ref => {
     <div class="acts"><button class="btn line" data-close>Close</button></div></div>`);
     loadGcashShots(dlg);
 };
-
