@@ -103,7 +103,7 @@
         ['.hx-copy', hero, ''],
         ['.hx-card', card, ' sk-txt-card'],
         ['.sc-head > div:first-child', sc, ''],
-        ['.pghead > div', pg, ''],
+        ['.pghead > div:not(.mc-tabs)', pg, ''],
         ['.ct-head', ct, ' sk-txt-mid']
     ];
 

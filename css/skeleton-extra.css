@@ -279,13 +279,13 @@
    (:not(.sk-txt) keeps the grey placeholder bars out of these rules) */
 html.sk-wait :is(.hx-pill, .hx-copy > h1, .hx-copy > p, .hx-cta, .hx-card > :not(.sk-txt), .sc-head > div:first-child > :not(.sk-txt), .sc-arrows,
     .ct-head > :not(.sk-txt), .ct-group > h3, .ct-list > li:not(.sk), .ct-maptools, .ct-mapgate > *,
-    .pghead > div > :not(.sk-txt), .pg-chips, #mybk > :not(.sk), #myrent > :not(.sk)) {
+    .pghead > div:not(.mc-tabs) > :not(.sk-txt), .pg-chips, #mybk > :not(.sk), #myrent > :not(.sk)) {
     opacity: 0;
 }
 
 html.sk-play :is(.hx-pill, .hx-copy > h1, .hx-copy > p, .hx-cta, .hx-card > :not(.sk-txt), .sc-head > div:first-child, .sc-arrows, .slider-wrapper, .sc-foot,
     .ct-head > :not(.sk-txt), .ct-group > h3, .ct-list > li:not(.sk), .ct-maptools, .ct-mapgate > *,
-    .pghead > div > :not(.sk-txt), .pg-chips, #mybk:not(.sk-done) > :not(.sk), #myrent:not(.sk-done) > :not(.sk)) {
+    .pghead > div:not(.mc-tabs) > :not(.sk-txt), .pg-chips, #mybk:not(.sk-done) > :not(.sk), #myrent:not(.sk-done) > :not(.sk)) {
     animation: skTextIn .7s cubic-bezier(.2, .7, .2, 1) both;
     animation-delay: var(--sk-d, 0ms);
 }
@@ -323,9 +323,9 @@ html.sk-play .ct-mapgate > :nth-child(5) { --sk-d: 580ms; }
 
 /* Book a studio, Rent equipment, My bookings, My rental: page header, then the table.
    The studio and equipment cards are left alone: css/motion.css + js/shared/motion.js already reveal them. */
-html.sk-play .pghead > div > :nth-child(1) { --sk-d: 0ms; }
-html.sk-play .pghead > div > :nth-child(2) { --sk-d: 80ms; }
-html.sk-play .pghead > div > :nth-child(3) { --sk-d: 160ms; }
+html.sk-play .pghead > div:not(.mc-tabs) > :nth-child(1) { --sk-d: 0ms; }
+html.sk-play .pghead > div:not(.mc-tabs) > :nth-child(2) { --sk-d: 80ms; }
+html.sk-play .pghead > div:not(.mc-tabs) > :nth-child(3) { --sk-d: 160ms; }
 html.sk-play .pg-chips { --sk-d: 240ms; }
 html.sk-play #mybk:not(.sk-done) > :not(.sk),
 html.sk-play #myrent:not(.sk-done) > :not(.sk) { --sk-d: 280ms; }

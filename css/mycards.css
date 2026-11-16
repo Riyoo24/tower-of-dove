@@ -36,8 +36,20 @@
     cursor: pointer;
 }
 
-.mc-tab:hover {
-    background: var(--graph);
+/* hover only where a real pointer exists: on touch screens :hover sticks after a tap and kept the tab looking selected */
+.mc-tab {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+@media (hover: hover) {
+    .mc-tab:hover {
+        background: var(--graph);
+    }
+}
+
+.mc-tab:focus:not(:focus-visible) {
+    outline: none;
 }
 
 /* red buttons keep depth (gradient, soft shadow, top highlight), the same as "Book now" in motion.css / depth.css */
@@ -48,9 +60,11 @@
     color: #fff;
 }
 
-.mc-tab[aria-selected="true"]:hover {
-    background: linear-gradient(180deg, #E0505F 0%, var(--brand-hi) 100%);
-    box-shadow: 0 6px 20px #B3202F88, 0 1px 0 #ffffff40 inset;
+@media (hover: hover) {
+    .mc-tab[aria-selected="true"]:hover {
+        background: linear-gradient(180deg, #E0505F 0%, var(--brand-hi) 100%);
+        box-shadow: 0 6px 20px #B3202F88, 0 1px 0 #ffffff40 inset;
+    }
 }
 
 .mc-n {

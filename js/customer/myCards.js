@@ -87,12 +87,23 @@ function ensureStyles() {
 const reducedMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
 /* Puts the sliding pill under the selected tab. It copies the look of the selected tab (colour, glow, radius),
-   so the theme's styling stays in css/mycards.css. The first placement jumps there; later ones glide. */
-function placeSlider(box) {
+   so the theme's styling stays in css/mycards.css.
+   animate = true only when the customer just picked a tab: then the pill glides. Every other placement (first
+   draw, data arriving, fonts loading, window resize, page shown) snaps straight to the right place, so the pill
+   can never be seen sliding in from a wrong position or sitting under the wrong tab.
+   While the tabs cannot be measured (page hidden) the pill is switched off and the selected tab shows its own
+   plain CSS look, so a tab is never left without a highlight. */
+function placeSlider(box, animate = false) {
     const slider = box.querySelector(':scope > .mc-slider');
     const sel = box.querySelector(':scope > .mc-tab[aria-selected="true"]');
-    if (!slider || !sel || !sel.offsetWidth)
-        return;   // not on screen yet: the ResizeObserver places it when the page is shown
+    if (!slider)
+        return;
+    if (!sel || !sel.offsetWidth || !box.offsetWidth) {
+        box.classList.remove('mc-slid', 'mc-measure');
+        slider.classList.remove('on');
+        delete slider.dataset.placed;   // the next placement is a snap, not a glide from an old spot
+        return;
+    }
     if (getComputedStyle(box).position === 'static')
         box.style.position = 'relative';
 
@@ -107,20 +118,24 @@ function placeSlider(box) {
     slider.style.borderRadius = cs.borderRadius;
     slider.style.border = `${cs.borderTopWidth} ${cs.borderTopStyle} ${cs.borderTopColor}`;
     box.classList.remove('mc-measure');
-    box.classList.add('mc-slid');
 
-    const first = slider.dataset.placed !== '1';
-    if (first)
-        slider.style.transition = 'none';
+    const glide = animate && slider.dataset.placed === '1' && !reducedMotion();
+    slider.style.transition = glide ? SLIDE_TRANSITION : 'none';
     slider.style.width = `${sel.offsetWidth}px`;
     slider.style.height = `${sel.offsetHeight}px`;
     slider.style.transform = `translate(${sel.offsetLeft}px, ${sel.offsetTop}px)`;
-    if (first) {
-        void slider.offsetWidth;   // apply the first position without animating
-        slider.style.transition = reducedMotion() ? 'none' : SLIDE_TRANSITION;
-        slider.dataset.placed = '1';
-        slider.classList.add('on');
-    }
+    if (!glide)
+        void slider.offsetWidth;   // apply this position at once, without animating
+    slider.dataset.placed = '1';
+    slider.classList.add('on');
+    box.classList.add('mc-slid');   // only now do the tabs hand their highlight over to the pill
+}
+
+/* Places the pill again once the layout has settled (fonts, counts, images can all change the tab widths). */
+function settleSlider(box) {
+    requestAnimationFrame(() => placeSlider(box));
+    if (document.fonts && document.fonts.ready)
+        document.fonts.ready.then(() => placeSlider(box)).catch(() => {});
 }
 
 /* ---- the list under the tabs ---- */
@@ -197,7 +212,9 @@ export const tabsHtml = (label, tabs, current) => tabs.map(t => {
 }).join('');
 
 /* Draws the tabs into box and keeps the choice. Click and the arrow keys switch tab; onPick(id) redraws the page.
-   When the same tabs are already there they are updated in place (so the pill can slide and focus is kept). */
+   When the same tabs are already there they are updated in place (so the pill can slide and focus is kept).
+   The slide and the list animation only play when the customer picked the tab (box.__mcUser, set by wireTabs);
+   a tab that changes by itself (data arriving on first load) just switches. */
 export function drawTabs(box, label, tabs, current) {
     ensureStyles();
     box.setAttribute('role', 'tablist');
@@ -206,11 +223,14 @@ export function drawTabs(box, label, tabs, current) {
     const existing = [...box.querySelectorAll(':scope > [data-tab]')];
     const same = existing.length === tabs.length && existing.every((b, i) => b.dataset.tab === tabs[i].id);
     const previous = box.__mcCurrent;
+    const byUser = !!box.__mcUser;
 
     if (same) {
         tabs.forEach((t, i) => {
             const on = t.id === current, b = existing[i];
-            b.innerHTML = tabInner(t);
+            const html = tabInner(t);
+            if (b.innerHTML !== html)
+                b.innerHTML = html;
             b.setAttribute('aria-selected', String(on));
             b.tabIndex = on ? 0 : -1;
         });
@@ -221,23 +241,38 @@ export function drawTabs(box, label, tabs, current) {
     }
     box.__mcCurrent = current;
 
-    placeSlider(box);
-    if ('ResizeObserver' in window && !box.__mcResize) {
-        box.__mcResize = new ResizeObserver(() => placeSlider(box));
-        box.__mcResize.observe(box);   // also places the pill when the page is shown for the first time
+    placeSlider(box, same && byUser && previous !== current);
+    settleSlider(box);
+
+    if ('ResizeObserver' in window) {
+        // watch the box and every tab: a tab can change width (count, font) without the box changing size
+        if (!box.__mcResize)
+            box.__mcResize = new ResizeObserver(() => placeSlider(box));
+        box.__mcResize.disconnect();
+        box.__mcResize.observe(box);
+        box.querySelectorAll(':scope > .mc-tab').forEach(b => box.__mcResize.observe(b));
     }
 
-    if (same && previous && previous !== current) {
+    if (same && byUser && previous && previous !== current) {
         const order = tabs.map(t => t.id);
         armSwitch(box, order.indexOf(current) >= order.indexOf(previous) ? 1 : -1);
     }
 }
 
 export function wireTabs(box, onPick) {
+    const pick = (id, focus) => {
+        box.__mcUser = true;
+        try {
+            onPick(id, focus);
+        }
+        finally {
+            box.__mcUser = false;
+        }
+    };
     box.addEventListener('click', e => {
         const t = e.target.closest('[data-tab]');
         if (t)
-            onPick(t.dataset.tab, false);
+            pick(t.dataset.tab, false);
     });
     box.addEventListener('keydown', e => {
         if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft')
@@ -246,8 +281,11 @@ export function wireTabs(box, onPick) {
         if (i < 0)
             return;
         e.preventDefault();
-        onPick(all[(i + (e.key === 'ArrowRight' ? 1 : all.length - 1)) % all.length].dataset.tab, true);
+        pick(all[(i + (e.key === 'ArrowRight' ? 1 : all.length - 1)) % all.length].dataset.tab, true);
     });
+    // the page can be shown (display none -> block) after the tabs were drawn: place the pill as soon as it is visible
+    window.addEventListener('pageshow', () => placeSlider(box));
+    window.addEventListener('resize', () => placeSlider(box));
 }
 
 /* The tab to show: the one the customer picked, otherwise the first of order that has something in it. */
