@@ -1,15 +1,3 @@
-/* =====================================================================
-   customer/myCards.js - small pieces shared by the "My bookings" and "My rental" card layouts
-   (date block, status pill, filter tabs). No data loading here: the two tabs pass in what to draw.
-   Styles: css/mycards.css
-
-   Tab-switch motion (added here so both pages get it from drawTabs):
-     - the red pill slides from the old tab to the new one (the tab buttons are updated in place, not rebuilt)
-     - the list under the tabs slides + fades in, row by row, towards the direction of the new tab
-   It uses the Web Animations API on the elements themselves, so it does NOT depend on the timed / one-shot
-   CSS classes (sk-play, sk-done ...) and plays on every click, no matter how long the page has been open.
-   ===================================================================== */
-
 import { esc } from '../shared/utils.js';
 
 const MANILA = 'Asia/Manila';
@@ -86,13 +74,6 @@ function ensureStyles() {
 
 const reducedMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
-/* Puts the sliding pill under the selected tab. It copies the look of the selected tab (colour, glow, radius),
-   so the theme's styling stays in css/mycards.css.
-   animate = true only when the customer just picked a tab: then the pill glides. Every other placement (first
-   draw, data arriving, fonts loading, window resize, page shown) snaps straight to the right place, so the pill
-   can never be seen sliding in from a wrong position or sitting under the wrong tab.
-   While the tabs cannot be measured (page hidden) the pill is switched off and the selected tab shows its own
-   plain CSS look, so a tab is never left without a highlight. */
 function placeSlider(box, animate = false) {
     const slider = box.querySelector(':scope > .mc-slider');
     const sel = box.querySelector(':scope > .mc-tab[aria-selected="true"]');
@@ -101,13 +82,12 @@ function placeSlider(box, animate = false) {
     if (!sel || !sel.offsetWidth || !box.offsetWidth) {
         box.classList.remove('mc-slid', 'mc-measure');
         slider.classList.remove('on');
-        delete slider.dataset.placed;   // the next placement is a snap, not a glide from an old spot
+        delete slider.dataset.placed;
         return;
     }
     if (getComputedStyle(box).position === 'static')
         box.style.position = 'relative';
 
-    // measure the selected tab's own look (with transitions off and the override removed), in one synchronous step
     box.classList.remove('mc-slid');
     box.classList.add('mc-measure');
     const cs = getComputedStyle(sel);
@@ -119,19 +99,27 @@ function placeSlider(box, animate = false) {
     slider.style.border = `${cs.borderTopWidth} ${cs.borderTopStyle} ${cs.borderTopColor}`;
     box.classList.remove('mc-measure');
 
-    const glide = animate && slider.dataset.placed === '1' && !reducedMotion();
-    slider.style.transition = glide ? SLIDE_TRANSITION : 'none';
-    slider.style.width = `${sel.offsetWidth}px`;
-    slider.style.height = `${sel.offsetHeight}px`;
-    slider.style.transform = `translate(${sel.offsetLeft}px, ${sel.offsetTop}px)`;
-    if (!glide)
-        void slider.offsetWidth;   // apply this position at once, without animating
+    const width = `${sel.offsetWidth}px`;
+    const height = `${sel.offsetHeight}px`;
+    const transform = `translate(${sel.offsetLeft}px, ${sel.offsetTop}px)`;
+    const placed = slider.dataset.placed === '1';
+    const changed = slider.style.width !== width || slider.style.height !== height || slider.style.transform !== transform;
+
+    // Hover and layout callbacks must not cancel a slide already heading to the selected tab.
+    if (!placed || changed) {
+        const glide = animate && placed && !reducedMotion();
+        slider.style.transition = glide ? SLIDE_TRANSITION : 'none';
+        slider.style.width = width;
+        slider.style.height = height;
+        slider.style.transform = transform;
+        if (!glide)
+            void slider.offsetWidth;
+    }
     slider.dataset.placed = '1';
     slider.classList.add('on');
-    box.classList.add('mc-slid');   // only now do the tabs hand their highlight over to the pill
+    box.classList.add('mc-slid');
 }
 
-/* Places the pill again once the layout has settled (fonts, counts, images can all change the tab widths). */
 function settleSlider(box) {
     requestAnimationFrame(() => placeSlider(box));
     if (document.fonts && document.fonts.ready)
@@ -211,10 +199,7 @@ export const tabsHtml = (label, tabs, current) => tabs.map(t => {
     return `<button type="button" class="mc-tab" role="tab" id="tab-${esc(t.id)}" data-tab="${esc(t.id)}" aria-selected="${on}" tabindex="${on ? 0 : -1}">${tabInner(t)}</button>`;
 }).join('');
 
-/* Draws the tabs into box and keeps the choice. Click and the arrow keys switch tab; onPick(id) redraws the page.
-   When the same tabs are already there they are updated in place (so the pill can slide and focus is kept).
-   The slide and the list animation only play when the customer picked the tab (box.__mcUser, set by wireTabs);
-   a tab that changes by itself (data arriving on first load) just switches. */
+// Update tabs in place to retain keyboard focus during a redraw.
 export function drawTabs(box, label, tabs, current) {
     ensureStyles();
     box.setAttribute('role', 'tablist');
@@ -245,7 +230,6 @@ export function drawTabs(box, label, tabs, current) {
     settleSlider(box);
 
     if ('ResizeObserver' in window) {
-        // watch the box and every tab: a tab can change width (count, font) without the box changing size
         if (!box.__mcResize)
             box.__mcResize = new ResizeObserver(() => placeSlider(box));
         box.__mcResize.disconnect();
@@ -283,7 +267,13 @@ export function wireTabs(box, onPick) {
         e.preventDefault();
         pick(all[(i + (e.key === 'ArrowRight' ? 1 : all.length - 1)) % all.length].dataset.tab, true);
     });
-    // the page can be shown (display none -> block) after the tabs were drawn: place the pill as soon as it is visible
+    const refreshHover = () => {
+        cancelAnimationFrame(box.__mcHoverFrame);
+        box.__mcHoverFrame = requestAnimationFrame(() => placeSlider(box));
+    };
+    box.addEventListener('pointerover', refreshHover);
+    box.addEventListener('pointerout', refreshHover);
+    box.addEventListener('pointercancel', refreshHover);
     window.addEventListener('pageshow', () => placeSlider(box));
     window.addEventListener('resize', () => placeSlider(box));
 }
