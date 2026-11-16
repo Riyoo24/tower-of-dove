@@ -124,6 +124,7 @@ async function claimGuestBookings() {
     }
 }
 
+let rentalsLoaded = false;   // false until the first loadMyRentals() ends; My bookings waits for it so add-ons do not pop in a moment later
 let bookingLoads = 0;   // > 0 while My bookings is being reloaded (the lists are empty for a moment)
 
 export async function loadMyBookings() {
@@ -179,7 +180,8 @@ async function loadMyBookingsNow() {
     }
     await loadMyExtensions();
     await loadReleases();   // release time of confirmed bookings with a balance, and which cancelled ones were no-shows (customer/noShow.js)
-    renderMyBookings();
+    if (rentalsLoaded)
+        renderMyBookings();   // first load: loadMyRentals() draws it once the add-ons are known
     renderAttachOptions();
 }
 
@@ -298,7 +300,9 @@ export async function loadMyRentals() {
     }
     await loadMyDamage();
     await loadSwapOffers();   // replacement items staff offered (customer/swapChoice.js)
+    rentalsLoaded = true;
     renderMyRentals();
+    renderMyBookings();   // add-ons are listed under their booking; the bookings were drawn before the rentals had loaded
     if (!bookingLoads)
         notifyStatusChanges();   // pop-up when staff verified, approved or rejected something (customer/alerts.js)
 }
