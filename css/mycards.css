@@ -40,9 +40,17 @@
     background: var(--graph);
 }
 
+/* red buttons keep depth (gradient, soft shadow, top highlight), the same as "Book now" in motion.css / depth.css */
 .mc-tab[aria-selected="true"] {
-    background: var(--brand);
+    border-radius: 10px;
+    background: linear-gradient(180deg, var(--brand-hi) 0%, var(--brand) 100%);
+    box-shadow: 0 4px 14px #B3202F55, 0 1px 0 #ffffff30 inset;
     color: #fff;
+}
+
+.mc-tab[aria-selected="true"]:hover {
+    background: linear-gradient(180deg, #E0505F 0%, var(--brand-hi) 100%);
+    box-shadow: 0 6px 20px #B3202F88, 0 1px 0 #ffffff40 inset;
 }
 
 .mc-n {
@@ -161,22 +169,54 @@
 }
 
 .mc-cta {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
     min-height: 44px;
     padding: 15px 20px;
-    border-radius: 14px;
-    background: var(--brand);
+    border: 1px solid var(--brand);
+    border-radius: 10px;
+    background: linear-gradient(180deg, var(--brand-hi) 0%, var(--brand) 100%);
+    box-shadow: 0 4px 14px #B3202F55, 0 1px 0 #ffffff30 inset;
     color: #fff;
     font-weight: 600;
     text-decoration: none;
+    transition: box-shadow .25s ease, background-color .2s ease, border-color .2s ease;
 }
 
-.mc-cta:hover {
-    background: var(--brand-hi);
+/* light sweep on hover, like "Book now" */
+.mc-cta::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: linear-gradient(110deg, transparent 30%, #ffffff38 50%, transparent 70%);
+    transform: translateX(-130%);
+}
+
+.mc-cta:hover,
+.mc-cta:focus-visible {
+    background: linear-gradient(180deg, #E0505F 0%, var(--brand-hi) 100%);
+    box-shadow: 0 0 0 1px #FF6B7866, 0 0 22px -2px var(--glow-mid), 0 6px 18px -6px #FF2D3680;
     color: #fff;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .mc-cta:hover::after {
+        transform: translateX(130%);
+        transition: transform .7s var(--ease);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mc-cta {
+        transition: none;
+    }
 }
 
 /* ---------- the big card: next session / gear in use ---------- */
@@ -698,4 +738,13 @@
     .mc-n {
         display: none;
     }
+}
+
+/* =====================================================================
+   Every red .btn.gold on the customer page: the same 10px corners as the tabs.
+   Its depth (gradient, shadow, sheen) comes from motion.css and depth.css.
+   ===================================================================== */
+html body .btn.gold:not(.is-done) {
+    border-radius: 10px;
+    font-weight: 600;
 }
