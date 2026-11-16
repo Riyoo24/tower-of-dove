@@ -227,6 +227,14 @@ function tick() {
     document.querySelectorAll('.rcd[data-due]').forEach(el => {
         el.innerHTML = badge(el.dataset, now);
     });
+    // the progress bar of the in-use card (My rental) moves with the clock
+    document.querySelectorAll('.mc-bar[data-from]').forEach(bar => {
+        const from = +bar.dataset.from, to = +bar.dataset.to;
+        const share = to > from ? Math.min(1, Math.max(0, (now - from) / (to - from))) : 1;
+        if (bar.firstElementChild)
+            bar.firstElementChild.style.width = (share * 100).toFixed(1) + '%';
+        bar.classList.toggle('is-late', now > to);
+    });
     if (current) {
         if (document.contains(current))
             paint(current);   // the open card keeps counting too

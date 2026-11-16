@@ -15,7 +15,8 @@ import { loadDamageBlock, onPayDamage } from './damageBlock.js';
 import { awaitingStudio, offersFor, openSwapChoice } from './swapChoice.js';
 import { closeActionMenu, openActionMenu } from '../shared/actionMenu.js';
 import { emptyState } from '../shared/emptyState.js';
-import { askConfirm, dlg, showDialog, showIdViewer, showSuccess, tableGrouped, tableNotes, whyRejected } from './ui.js';
+import { askConfirm, dlg, showDialog, showIdViewer, showSuccess, tableNotes, whyRejected } from './ui.js';
+import { ARROW, chip, currentTab, dateParts, dateTile, drawTabs, focusTab, moreButton, pill, wireTabs } from './myCards.js';
 import { gcashQrUrl } from '../shared/catalog.js';
 import { gcashProofHtml, initGcashProof, uploadGcashProof } from '../shared/gcashProof.js';
 import { applyChecks, check, liveCheck } from '../shared/fieldCheck.js';
@@ -33,6 +34,8 @@ export function applyAccessMode() {
     $('#bk-guest').hidden = member;
     $('#rt-member').hidden = !member;
     $('#rt-guest').hidden = member;
+    $('#bk-tabs').hidden = !member;
+    $('#rt-tabs').hidden = !member;
 }
 
 export function initRentalLookup() {
@@ -146,7 +149,20 @@ function rentalMenuItems(o) {
     return items;
 }
 
-function runRentalAction(action, rentalRef) {
+/* The add-on equipment of a booking is managed from that booking's "..." menu (no button of its own on the add-on line). */
+export function addonMenuItems(bookingRef) {
+    const items = [];
+    rentalOrders().filter(o => o.type === 'addon' && o.ref === bookingRef).forEach(o => {
+        const name = o.lines.map(l => l.item).join(', ');
+        if (offersFor(o.rentalRef)[0])
+            items.push({ act: `rental:choose:${o.rentalRef}`, label: `Choose replacement for ${name}` });
+        if (['Pending', 'Approved'].includes(o.rawStatus))
+            items.push({ act: `rental:cancel:${o.rentalRef}`, label: `Cancel add-on: ${name}`, danger: true });
+    });
+    return items;
+}
+
+export function runRentalAction(action, rentalRef) {
     if (action === 'details')
         return showRentalDetails(rentalRef);
     if (action === 'viewid')
@@ -160,9 +176,6 @@ function runRentalAction(action, rentalRef) {
     startCancelRental(rentalRef);
 }
 
-/* Which "Past and closed" groups are open (closed by default; the button in the group row toggles it). */
-export const pastOpen = { bk: false, rn: false };
-
 /* ---- Damage fees (money the customer owes after a return; supabase/58_damage_charges.sql) ---- */
 export const damageOf = ref => state.DAMAGE[ref] || [];
 const damageSum = (ref, statuses) => sum(damageOf(ref).filter(d => statuses.includes(d.status)).map(d => d.amount));
@@ -173,21 +186,6 @@ export const damageTotal = ref => sum(damageOf(ref).map(d => d.amount));
 const lateLinesOf = ref => state.RENTALS.filter(l => l.rentalRef === ref && l.lateDeferred && !l.latePaid && l.late > 0);
 export const lateOwed = ref => sum(lateLinesOf(ref).filter(l => !l.latePendingRef).map(l => l.late));   // nothing sent yet
 export const lateWaiting = ref => sum(lateLinesOf(ref).filter(l => l.latePendingRef).map(l => l.late));   // GCash sent, staff are checking it
-const lateBadge = ref => {
-    if (lateOwed(ref) > 0)
-        return ` <span class="b balancedue" title="Open Actions > Pay late fee">Late fee ${peso(lateOwed(ref))} unpaid</span>`;
-    if (lateWaiting(ref) > 0)
-        return ' <span class="b pending">Late fee: payment being checked</span>';
-    return '';
-};
-const damageBadge = ref => {
-    if (damageOwed(ref) > 0)
-        return ` <span class="b balancedue" title="Open Details to see the reason and the photos">Damage fee ${peso(damageOwed(ref))} unpaid</span>`;
-    if (damageWaiting(ref) > 0)
-        return ' <span class="b pending">Damage fee: payment being checked</span>';
-    return '';
-};
-
 /* the status badge of a rental: once the customer declined the replacement items, the studio is the one to act */
 const statusBadge = o => ['Pending', 'Approved'].includes(o.rawStatus) && awaitingStudio(o.rentalRef) && !offersFor(o.rentalRef).length
     ? '<span class="b pending" title="You said none of the replacement items suit you. The studio will contact you.">Studio will contact you</span>'
@@ -199,30 +197,176 @@ const swapChip = ref => offersFor(ref).length ? ' <span class="b balancedue" tit
 const rentalPickup = o => new Date((o.lines[0] && o.lines[0].pickup) || 0).getTime() || 0;
 const orderTotal = o => sum(o.lines.map(l => (l.unit || 0) * l.qty));
 
-/* The add-on equipment orders of one booking, as indented lines under that booking in My bookings.
+/* The add-on equipment orders of one booking, as lines inside that booking's card in My bookings.
    Cancelled and rejected ones stay in the list (struck through) so the customer sees why the total changed.
    plain = for a past booking: just the item and price, no status and no buttons. */
-export function addonSubRows(bookingRef, plain = false) {
-    /* Each add-on is returned as { text, strike, tail }. tail = cells for the LAST columns of the table (Status, Payment, Actions),
-       so tableGrouped puts the add-on's status and Actions button under the same columns as the booking row's. */
-    return rentalOrders().filter(o => o.type === 'addon' && o.ref === bookingRef).map(o => {
+export function addonCards(bookingRef, plain = false) {
+    const list = rentalOrders().filter(o => o.type === 'addon' && o.ref === bookingRef);
+    if (!list.length)
+        return '';
+    return `<div class="mc-addons">${list.map(o => {
         const closed = ['Cancelled', 'Rejected'].includes(o.rawStatus);
-        return {
-            strike: closed,
-            text: `<span class="b addon">Add-on</span>
-                <span class="subtxt">${itemSummary(o.lines, true)} <span class="mut">(${peso(orderTotal(o))})</span></span>`,
-            tail: plain ? [] : [statusBadge(o) + swapChip(o.rentalRef), '', rentalMenuBtn(o.rentalRef)]
-        };
-    });
+        return `<div class="mc-addon${closed ? ' strike' : ''}">
+            <span class="b addon">Add-on</span>
+            <span class="mc-addon-t">${itemSummary(o.lines, true)} <span class="mut">(${peso(orderTotal(o))})</span></span>
+            ${plain ? '' : `<span class="mc-addon-end">${statusBadge(o)}${swapChip(o.rentalRef)}</span>`}
+        </div>`;
+    }).join('')}</div>`;
 }
 
-/* My rental: outside rentals, grouped In use (overdue first) > Upcoming (next pick-up first) > Past and closed (newest first).
-   Add-on equipment is listed under its booking in My bookings; only an add-on whose booking is not in the account shows up here. */
+/* ---- My rental (card layout) ---- */
+
+/* The tab the customer picked (null = the first tab that has rentals in it). */
+let rnTab = null;
+
+const RN_TONE = { 'In Use': 'live', Overdue: 'bad', Pending: 'warn', Approved: 'ok', Returned: 'ok', Rejected: 'bad', Cancelled: 'mute' };
+
+const clockOf = ts => new Date(ts).toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit' });
+
+const feeOwed = ref => lateOwed(ref) + damageOwed(ref);
+const feeWaiting = ref => lateWaiting(ref) + damageWaiting(ref);
+
+/* The status pill of a rental order. A returned rental with a fee still to pay shows the fee instead of "Returned". */
+function rentalPill(o) {
+    if (o.rawStatus === 'Returned') {
+        if (lateOwed(o.rentalRef) > 0 && damageOwed(o.rentalRef) > 0)
+            return pill('Fees due', 'warn');
+        if (lateOwed(o.rentalRef) > 0)
+            return pill('Late fee due', 'warn');
+        if (damageOwed(o.rentalRef) > 0)
+            return pill('Damage fee due', 'warn');
+        if (feeWaiting(o.rentalRef) > 0)
+            return pill('Fee being checked', 'warn');
+    }
+    if (['Pending', 'Approved'].includes(o.rawStatus) && awaitingStudio(o.rentalRef) && !offersFor(o.rentalRef).length)
+        return pill('Studio will contact you', 'warn');
+    return pill(o.status, RN_TONE[o.status] || 'mute');
+}
+
+/* what the customer pays for the order, in one short line */
+function rentalTotalText(o) {
+    if (o.rawStatus === 'Rejected')
+        return 'Not charged';
+    if (o.rawStatus === 'Cancelled')
+        return (o.lines[0].down || 0) > 0 ? 'Payment kept (non-refundable)' : 'Not charged';
+    const costs = calculateRentalCosts(o), fee = (o.type === 'out' ? costs.lateFee : 0) + damageTotal(o.rentalRef);
+    return peso(costs.totalPrice) + (fee > 0 ? ` + ${peso(fee)} fee` : '');
+}
+
+/* "10:00 AM" when the rental starts and ends on the same day, otherwise the full date and time */
+function pickReturn(o) {
+    const first = o.lines[0];
+    if (o.type !== 'out' || !first.pickup || !first.returnAt)
+        return { pick: o.when, ret: o.ret };
+    const same = new Date(first.pickup).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }) === new Date(first.returnAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+    return { pick: same ? clockOf(first.pickup) : o.when, ret: same ? clockOf(first.returnAt) : o.ret };
+}
+
+function rentalRow(o) {
+    const first = o.lines[0], when = pickReturn(o);
+    const notes = [whyRejected(o.status, o.reason)];
+    if (o.rawStatus === 'Returned' && lateOwed(o.rentalRef) + damageOwed(o.rentalRef) > 0)
+        notes.push('Pay the fee from the actions menu, or from the notice at the top of this page.');
+    else if (o.rawStatus === 'Returned' && feeWaiting(o.rentalRef) > 0)
+        notes.push('Your fee payment was sent. Staff are checking it.');
+    const cleaned = notes.filter(Boolean);
+    return `<article class="mc-row${['Cancelled', 'Rejected'].includes(o.rawStatus) ? ' dim' : ''}">
+        ${dateTile(dateParts(first.pickup || o.when))}
+        <div class="mc-main">
+            <div class="mc-title">${itemSummary(o.lines)}</div>
+            <div class="mc-meta">Pick-up ${esc(when.pick)} &middot; Return ${esc(when.ret)} &middot; <span class="ref-static">${esc(o.ref)}</span>${o.type === 'addon' ? ' <span class="b addon">Add-on</span>' : ''}</div>
+            ${cleaned.length ? `<div class="mc-note">${cleaned.join('<br>')}</div>` : ''}
+        </div>
+        <div class="mc-state">${rentalPill(o)}${swapChip(o.rentalRef)}<span class="mc-pay">${esc(rentalTotalText(o))}</span></div>
+        <div class="mc-acts"><button type="button" class="mc-ghost" data-ract="details" data-ref="${esc(o.rentalRef)}">Details</button>${moreButton('data-rmenu', o.rentalRef)}</div>
+    </article>`;
+}
+
+/* The big card for the rental that is in use: what is out, the live return countdown and how far through the rental it is. */
+function inUseCard(o) {
+    const costs = calculateRentalCosts(o), first = o.lines[0];
+    const startMs = Date.parse(first.issuedAt || first.pickup), endMs = Date.parse(first.returnAt || first.due);
+    const now = Date.now();
+    const pct = Number.isFinite(startMs) && Number.isFinite(endMs) && endMs > startMs ? Math.min(1, Math.max(0, (now - startMs) / (endMs - startMs))) : null;
+    const countdown = returnCountdownHtml(o);
+    const photos = o.lines.filter(l => l.beforePhotoPath);
+    return `<section class="mc-hero" aria-label="Gear in use">
+        <div class="mc-hero-l col">
+            <div class="mc-kicker">IN USE NOW &middot; ${esc(o.ref)}</div>
+            <div class="mc-big">${o.lines.map(l => esc(l.item)).join(' + ')}</div>
+            <div class="mc-lines">${o.lines.map(l => `<div><span>${l.qty} x ${esc(l.item)}</span><span class="mc-dim">${peso(costs.priceOfLine(l))}</span></div>`).join('')}</div>
+            <div class="mc-chips">${rentalPill(o)}${first.issuedAt || first.pickup ? chip(`Picked up ${esc(fmtDT(first.issuedAt || first.pickup))}`) : ''}</div>
+        </div>
+        <div class="mc-hero-r">
+            <div>
+                <div class="mc-window"><span>Return by ${esc(pickReturn(o).ret)}</span></div>
+                <div class="mc-count">${countdown || pill(o.status, RN_TONE[o.status] || 'mute')}</div>
+                ${pct === null ? '' : `<div class="mc-bar${now > endMs ? ' is-late' : ''}" data-from="${startMs}" data-to="${endMs}" aria-hidden="true"><i style="width:${pct * 100}%"></i></div>`}
+                <div class="mc-hint">Late returns are charged a fee per extra hour.</div>
+            </div>
+            <div class="mc-btns">
+                <button type="button" class="mc-ghost" data-ract="details" data-ref="${esc(o.rentalRef)}">Details</button>
+                ${photos.length ? `<button type="button" class="mc-ghost" data-ract="before" data-ref="${esc(o.rentalRef)}">${photos.length > 1 ? 'View before photos' : 'View before photo'}</button>` : ''}
+                ${moreButton('data-rmenu', o.rentalRef)}
+            </div>
+        </div>
+    </section>`;
+}
+
+/* The notice at the top (whichever tab is open): one row per rental with a late fee or damage fee still to pay. */
+function feeAlerts(outside) {
+    const owing = outside.filter(o => feeOwed(o.rentalRef) > 0);
+    if (!owing.length)
+        return '';
+    const blocked = state.BLOCK && state.BLOCK.blocked;
+    return owing.map(o => {
+        const late = lateOwed(o.rentalRef), dmg = damageOwed(o.rentalRef);
+        const what = late && dmg ? `A late fee of ${peso(late)} and a damage fee of ${peso(dmg)} are`
+            : late ? `A late fee of ${peso(late)} is` : `A damage fee of ${peso(dmg)} is`;
+        const detail = late && !dmg ? `Rental ${esc(o.ref)} was returned after its return time.` : `Rental ${esc(o.ref)} has a fee from its return.`;
+        return `<div class="mc-alert" role="alert">
+            <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/></svg>
+            <div class="mc-alert-t"><b>${what} waiting for payment.</b><div>${detail}${blocked ? ' New bookings and rentals are paused until it is paid.' : ''}</div></div>
+            <div class="mc-alert-btns">
+                ${late ? `<button type="button" class="mc-warnbtn" data-ract="paylate" data-ref="${esc(o.rentalRef)}">Pay late fee</button>` : ''}
+                ${dmg ? `<button type="button" class="mc-warnbtn" data-ract="paydamage" data-ref="${esc(o.rentalRef)}">Pay damage fee</button>` : ''}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function rentalsSide(orders) {
+    const outside = orders.filter(o => o.type === 'out');
+    const owed = sum(outside.map(o => feeOwed(o.rentalRef))), waiting = sum(outside.map(o => feeWaiting(o.rentalRef)));
+    const refs = outside.filter(o => feeOwed(o.rentalRef) > 0).map(o => esc(o.ref));
+    return `<aside class="mc-side">
+        <div class="mc-card">
+            <h3 class="mc-h3">Rental checklist</h3>
+            <ul class="mc-steps">
+                <li><b>1</b><span>Bring the valid ID you sent with the rental.</span></li>
+                <li><b>2</b><span>Staff take before photos at pick-up. You can view them here.</span></li>
+                <li><b>3</b><span>Return on time to avoid late fees.</span></li>
+            </ul>
+        </div>
+        <div class="mc-card">
+            <div class="mc-kicker">FEES TO PAY</div>
+            <div class="mc-amount">${peso(owed)}</div>
+            <p class="mc-hint lg">${owed > 0 ? `On ${refs.join(', ')}.` : 'You have no fees to pay.'}${waiting > 0 ? ` ${peso(waiting)} more is being checked by staff.` : ''}</p>
+        </div>
+        <a class="mc-cta" href="#rent">Rent more gear ${ARROW}</a>
+    </aside>`;
+}
+
+/* My rental: outside rentals, in the tabs In use (overdue first) > Upcoming (next pick-up first) > Past and closed (newest first;
+   returned rentals with a fee still to pay come first). Add-on equipment is listed inside its booking in My bookings;
+   only an add-on whose booking is not in the account shows up here. */
 export function renderMyRentals() {
     closeActionMenu();
+    const tabsBox = $('#rt-tabs');
     const mineBookings = new Set(BOOKINGS.filter(b => b.mine).map(b => b.ref));
     const orders = rentalOrders().filter(o => o.type === 'out' || !mineBookings.has(o.ref));
     if (!orders.length) {
+        tabsBox.innerHTML = '';
         $('#myrent').innerHTML = emptyState({
             icon: 'headphones',
             title: 'No rentals yet',
@@ -231,43 +375,35 @@ export function renderMyRentals() {
         });
         return;
     }
-    const row = o => {
-        const actions = rentalMenuBtn(o.rentalRef);
-        return {
-            cells: [
-                o.when,
-                o.ret,
-                `<span class="itm">${itemSummary(o.lines)}</span>`,
-                `<span class="ref-static">${esc(o.ref)}</span>${o.type === 'addon' ? ' <span class="b addon">Add-on</span>' : ''}`,
-                // a returned rental with a fee still to pay (or being checked) shows only the fee status
-                o.rawStatus === 'Returned' && (damageOwed(o.rentalRef) > 0 || damageWaiting(o.rentalRef) > 0 || lateOwed(o.rentalRef) > 0 || lateWaiting(o.rentalRef) > 0)
-                    ? (lateBadge(o.rentalRef) + damageBadge(o.rentalRef)).trim() : (returnCountdownHtml(o) || statusBadge(o)) + swapChip(o.rentalRef) + damageBadge(o.rentalRef),   // an outside rental in use shows the live return countdown instead of "In Use"
-                actions
-            ],
-            note: whyRejected(o.status, o.reason),
-            dim: ['Cancelled', 'Rejected'].includes(o.rawStatus)
-        };
+    const by = {
+        active: orders.filter(o => o.rawStatus === 'Active')
+            .sort((x, y) => (y.status === 'Overdue') - (x.status === 'Overdue') || rentalPickup(x) - rentalPickup(y)),
+        upcoming: orders.filter(o => ['Pending', 'Approved'].includes(o.rawStatus)).sort((x, y) => rentalPickup(x) - rentalPickup(y)),
+        past: orders.filter(o => !['Active', 'Pending', 'Approved'].includes(o.rawStatus))
+            .sort((x, y) => (feeOwed(y.rentalRef) > 0) - (feeOwed(x.rentalRef) > 0) || rentalPickup(y) - rentalPickup(x))
     };
-    const inUse = orders.filter(o => o.rawStatus === 'Active')
-        .sort((x, y) => (y.status === 'Overdue') - (x.status === 'Overdue') || rentalPickup(x) - rentalPickup(y));
-    const upcoming = orders.filter(o => ['Pending', 'Approved'].includes(o.rawStatus)).sort((x, y) => rentalPickup(x) - rentalPickup(y));
-    // a returned rental with a damage fee or late fee still to pay stays in the open list, so it is not forgotten
-    const owing = o => o.rawStatus === 'Returned' && (damageOwed(o.rentalRef) > 0 || lateOwed(o.rentalRef) > 0);
-    const owes = orders.filter(owing).sort((x, y) => rentalPickup(y) - rentalPickup(x));
-    // a returned rental whose fee payment staff are still checking is not closed yet either
-    const checking = o => o.rawStatus === 'Returned' && !owing(o) && (damageWaiting(o.rentalRef) > 0 || lateWaiting(o.rentalRef) > 0);
-    const checks = orders.filter(checking).sort((x, y) => rentalPickup(y) - rentalPickup(x));
-    const past = orders.filter(o => !['Active', 'Pending', 'Approved'].includes(o.rawStatus) && !owing(o) && !checking(o)).sort((x, y) => rentalPickup(y) - rentalPickup(x));
-    const groups = [
-        { title: 'Fees to pay', rows: owes.map(row) },
-        { title: 'Fees being checked', rows: checks.map(row) },
-        { title: 'In use', rows: inUse.map(row) },
-        { title: 'Upcoming', rows: upcoming.map(row) },
-        { title: 'Past and closed', toggle: 'rn', collapsed: !pastOpen.rn, rows: past.map(row) }
-    ].filter(g => g.rows.length);
-    $('#myrent').innerHTML = tableGrouped(['Pick-up', 'Return', 'Items', 'Reference', 'Status', ''], groups);
-    // while "Past and closed" is open the table scrolls inside its box (like the admin page); the page itself stays put
-    $('#myrent').classList.toggle('tw-scroll', groups.some(g => g.toggle && !g.collapsed));
+    const counts = { active: by.active.length, upcoming: by.upcoming.length, past: by.past.length };
+    const tab = currentTab(rnTab, counts, ['active', 'upcoming', 'past']);
+    drawTabs(tabsBox, 'Filter rentals', [
+        { id: 'active', label: 'In use', n: counts.active },
+        { id: 'upcoming', label: 'Upcoming', n: counts.upcoming },
+        { id: 'past', label: 'Past and closed', n: counts.past }
+    ], tab);
+
+    const hero = tab === 'active' && by.active.length ? by.active[0] : null;
+    const list = hero ? by.active.slice(1) : by[tab];
+    const titles = { active: hero ? 'Also in use' : 'Nothing in use', upcoming: 'Coming up', past: 'Past and closed' };
+    const hints = { active: 'Your running rental is above', upcoming: 'Next pick-up first', past: 'Newest first. Fees to pay stay at the top of the page.' };
+    const empty = { active: 'No gear is out right now.', upcoming: 'No rentals are booked yet.', past: 'Nothing here yet.' };
+    const showHead = !(hero && !list.length);
+    $('#myrent').innerHTML = `${feeAlerts(orders.filter(o => o.type === 'out'))}<div class="mc-layout">
+        <div class="mc-col">
+            ${hero ? inUseCard(hero) : ''}
+            ${showHead ? `<div class="mc-listhead"><h2>${titles[tab]}</h2><span>${hints[tab]}</span></div>` : ''}
+            ${list.length ? list.map(rentalRow).join('') : (hero ? '' : `<p class="mc-empty">${empty[tab]}</p>`)}
+        </div>
+        ${rentalsSide(orders)}
+    </div>`;
 }
 
 /* The customer can open the valid ID they sent with an outside rental (private bucket, 10 minute link). */
@@ -781,12 +917,23 @@ export function initMyRentals() {
                 openActionMenu(menuButton, rentalMenuItems(order), action => runRentalAction(action, order.rentalRef));
             return;
         }
-        const toggle = clickEvent.target.closest('[data-toggle="rn"]');
-        if (toggle) {
-            pastOpen.rn = !pastOpen.rn;
-            return renderMyRentals();
+        const act = clickEvent.target.closest('[data-ract]');
+        if (act) {
+            const ref = act.dataset.ref;
+            if (act.dataset.ract === 'before') {
+                const order = rentalOrders().find(o => o.rentalRef === ref);
+                const photos = order ? order.lines.filter(l => l.beforePhotoPath) : [];
+                return photos.length ? viewInspectionPhotos(photos, 'before') : undefined;
+            }
+            return runRentalAction(act.dataset.ract, ref);
         }
     };
+    wireTabs($('#rt-tabs'), (id, focus) => {
+        rnTab = id;
+        renderMyRentals();
+        if (focus)
+            focusTab($('#rt-tabs'));
+    });
     startReturnCountdown();
     $('#myrent').addEventListener('click', onClick);
     $('#mybk').addEventListener('click', onClick);

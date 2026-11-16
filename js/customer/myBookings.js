@@ -6,7 +6,7 @@
 import { state } from './state.js';
 import { SUPABASE_ANON_KEY, SUPABASE_URL, sb } from '../config/supabaseClient.js';
 import { refreshBook } from './book.js';
-import { noShowSentence, releaseNote, runningLate, clock as releaseClock } from './noShow.js';
+import { RELEASE, noShowSentence, releaseNote, runningLate, clock as releaseClock } from './noShow.js';
 import { BK_STATUS, loadMyBookings } from './data.js';
 import {
     askConfirm,
@@ -14,10 +14,10 @@ import {
     showDialog,
     showSuccess,
     stampLabel,
-    tableGrouped,
     whyRejected
 } from './ui.js';
-import { addonSubRows, pastOpen } from './myRentals.js';
+import { addonCards, addonMenuItems, runRentalAction } from './myRentals.js';
+import { ARROW, chip, currentTab, dateParts, dateTile, drawTabs, focusTab, moreButton, pill, todayManila, whenLabel, wireTabs } from './myCards.js';
 import { calendarEvent, downloadIcs } from '../shared/calendar.js';
 import { closeActionMenu, openActionMenu } from '../shared/actionMenu.js';
 import { BOOKINGS, firstBookableDate, isPastSlot, lastBookableDate, loadBusy, takenSlots } from '../shared/availability.js';
@@ -87,7 +87,7 @@ function bookingMenuItems(b) {
         items.push({ act: 'resched', label: 'Reschedule' });
         items.push({ act: 'cancel', label: 'Cancel booking', danger: true });
     }
-    return items;
+    return items.concat(addonMenuItems(b.ref));
 }
 
 function openMenu(btn) {
@@ -100,6 +100,10 @@ function runBookingAction(act, ref) {
     const b = findBooking(ref);
     if (!b)
         return;
+    if (act.startsWith('rental:')) {
+        const [, what, rentalRef] = act.split(':');
+        return runRentalAction(what, rentalRef);   // add-on equipment: cancel it or choose a replacement
+    }
     if (act === 'details')
         return showDetails(b);
     if (act === 'extend')
@@ -116,10 +120,132 @@ function runBookingAction(act, ref) {
         confirmCancel(b);
 }
 
+/* The tab the customer picked (null = the first tab that has bookings in it). */
+let bkTab = null;
+
+const BK_TONE = { Confirmed: 'ok', Pending: 'warn', Active: 'live', Completed: 'ok', Rejected: 'bad' };
+
+const isNoShow = b => b.status === 'Cancelled' && !!(RELEASE[b.ref] && RELEASE[b.ref].noShow);
+
+const statusPill = b => isNoShow(b) ? pill('No-show', 'warn') : pill(b.status === 'Active' ? 'In progress' : b.status, BK_TONE[b.status] || 'mute');
+
+/* What the customer sees about the money of one booking, in one short line. Down payments are never refunded. */
+function paymentText(b) {
+    if (b.status === 'Rejected')
+        return 'Not charged';
+    if (b.status === 'Cancelled')
+        return b.down > 0 ? 'Payment kept (non-refundable)' : 'Not charged';
+    if (b.status === 'Pending')
+        return b.down > 0 ? (b.payOpt === 'full' ? 'Full payment sent' : 'Down payment sent') : 'Waiting for your payment';
+    return b.balanceDue > 0.005 ? `Balance ${peso(b.balanceDue)} at the studio` : 'Paid in full';
+}
+
+/* "TODAY", "TOMORROW" or "IN 5 DAYS" for the hero card */
+function untilLabel(b) {
+    const days = Math.round((Date.parse(`${b.date}T00:00:00Z`) - Date.parse(`${todayManila()}T00:00:00Z`)) / 864e5);
+    return days <= 0 ? 'TODAY' : days === 1 ? 'TOMORROW' : `IN ${days} DAYS`;
+}
+
+const ghostBtn = (act, ref, label, extra = '') =>
+    `<button type="button" class="mc-ghost${extra}" data-bact="${act}" data-ref="${esc(ref)}">${label}</button>`;
+
+/* One booking as a ticket row. closed = a past booking (its add-ons show as plain lines). */
+function bookingRow(b, closed) {
+    const notes = [whyRejected(b.status, b.reason), extNote(b), releaseNote(b)].filter(Boolean);
+    if (b.status === 'Active' && !notes.length)
+        notes.push(`Session ends at ${endTime(b.start, b.hours)}. Need more time? Tap Extend.`);
+    const rebookInNote = notes.some(n => n.includes('data-rebook'));
+    let cta;
+    if (b.status === 'Active' && isMember() && !pendingExt(b.ref))
+        cta = ghostBtn('extend', b.ref, 'Extend');
+    else if (closed && !rebookInNote)
+        cta = `<button type="button" class="mc-ghost" data-rebook="${esc(b.ref)}">Book again</button>`;
+    else
+        cta = ghostBtn('details', b.ref, 'Details');
+    return `<article class="mc-row${['Cancelled', 'Rejected'].includes(b.status) ? ' dim' : ''}">
+        ${dateTile(dateParts(b.date))}
+        <div class="mc-main">
+            <div class="mc-title">${esc(b.start)} to ${endTime(b.start, b.hours)}</div>
+            <div class="mc-meta">Studio ${esc(b.studio)} &middot; ${b.hours} ${b.hours > 1 ? 'hrs' : 'hr'} &middot; <span class="ref-static">${esc(b.ref)}</span></div>
+            ${notes.length ? `<div class="mc-note">${notes.join('<br>')}</div>` : ''}
+        </div>
+        <div class="mc-state">${statusPill(b)}<span class="mc-pay">${esc(paymentText(b))}</span></div>
+        <div class="mc-acts">${cta}${moreButton('data-menu', b.ref)}</div>
+        ${addonCards(b.ref, closed)}
+    </article>`;
+}
+
+/* The big card for the next session: date, time, what is paid, and how long Reschedule and Cancel stay open. */
+function nextSession(b) {
+    const ad = state.ADDONS[b.ref] || [];
+    const cutoff = startsAt(b).getTime() - 24 * 3600e3, now = Date.now(), locked = now >= cutoff;
+    const from = b.created ? new Date(b.created).getTime() : NaN;
+    const pct = Number.isFinite(from) && cutoff > from ? Math.min(1, Math.max(0, (now - from) / (cutoff - from))) : null;
+    const lockAttr = locked ? ` aria-disabled="true" title="${esc(CUTOFF_MSG)}"` : '';
+    const payChip = b.down > 0 ? chip(`${b.payOpt === 'full' ? 'Full payment' : '50% down payment'} ${b.status === 'Pending' ? 'sent' : 'paid'}`) : '';
+    const notes = [extNote(b), releaseNote(b)].filter(Boolean);
+    return `<section class="mc-hero" aria-label="Next session">
+        <div class="mc-hero-l">
+            ${dateTile(dateParts(b.date), true)}
+            <div>
+                <div class="mc-kicker">NEXT SESSION &middot; ${untilLabel(b)}</div>
+                <div class="mc-big">${esc(b.start)} to ${endTime(b.start, b.hours)}</div>
+                <div class="mc-meta">Studio ${esc(b.studio)} &middot; ${b.hours} ${b.hours > 1 ? 'hours' : 'hour'} &middot; <span class="mc-dim">Ref</span> <span class="ref-static">${esc(b.ref)}</span></div>
+                <div class="mc-chips">${statusPill(b)}${payChip}${ad.map(a => chip(`+ ${esc(a.name)}${a.qty > 1 ? ` x${a.qty}` : ''}`)).join('')}</div>
+            </div>
+        </div>
+        <div class="mc-hero-r">
+            <div>
+                <div class="mc-window"><span>${locked ? 'Changes are closed' : 'Changes are open'}</span><b class="${locked ? 'locked' : ''}">${locked ? `closed ${whenLabel(cutoff)}` : `closes ${whenLabel(cutoff)}`}</b></div>
+                ${pct === null ? '' : `<div class="mc-bar${locked ? ' is-late' : ''}" aria-hidden="true"><i style="width:${(locked ? 1 : pct) * 100}%"></i></div>`}
+                <div class="mc-hint">${locked ? 'Reschedule and cancel are locked. Contact the studio and we will help.' : 'After that, reschedule and cancel are locked.'}</div>
+            </div>
+            <div class="mc-btns">
+                ${ghostBtn('details', b.ref, 'Details')}
+                ${['Pending', 'Confirmed'].includes(b.status) ? ghostBtn('cal', b.ref, 'Add to calendar') : ''}
+                ${['Pending', 'Confirmed'].includes(b.status) ? `<button type="button" class="mc-ghost${locked ? ' is-locked' : ''}" data-bact="resched" data-ref="${esc(b.ref)}"${lockAttr}>Reschedule</button>` : ''}
+                ${['Pending', 'Confirmed'].includes(b.status) ? `<button type="button" class="mc-ghost mc-danger${locked ? ' is-locked' : ''}" data-bact="cancel" data-ref="${esc(b.ref)}"${lockAttr}>Cancel</button>` : ''}
+            </div>
+        </div>
+        ${notes.length ? `<div class="mc-note wide">${notes.join('<br>')}</div>` : ''}
+        ${addonCards(b.ref, false)}
+    </section>`;
+}
+
+/* The right column: what is left to pay at the studio, how changes work, and a way to book again. */
+function bookingsSide(mine) {
+    const open = mine.filter(b => ['Confirmed', 'Active'].includes(b.status) && b.balanceDue > 0.005)
+        .sort((x, y) => startsAt(x) - startsAt(y));
+    const owed = open.reduce((n, b) => n + b.balanceDue, 0);
+    const balance = open.length ? `<div class="mc-card">
+        <div class="mc-kicker">BALANCE TO PAY AT THE STUDIO</div>
+        <div class="mc-amount">${peso(owed)}</div>
+        <p class="mc-hint lg">${open.length === 1
+            ? `For ${shortDate(open[0].date)}, Studio ${esc(open[0].studio)}.` : `Across ${open.length} bookings.`} Bring cash or pay by GCash on arrival.</p>
+    </div>` : '';
+    return `<aside class="mc-side">
+        ${balance}
+        <div class="mc-card">
+            <h3 class="mc-h3">How changes work</h3>
+            <ul class="mc-steps">
+                <li><b>1</b><span>Reschedule or cancel up to 24 hours before.</span></li>
+                <li><b>2</b><span>Extend a running session from its Actions menu.</span></li>
+                <li><b>3</b><span>Within 24 hours, contact the studio and we will help.</span></li>
+                <li><b>4</b><span>Payments are not refunded if a booking is cancelled.</span></li>
+            </ul>
+        </div>
+        <a class="mc-cta" href="#book">Book another session ${ARROW}</a>
+    </aside>`;
+}
+
+/* My bookings: tabs Upcoming (Pending, Confirmed; next session first, shown as a big card) > In progress (Active) > Past and closed
+   (newest first). The add-on equipment of a booking is listed inside its card. */
 export function renderMyBookings() {
     closeActionMenu();
+    const tabsBox = $('#bk-tabs');
     const mine = BOOKINGS.filter(b => b.mine);
     if (!mine.length) {
+        tabsBox.innerHTML = '';
         $('#mybk').innerHTML = emptyState({
             icon: 'calendar',
             title: 'No bookings yet',
@@ -128,37 +254,32 @@ export function renderMyBookings() {
         });
         return;
     }
-    const row = (b, closed = false) => {
-        // one "Actions" button; its menu lists Details, Extend, Reschedule and Cancel (see bookingMenuItems)
-        const actions = `<button type="button" class="btn sm line menu-btn" data-menu="${esc(b.ref)}" aria-haspopup="menu" aria-expanded="false">Actions <span aria-hidden="true">&#9662;</span></button>`;
-        return {
-            cells: [
-                shortDate(b.date),
-                b.start,
-                'Studio ' + b.studio,
-                b.hours + (b.hours > 1 ? ' hrs' : ' hr'),
-                `<span class="ref-static">${esc(b.ref)}</span>`,
-                badge(b.status),
-                badge(b.payment),
-                actions
-            ],
-            note: [whyRejected(b.status, b.reason), extNote(b), releaseNote(b)].filter(Boolean).join('<br>'),
-            subs: addonSubRows(b.ref, closed),
-            dim: ['Cancelled', 'Rejected'].includes(b.status)
-        };
-    };
     const soonest = (x, y) => startsAt(x) - startsAt(y);
-    const upcoming = mine.filter(b => ['Pending', 'Confirmed'].includes(b.status)).sort(soonest);
-    const active = mine.filter(b => b.status === 'Active').sort(soonest);
-    const past = mine.filter(b => !['Pending', 'Confirmed', 'Active'].includes(b.status)).sort((x, y) => soonest(y, x));
-    const groups = [
-        { title: 'Upcoming', rows: upcoming.map(b => row(b)) },
-        { title: 'In progress', rows: active.map(b => row(b)) },
-        { title: 'Past and closed', toggle: 'bk', collapsed: !pastOpen.bk, rows: past.map(b => row(b, true)) }
-    ].filter(g => g.rows.length);
-    $('#mybk').innerHTML = tableGrouped(['Date', 'Time', 'Studio', 'Duration', 'Reference', 'Status', 'Payment', ''], groups);
-    // while "Past and closed" is open the table scrolls inside its box (like the admin page); the page itself stays put
-    $('#mybk').classList.toggle('tw-scroll', groups.some(g => g.toggle && !g.collapsed));
+    const by = {
+        upcoming: mine.filter(b => ['Pending', 'Confirmed'].includes(b.status)).sort(soonest),
+        active: mine.filter(b => b.status === 'Active').sort(soonest),
+        past: mine.filter(b => !['Pending', 'Confirmed', 'Active'].includes(b.status)).sort((x, y) => soonest(y, x))
+    };
+    const counts = { upcoming: by.upcoming.length, active: by.active.length, past: by.past.length };
+    const tab = currentTab(bkTab, counts, ['upcoming', 'active', 'past']);
+    drawTabs(tabsBox, 'Filter bookings', [
+        { id: 'upcoming', label: 'Upcoming', n: counts.upcoming },
+        { id: 'active', label: 'In progress', n: counts.active },
+        { id: 'past', label: 'Past and closed', n: counts.past }
+    ], tab);
+
+    const hero = tab === 'upcoming' && by.upcoming.length ? by.upcoming[0] : null;
+    const list = hero ? by.upcoming.slice(1) : by[tab];
+    const titles = { upcoming: hero ? 'Also coming up' : 'Coming up', active: 'Running now', past: 'Past and closed' };
+    const empty = { upcoming: 'Nothing is booked yet. Pick a studio and a time.', active: 'No session is running right now.', past: 'Nothing here yet.' };
+    $('#mybk').innerHTML = `<div class="mc-layout">
+        <div class="mc-col">
+            ${hero ? nextSession(hero) : ''}
+            ${!list.length && hero ? '' : `<div class="mc-listhead"><h2>${titles[tab]}</h2><span>${tab === 'past' ? 'Newest first' : 'Next session first'}</span></div>`}
+            ${list.length ? list.map(b => bookingRow(b, tab === 'past')).join('') : (hero ? '' : `<p class="mc-empty">${empty[tab]}</p>`)}
+        </div>
+        ${bookingsSide(mine)}
+    </div>`;
 }
 
 /* The calendar entry of a booking (shared/calendar.js). Pending bookings are marked tentative. */
@@ -859,11 +980,16 @@ async function bookAgain(ref) {
 }
 
 export function initBookingsTab() {
+    wireTabs($('#bk-tabs'), (id, focus) => {
+        bkTab = id;
+        renderMyBookings();
+        if (focus)
+            focusTab($('#bk-tabs'));
+    });
     $('#mybk').addEventListener('click', e => {
-        if (e.target.closest('[data-toggle="bk"]')) {
-            pastOpen.bk = !pastOpen.bk;
-            return renderMyBookings();
-        }
+        const act = e.target.closest('[data-bact]');
+        if (act)
+            return runBookingAction(act.dataset.bact, act.dataset.ref);
         const menu = e.target.closest('[data-menu]');
         if (menu)
             return openMenu(menu);

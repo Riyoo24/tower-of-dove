@@ -49,6 +49,7 @@
   <link rel="stylesheet" href="../css/theme.css">
   <link rel="stylesheet" href="../css/depth.css">
   <link rel="stylesheet" href="../css/skeleton-extra.css">
+  <link rel="stylesheet" href="../css/mycards.css">
   <link rel="stylesheet" href="../css/print.css" media="print">
   <script src="../js/shared/modalTop.js"></script>
 </head>
@@ -389,12 +390,12 @@
           <div>
             <span class="eyebrow">Your sessions</span>
             <h1>My bookings</h1>
-            <p class="sub">Changes and cancellations close 24 hours before your session.</p>
+            <p class="sub">Everything you have booked, in one place. You can change or cancel a session until 24 hours before it starts.</p>
           </div>
-          <div class="pg-chips" aria-hidden="true"><span>Changes close 24 h before</span></div>
+          <div class="mc-tabs" id="bk-tabs"></div>
         </header>
         <!-- Signed in: the customer's own bookings -->
-        <div class="card" id="bk-member"><div class="tw" id="mybk"></div></div>
+        <div class="mc-wrap" id="bk-member"><div id="mybk"></div></div>
 
         <!-- Guest: reference code only -->
         <div class="lk-row">
@@ -443,9 +444,9 @@
             <h1>My rental</h1>
             <p class="sub">Your outside rentals. Equipment added to a studio booking is listed under that booking in My bookings. Guests: enter the reference code from your confirmation.</p>
           </div>
-          <div class="pg-chips" aria-hidden="true"><span>Outside rentals &amp; damage fees</span></div>
+          <div class="mc-tabs" id="rt-tabs"></div>
         </header>
-        <div class="card" id="rt-member"><div class="tw" id="myrent"></div></div>
+        <div class="mc-wrap" id="rt-member"><div id="myrent"></div></div>
 
         <div class="lk-row">
         <div class="card lookup" id="rt-guest" hidden>

@@ -115,8 +115,8 @@
         // customer
         ['#cs', function () { return many(3, card); }],
         ['#eq', function () { return many(6, card); }],
-        ['#mybk', function () { return table(7, 4); }],
-        ['#myrent', function () { return table(6, 3); }],
+        ['#mybk', function () { return many(3, panel); }],
+        ['#myrent', function () { return many(3, panel); }],
         ['#c-rent #eq-toolbar', rentTools, true],            // the search box + "In stock only" switch (third item: quiet)
         ['#c-rent #eq-cats', rentCats, true],                // the category chips
         // home page
