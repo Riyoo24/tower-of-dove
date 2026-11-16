@@ -127,17 +127,38 @@ async function claimGuestBookings() {
 let rentalsLoaded = false;   // false until the first loadMyRentals() ends; My bookings waits for it so add-ons do not pop in a moment later
 let bookingLoads = 0;   // > 0 while My bookings is being reloaded (the lists are empty for a moment)
 
-export async function loadMyBookings() {
-    bookingLoads++;
-    try {
-        await loadMyBookingsNow();
-    } finally {
-        bookingLoads--;
+/* Only one reload of My bookings runs at a time. loadMyBookings() is called from several places (page start, the
+   minute timer, after booking / cancelling / swapping...). When two ran together both read the list, and both pushed
+   into the same shared array, so every booking showed twice until the next refresh. A call that arrives while a load
+   is running does not start another one: it waits for a fresh load that starts right after the running one. */
+let bookingRun = null;
+let bookingAgain = false;
+
+export function loadMyBookings() {
+    if (bookingRun) {
+        bookingAgain = true;
+        return bookingRun;
     }
+    bookingRun = (async () => {
+        try {
+            do {
+                bookingAgain = false;
+                bookingLoads++;
+                try {
+                    await loadMyBookingsNow();
+                } finally {
+                    bookingLoads--;
+                }
+            } while (bookingAgain);
+        } finally {
+            bookingRun = null;
+        }
+    })();
+    return bookingRun;
 }
 
 async function loadMyBookingsNow() {
-    BOOKINGS.length = 0;
+    const next = [];   // built on the side and swapped into BOOKINGS in one step, so the list is never half filled or filled twice
     if (isMember()) {
         await claimGuestBookings();
         // newest 300 only, then back into date order for the screens
@@ -149,7 +170,7 @@ async function loadMyBookingsNow() {
         }
         (data || []).forEach(r => {
             const p = manilaParts(r.start_at);
-            BOOKINGS.push({
+            next.push({
                 ref: r.booking_ref,
                 studio: studioLetter(r.studio_id),
                 date: p.date,
@@ -171,13 +192,14 @@ async function loadMyBookingsNow() {
             });
         });
     } else {
-        guestBookings().forEach(b => BOOKINGS.push({
+        guestBookings().forEach(b => next.push({
             ...b,
             status: 'Pending',
             payment: 'Pending',
             mine: true
         }));
     }
+    BOOKINGS.splice(0, BOOKINGS.length, ...next);
     await loadMyExtensions();
     await loadReleases();   // release time of confirmed bookings with a balance, and which cancelled ones were no-shows (customer/noShow.js)
     if (rentalsLoaded)
@@ -187,16 +209,19 @@ async function loadMyBookingsNow() {
 
 /* Extension requests of the signed-in customer (needs 23_extension_payment.sql; without it the list stays empty). */
 async function loadMyExtensions() {
-    state.EXT = {};
-    if (!isMember())
+    if (!isMember()) {
+        state.EXT = {};
         return;
+    }
+    const ext = {};
     const { data, error } = await run(sb, 'v_booking_extension', COLS.v_booking_extension, q => q.order('created_at', { ascending: false }).limit(LIMIT.mine));
     if (error) {
         console.warn('Extension requests not loaded (run 23_extension_payment.sql):', error.message);
+        state.EXT = {};
         return;
     }
     (data || []).forEach(x => {
-        (state.EXT[x.booking_ref] = state.EXT[x.booking_ref] || []).push({
+        (ext[x.booking_ref] = ext[x.booking_ref] || []).push({
             id: x.extension_id,
             hours: Number(x.extra_hours) || 0,
             cost: Number(x.extra_cost) || 0,
@@ -209,20 +234,24 @@ async function loadMyExtensions() {
             created: x.created_at
         });
     });
+    state.EXT = ext;
 }
 
 /* Damage fees recorded for the customer's returned outside rentals (needs 58_damage_charges.sql; without it the list stays empty). */
 async function loadMyDamage() {
-    state.DAMAGE = {};
-    if (!isMember())
+    if (!isMember()) {
+        state.DAMAGE = {};
         return;
+    }
+    const dmg = {};
     const { data, error } = await run(sb, 'v_damage_charge', COLS.v_damage_charge, q => q.order('created_at', { ascending: false }).limit(LIMIT.mine));
     if (error) {
         console.warn('Damage fees not loaded (run 58_damage_charges.sql):', error.message);
+        state.DAMAGE = {};
         return;
     }
     (data || []).forEach(d => {
-        (state.DAMAGE[d.rental_ref] = state.DAMAGE[d.rental_ref] || []).push({
+        (dmg[d.rental_ref] = dmg[d.rental_ref] || []).push({
             id: d.damage_charge_id,
             item: d.equipment_name,
             qty: d.quantity,
@@ -237,12 +266,36 @@ async function loadMyDamage() {
             afterPhotoPath: d.after_photo_path || null
         });
     });
+    state.DAMAGE = dmg;
 }
 
-export async function loadMyRentals() {
-    state.RENTALS = [];
-    state.ADDONS = {};
-    state.ADDPAID = {};   // booking reference -> { rental reference: amount paid for that add-on order }
+/* Same rule as loadMyBookings(): one rentals reload at a time, otherwise two overlapping loads pushed into the same
+   lists and add-ons / rentals appeared twice. */
+let rentalRun = null;
+let rentalAgain = false;
+
+export function loadMyRentals() {
+    if (rentalRun) {
+        rentalAgain = true;
+        return rentalRun;
+    }
+    rentalRun = (async () => {
+        try {
+            do {
+                rentalAgain = false;
+                await loadMyRentalsNow();
+            } while (rentalAgain);
+        } finally {
+            rentalRun = null;
+        }
+    })();
+    return rentalRun;
+}
+
+async function loadMyRentalsNow() {
+    const rentals = [];
+    const addons = {};
+    const addPaid = {};   // booking reference -> { rental reference: amount paid for that add-on order }
     if (isMember()) {
         const { data, error } = await run(sb, 'v_rental_lines', COLS.v_rental_lines, q => q.order('created_at', { ascending: false }).limit(LIMIT.mine));
         if (error)
@@ -251,16 +304,16 @@ export async function loadMyRentals() {
             const addon = r.rental_type === 'Add-on',
                 bk = addon ? BOOKINGS.find(b => b.ref === r.booking_ref) : null;
             if (addon && r.booking_ref && !['Rejected', 'Cancelled'].includes(r.status)) {
-                (state.ADDONS[r.booking_ref] = state.ADDONS[r.booking_ref] || []).push({
+                (addons[r.booking_ref] = addons[r.booking_ref] || []).push({
                     name: r.equipment_name,
                     qty: r.quantity,
                     price: Number(r.unit_price_at_request) || 0
                 });
                 // add-on equipment added later is paid with its own GCash payment (50% or full)
                 if (Number(r.down_payment) > 0)
-                    (state.ADDPAID[r.booking_ref] = state.ADDPAID[r.booking_ref] || {})[r.rental_ref] = Number(r.down_payment) + (Number(r.balance_paid_amount) || 0);   // paid online + balance collected at the studio
+                    (addPaid[r.booking_ref] = addPaid[r.booking_ref] || {})[r.rental_ref] = Number(r.down_payment) + (Number(r.balance_paid_amount) || 0);   // paid online + balance collected at the studio
             }
-            state.RENTALS.push({
+            rentals.push({
                 ref: addon ? r.booking_ref : r.rental_ref,
                 item: r.equipment_name,
                 qty: r.quantity,
@@ -289,7 +342,6 @@ export async function loadMyRentals() {
                 reason: r.rejected_reason || '',
                 // Inspection documentation (outside rentals only)
                 issuedAt        : r.issued_at          || null,
-                issuedAt        : r.issued_at          || null,
                 handoverPhotoPath: r.handover_photo_path || null,
                 beforePhotoPath : r.before_photo_path  || null,
                 returnCondition : r.return_condition   || null,
@@ -298,6 +350,9 @@ export async function loadMyRentals() {
             });
         });
     }
+    state.RENTALS = rentals;
+    state.ADDONS = addons;
+    state.ADDPAID = addPaid;
     await loadMyDamage();
     await loadSwapOffers();   // replacement items staff offered (customer/swapChoice.js)
     rentalsLoaded = true;

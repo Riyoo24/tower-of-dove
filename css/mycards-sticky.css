@@ -1,0 +1,27 @@
+/* =====================================================================
+   mycards-sticky.css - keeps the right-hand panel of My bookings and My rental
+   (balance / fees to pay, checklist or "How changes work", and the Book / Rent button)
+   in view while the long list on the left scrolls.
+   Loaded after mycards.css in pages/customer.html.
+   ===================================================================== */
+
+/* 96px = the floating top bar (84px) + a little air, same offset the FAQ side column uses */
+.mc-layout > .mc-side {
+    position: sticky;
+    top: 96px;
+    align-self: start;   /* a stretched grid cell has no room to slide, so sticky would do nothing */
+}
+
+/* One column (the panel sits under the list): nothing to keep in view */
+@media (max-width: 980px) {
+    .mc-layout > .mc-side {
+        position: static;
+    }
+}
+
+/* Very short windows: a pinned panel taller than the screen would hide its bottom, so let it scroll normally */
+@media (max-height: 600px) {
+    .mc-layout > .mc-side {
+        position: static;
+    }
+}
