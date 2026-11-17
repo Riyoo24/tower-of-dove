@@ -10,7 +10,7 @@ import { firstBookableDate, isPastSlot, lastBookableDate, loadBusy, takenSlots }
 import { studioThumb } from '../shared/cards.js';
 import { cachedAvailLine, fillAvailLines } from '../shared/liveAvail.js';
 import { STUDIOS, isClosed } from '../shared/catalog.js';
-import { $, SLOTS, badge, descHTML, esc, longDate, manilaDay, pad, peso, toast } from '../shared/utils.js';
+import { $, SLOTS, badge, descHTML, descWithSpecs, esc, longDate, manilaDay, pad, peso, toast } from '../shared/utils.js';
 
 /* A day is fully booked (red) only when it can still be booked and every hour that is left is taken.
    Past days are never red, and neither is a day with no hours left to book (like today after closing);
@@ -137,7 +137,7 @@ function renderBook() {
       <svg class="pk-b" aria-hidden="true" focusable="false"><rect pathLength="1"></rect><rect class="m" pathLength="1"></rect></svg>
       ${studioThumb(s)}
       <div class="row"><h3>Studio ${s.id}</h3>${badge(s.status)}</div>
-      ${descHTML(s.desc)}
+      ${descHTML(descWithSpecs(s.desc, s.specs))}
       ${cachedAvailLine(i)}
       <p style="margin-top:6px"><b>${peso(s.rate)}</b> <span class="mut">per hour</span></p>
     </div>`).join('');

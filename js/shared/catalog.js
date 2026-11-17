@@ -18,7 +18,7 @@ export const gcashQrUrl = bust =>
 
 /* Studios and equipment are loaded from Supabase when the page opens (see loadCatalog).
    Page scripts must wait for `dataReady` before using them.
-   Studio: { dbId, id: 'A', desc, rate, status, c1, c2 }   status: Available | Maintenance | Unavailable */
+   Studio: { dbId, id: 'A', desc, specs, rate, status, c1, c2 }   status: Available | Maintenance | Unavailable */
 export const STUDIOS = [];
 
 export const EQUIPMENT = [];
@@ -60,6 +60,7 @@ export async function loadCatalog() {
             dbId: s.studio_id,
             id: s.name.replace(/^studio\s*/i, ''),
             desc: s.description || '',
+            specs: s.room_specs || '',   // gear list, one item per line (95_studio_room_specs.sql)
             rate: +s.hourly_rate,
             status: s.status,
             img: s.image,

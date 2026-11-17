@@ -12,6 +12,7 @@ import { SLIDES, initCarousel } from './carousel.js';
 import { renderEquipment, renderStudioOptions, renderStudios } from './render.js';
 import { initBackToTop } from '../shared/backToTop.js';
 import { STUDIOS, dataReady } from '../shared/catalog.js';
+import { specsOf } from '../shared/utils.js';
 
 export function initHome() {
     initContact();    // Contact Us section
@@ -29,8 +30,9 @@ export function initHome() {
             sl.studio = si;   // the "Book this room" button opens this studio
             if (st.img)
                 sl.img = st.img;
-            if (st.desc)
-                sl.sub = st.desc;
+            const { tagline } = specsOf(st.desc, st.specs);   // the Description only: gear is shown on the room cards
+            if (tagline)
+                sl.sub = tagline;
             sl.price = st.rate || 0;
         });
 

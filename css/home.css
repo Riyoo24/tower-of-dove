@@ -1351,6 +1351,66 @@ body.hastop[data-active="home"] .hero {
     color: currentColor;
 }
 
+/* spec sheet: one spec per row with a hairline between rows (several plain lines in the description) */
+.desc .specs ul {
+    gap: 0;
+}
+
+.desc .specs li {
+    padding: 7px 0 7px 16px;
+    line-height: 1.35;
+    color: var(--ink, #e9e9ee);
+    border-top: 1px solid var(--line);
+}
+
+.desc .specs li:first-child {
+    border-top: 0;
+    padding-top: 2px;
+}
+
+.desc .specs li::before {
+    content: '';
+    top: 13px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #b3202f;
+}
+
+.desc .specs li:first-child::before {
+    top: 8px;
+}
+
+.desc .specs li.x {
+    color: var(--mut);
+    font-style: italic;
+}
+
+.desc .specs li.x::before {
+    content: '\2715';
+    top: 7px;
+    width: auto;
+    height: auto;
+    border-radius: 0;
+    background: none;
+    font-size: 11px;
+    font-style: normal;
+    color: #ff8a93;
+}
+
+.desc .specs li.x:first-child::before {
+    top: 3px;
+}
+
+/* room cards: the live "Next free" line sits just above the price row, so it lines up across cards of different heights */
+.hx-room>.avail-line {
+    margin-top: auto;
+}
+
+.hx-room>.avail-line+.hx-foot {
+    margin-top: 6px;
+}
+
 /* room cards: the two lists sit under the photo, with a hairline between them and the price row */
 .hx-room .desc,
 .pick .desc {
@@ -1611,4 +1671,266 @@ body.hastop[data-active="home"] .hero {
     .faq-list {
         padding: 2px 16px;
     }
+}
+
+
+/* ---------- room cards (compact): photo with name and price on it, two spec lines, next-free bar, Book button ---------- */
+.hx-room {
+    position: relative;
+    overflow: hidden;
+    padding: 12px 12px 14px;
+    gap: 12px;
+}
+
+.hx-room .rm-photo {
+    position: relative;
+    aspect-ratio: 16 / 10;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #111;
+}
+
+.hx-room .rm-photo .ph {
+    height: 100%;
+    margin: 0;
+    border-radius: 0;
+}
+
+.hx-room .rm-photo::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 72px;
+    background: linear-gradient(to top, #000000b8, #00000000);
+    pointer-events: none;
+}
+
+#studio-grid>.hx-room .ph::after {
+    display: none !important;   /* the hover waveform would sit on the price */
+}
+
+.hx-room .rm-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 2;
+}
+
+.hx-room .rm-badge .hx-b,
+.hx-room .rm-badge .b {
+    background: #0b0b0dcc;
+}
+
+.hx-room .rm-cap {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 10px;
+    z-index: 2;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    color: #fff;
+}
+
+.hx-room .rm-cap h3 {
+    margin: 0;
+    font-size: 20px;
+}
+
+.hx-room .rm-cap span {
+    white-space: nowrap;
+    font-size: 13px;
+    color: #ffffffcc;
+}
+
+.hx-room .rm-cap b {
+    font-size: 19px;
+    color: #fff;
+}
+
+.hx-room .rm-body {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-height: 96px;
+    padding: 0 2px;
+    gap: 8px;
+}
+
+.rm-tag {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.4;
+    color: var(--mut);
+}
+
+.rm-specs {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 6px;
+    width: 100%;
+}
+
+.rm-specs li {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+    font-size: 13.5px;
+    line-height: 1.3;
+    color: var(--ink);
+}
+
+.rm-specs li i {
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 2px;
+    background: var(--accent);
+}
+
+.rm-specs li span {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.rm-more {
+    margin-top: 4px;
+    padding: 6px 0;
+    background: none;
+    border: 0;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--mut);
+    cursor: pointer;
+}
+
+.rm-more:hover {
+    color: var(--ink);
+}
+
+.hx-room>.avail-line {
+    margin: 0;
+    padding: 9px 12px;
+    border-radius: 10px;
+    background: #ffffff0a;
+    align-items: center;
+}
+
+.hx-room>.avail-line .al-dot {
+    margin-top: 0;
+}
+
+.hx-room .rm-book {
+    width: 100%;
+    min-height: 46px;
+    justify-content: center;
+    margin-top: auto;
+}
+
+.hx-room>.avail-line {
+    margin-top: auto;
+}
+
+.hx-room>.avail-line+.rm-book {
+    margin-top: 0;
+}
+
+/* the full gear list, laid over the card */
+.rm-panel {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px 16px 14px;
+    background: var(--surface);
+    overflow-y: auto;
+}
+
+.rm-panel[hidden] {
+    display: none;
+}
+
+.rm-ph {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.rm-ph h3 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.rm-x {
+    width: 44px;
+    height: 44px;
+    margin: -8px -8px 0 0;
+    border: 0;
+    border-radius: 10px;
+    background: none;
+    color: var(--ink);
+    font-size: 26px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.rm-x:hover {
+    background: var(--dove);
+}
+
+.rm-specs.all {
+    gap: 0;
+}
+
+.rm-specs.all li {
+    align-items: flex-start;
+    padding: 9px 0;
+    border-top: 1px solid var(--line);
+    font-size: 14px;
+    line-height: 1.35;
+}
+
+.rm-specs.all li i {
+    margin-top: 6px;
+}
+
+.rm-specs.all li span {
+    white-space: normal;
+    overflow: visible;
+}
+
+.rm-note {
+    margin: auto 0 0;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: var(--dove);
+    font-size: 12.5px;
+    line-height: 1.35;
+    color: var(--mut);
+}
+
+/* the description: up to 3 lines on its own, one line when the gear list sits under it */
+.rm-tag {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+}
+
+.rm-tag.one {
+    -webkit-line-clamp: 1;
 }

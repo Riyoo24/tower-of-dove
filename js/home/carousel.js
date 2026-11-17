@@ -4,18 +4,18 @@
    (stopped on hover, focus, touch, or when the visitor prefers reduced motion).
    ===================================================================== */
 
-import { $, descHTML, esc, peso, reducedMotion } from '../shared/utils.js';
+import { $, esc, peso, reducedMotion } from '../shared/utils.js';
 import { goBook } from '../shared/navigation.js';
 import { photo } from '../shared/cards.js';
 
-/* Carousel slides. index.js fills in `img`, `sub` and `price` from the studio data (Supabase).
+/* Carousel slides. index.js fills in `img`, `sub` (the studio's Description, never its Room specs) and `price` from the studio data (Supabase).
    `studio` (set by index.js) is the studio's position in STUDIOS, so the button opens the booking page on that studio.
    `scroll` makes the button jump to a section of the page instead of opening the booking page. */
 export const SLIDES = [
-    { label: 'Studio A', tag: 'Rehearsal room', sub: 'Pick a time and plug in.', price: 0, c1: '#C92C3E', c2: '#3D0C14', img: null, cta: 'Book this room' },
-    { label: 'Studio B', tag: 'Rehearsal room', sub: 'Pick a time and plug in.', price: 0, c1: '#C98512', c2: '#33220A', img: null, cta: 'Book this room' },
-    { label: 'Studio C', tag: 'Rehearsal room', sub: 'Pick a time and plug in.', price: 0, c1: '#8E161F', c2: '#1E0A0F', img: null, cta: 'Book this room' },
-    { label: 'Studio D', tag: 'Rehearsal room', sub: 'Pick a time and plug in.', price: 0, c1: '#4A4A55', c2: '#16161A', img: null, cta: 'Book this room' },
+    { label: 'Studio A', tag: 'Rehearsal room', price: 0, c1: '#C92C3E', c2: '#3D0C14', img: null, cta: 'Book this room' },
+    { label: 'Studio B', tag: 'Rehearsal room', price: 0, c1: '#C98512', c2: '#33220A', img: null, cta: 'Book this room' },
+    { label: 'Studio C', tag: 'Rehearsal room', price: 0, c1: '#8E161F', c2: '#1E0A0F', img: null, cta: 'Book this room' },
+    { label: 'Studio D', tag: 'Rehearsal room', price: 0, c1: '#4A4A55', c2: '#16161A', img: null, cta: 'Book this room' },
     { label: 'Rental gear', tag: 'Equipment', sub: 'Add gear to a booking, or rent it to take outside the studio.', price: 0, c1: '#6E0F1C', c2: '#0B0B0D', img: null, cta: 'Browse gear', scroll: 'equipment' }
 ];
 
@@ -35,8 +35,6 @@ function slideHTML(s, i) {
     const media = s.img
         ? photo(s.img, '', { width: 1200, height: 440, sizes: '(max-width: 900px) 100vw, 1120px', eager: i === 0 })
         : equalizer(i + 1);
-    const action = s.scroll ? `data-scroll="${esc(s.scroll)}"`
-        : s.studio !== undefined ? `data-book-studio="${s.studio}"` : 'data-route="book"';
     return `
     <article class="slide" role="group" aria-roledescription="slide" aria-label="${i + 1} of ${SLIDES.length}: ${esc(s.label)}" style="--c1:${s.c1};--c2:${s.c2}">
       ${media}
@@ -44,11 +42,7 @@ function slideHTML(s, i) {
         <div class="slide-txt">
           <span class="slide-tag">${esc(s.tag)}</span>
           <h3>${esc(s.label)}</h3>
-          ${descHTML(s.sub, 'on-photo')}
-        </div>
-        <div class="slide-act">
-          ${s.price ? `<span class="slide-price"><b>${peso(s.price)}</b> / hour</span>` : ''}
-          <button type="button" class="btn gold" ${action}>${esc(s.cta)} &rarr;</button>
+          ${s.sub ? `<p>${esc(s.sub)}</p>` : ''}
         </div>
       </div>
     </article>`;

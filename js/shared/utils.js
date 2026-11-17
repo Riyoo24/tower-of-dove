@@ -67,6 +67,12 @@ export function descHTML(text, cls = '') {
     if (!lines.length)
         return '';
     const out = [];
+    // Several plain lines (no "-" items, no "Heading:" lines) are a spec sheet, one spec per line: show them as tidy rows.
+    // A single line stays a one-line tagline. A line saying "not included" gets a cross instead of a dot.
+    if (lines.length > 1 && !lines.some(l => /^[-\u2013\u2022*]\s*\S/.test(l) || l.endsWith(':'))) {
+        const rows = lines.map(l => `<li${/\b(not included|excluded|not available|not provided)\b/i.test(l) ? ' class="x"' : ''}>${esc(l)}</li>`);
+        return `<div class="desc ${cls} rich"><div class="ds specs"><ul>${rows.join('')}</ul></div></div>`;
+    }
     let sec = null;   // the list currently being filled
     const close = () => { if (sec) { out.push('</ul></div>'); sec = null; } };
     for (const l of lines) {
@@ -87,6 +93,41 @@ export function descHTML(text, cls = '') {
     close();
     const rich = out.some(x => x.startsWith('<div class="ds'));   // has lists, not just a tagline
     return `<div class="desc ${cls}${rich ? ' rich' : ''}">${out.join('')}</div>`;
+}
+
+/* What a room card needs from a studio: a short tagline (the Description field), the gear list and the notes (the Room specs field).
+   Room specs: one item per line (a leading "-" is fine); a line saying "not included" or "excluded", or anything under a
+   "Not included:" heading, becomes a note instead of an item.
+   Older studios have no Room specs yet and kept their gear in the Description: when that has several lines it is read as the gear list. */
+const readSpecs = text => {
+    const items = [], notes = [];
+    let no = false;
+    for (const l of String(text || '').split(/\r?\n/).map(x => x.trim()).filter(Boolean)) {
+        if (l.endsWith(':')) {
+            no = /^(not|exclud|no\b)/i.test(l);
+            continue;
+        }
+        const t = l.replace(/^[-\u2013\u2022*]\s*/, '');
+        (no || /\b(not included|excluded|not available|not provided)\b/i.test(t) ? notes : items).push(t);
+    }
+    return { items, notes };
+};
+
+export function specsOf(desc, specs) {
+    const d = String(desc || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (String(specs || '').trim())
+        return { tagline: d.join(' '), ...readSpecs(specs) };
+    if (d.length <= 1 && !d.some(l => l.endsWith(':')))
+        return { tagline: d[0] || '', items: [], notes: [] };
+    return { tagline: '', ...readSpecs(desc) };   // legacy: gear typed into the Description
+}
+
+/* Description + Room specs as one text for descHTML() (the booking page): the description, then "In the room" and "Not included" lists. */
+export function descWithSpecs(desc, specs) {
+    if (!String(specs || '').trim())
+        return desc || '';
+    const { items, notes } = readSpecs(specs);
+    return [String(desc || '').trim(), items.length ? 'In the room:' : '', ...items.map(t => '- ' + t), notes.length ? 'Not included:' : '', ...notes.map(t => '- ' + t.replace(/\s*[,:\-]?\s*\b(not included|excluded)\b\s*$/i, ''))].filter(Boolean).join('\n');
 }
 
 export const peso = n => '₱' + n.toLocaleString('en-US');

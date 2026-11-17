@@ -28,7 +28,7 @@ export function renderStudios() {
         const c = STUDIO_COLORS[i % STUDIO_COLORS.length], letter = s.name.replace(/^studio\s*/i, '');
         const ph = s.image ? `<div class="ph has"><img src="${esc(s.image)}" alt="${esc(s.name)}" width="320" height="104" loading="lazy" decoding="async"></div>`
             : `<div class="ph" style="background:linear-gradient(135deg,${c[0]},${c[1]})">${esc(letter)}</div>`;
-        return `<div class="card">${ph}<div class="row"><h3>${esc(s.name)}</h3>${badge(s.status)}</div><p class="mut" style="white-space:pre-line">${esc(s.description || '')}</p>
+        return `<div class="card">${ph}<div class="row"><h3>${esc(s.name)}</h3>${badge(s.status)}</div><p class="mut" style="white-space:pre-line">${esc(s.description || '')}</p>${s.room_specs ? `<p class="mut" style="font-size:13px">${pl(s.room_specs.split(/\r?\n/).filter(l => l.trim()).length, 'room spec')}</p>` : ''}
       <div class="row" style="margin-top:8px"><b>${money(s.hourly_rate)}/hr</b><span>${btn('st-edit', s.studio_id, 'Edit')}${btn('st-tog', s.studio_id, s.status === 'Available' ? 'Disable' : 'Enable', 1)}${dbtn('st-del', s.studio_id, 'Delete')}</span></div></div>`;
     }).join('');
 }
@@ -74,7 +74,9 @@ ACT['st-edit'] = id => {
     const s = STU.find(x => x.studio_id === +id);
     showDlg(`<form id="se-f" novalidate><h2 style="margin:0 0 4px">Edit ${esc(s.name)}</h2>
     <label for="se-n">Name</label><input id="se-n" value="${esc(s.name)}">
-    <label for="se-d">Description</label><textarea id="se-d" rows="8" style="resize:vertical;min-height:140px" placeholder="Press Enter for a new line">${esc(s.description || '')}</textarea>
+    <label for="se-d">Description</label><textarea id="se-d" rows="3" maxlength="200" style="resize:vertical" placeholder="Short line about the room, e.g. Mid-size band room">${esc(s.description || '')}</textarea>
+    <label for="se-sp">Room specs</label><textarea id="se-sp" rows="7" style="resize:vertical;min-height:140px" placeholder="One item per line, e.g.&#10;Drum set with cymbals&#10;1 Guitar amp, 4x10 cab&#10;2 Mics with stand&#10;Electric guitars not included">${esc(s.room_specs || '')}</textarea>
+    <p class="mut" style="margin:4px 0 0;font-size:13px">One item per line. A line that says "not included" is shown as a note.</p>
     <label for="se-r">Hourly rate (₱)</label><input id="se-r" type="number" min="0" value="${num(s.hourly_rate)}">
     <label for="se-s">Status</label><select id="se-s">${['Available', 'Unavailable', 'Maintenance'].map(x => `<option ${x === s.status ? 'selected' : ''}>${x}</option>`).join('')}</select>
     <label for="se-f2">New photo (optional)</label><input id="se-f2" type="file" accept="image/*">
@@ -94,6 +96,7 @@ ACT['st-edit'] = id => {
         const patch = {
             name,
             description: $('#se-d').value.trim() || null,
+            room_specs: $('#se-sp').value.trim() || null,
             hourly_rate: rate,
             status: $('#se-s').value
         };
@@ -120,6 +123,7 @@ $('#sbtn').addEventListener('click', async () => {
     const row = {
         name,
         description: $('#sd').value.trim() || null,
+        room_specs: $('#sp').value.trim() || null,
         hourly_rate: rate,
         status: $('#ss').value
     };
@@ -131,7 +135,7 @@ $('#sbtn').addEventListener('click', async () => {
         return toast('Photo upload failed: ' + x.message);
     }
     if (await run(sb.from('studio').insert(row))) {
-        ['#sn', '#sd', '#sr', '#sf'].forEach(s => {
+        ['#sn', '#sd', '#sp', '#sr', '#sf'].forEach(s => {
             $(s).value = '';
         });
         afterStudio(`${name} added.`);
