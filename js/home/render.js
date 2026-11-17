@@ -38,14 +38,14 @@ export function renderStudios() {
             : '';
         return `
       <div class="card hx-room">
-        <div class="rm-photo">
-          ${studioThumb(s)}
-          <span class="rm-badge">${closed ? badge(s.status) : `<span class="hx-b" data-room-status="${i}"><i></i>Checking...</span>`}</span>
-          <div class="rm-cap"><h3>Studio ${esc(s.id)}</h3><span><b>${peso(s.rate)}</b> / hr</span></div>
-        </div>
+        ${studioThumb(s)}
+        <div class="rm-head"><h3>Studio ${esc(s.id)}</h3>${closed ? badge(s.status) : `<span class="hx-b" data-room-status="${i}"><i></i>Checking...</span>`}</div>
         <div class="rm-body">${specs}</div>
         ${cachedAvailLine(i)}
-        <button class="btn gold rm-book" data-book-studio="${i}" ${closed ? 'disabled' : ''}>${closed ? 'Closed' : 'Book Studio ' + esc(s.id)}</button>
+        <div class="row hx-foot">
+          <span><b>${peso(s.rate)}</b> <span class="mut">/ hour</span></span>
+          <button class="btn gold" data-book-studio="${i}" ${closed ? 'disabled' : ''}>${closed ? 'Closed' : 'Book now'}</button>
+        </div>
         ${panel}
       </div>`;
     }).join('');

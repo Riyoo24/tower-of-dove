@@ -10,7 +10,7 @@ import { firstBookableDate, isPastSlot, lastBookableDate, loadBusy, takenSlots }
 import { studioThumb } from '../shared/cards.js';
 import { cachedAvailLine, fillAvailLines } from '../shared/liveAvail.js';
 import { STUDIOS, isClosed } from '../shared/catalog.js';
-import { $, SLOTS, badge, descHTML, descWithSpecs, esc, longDate, manilaDay, pad, peso, toast } from '../shared/utils.js';
+import { $, SLOTS, badge, esc, longDate, manilaDay, pad, peso, specsOf, toast } from '../shared/utils.js';
 
 /* A day is fully booked (red) only when it can still be booked and every hour that is left is taken.
    Past days are never red, and neither is a day with no hours left to book (like today after closing);
@@ -123,6 +123,31 @@ const roomLine = s => {
     return `Studio ${s.id}${line ? ' \u00b7 ' + line : ''}`;
 };
 
+/* Room card text, kept short so the cards stay low: the description on one line and the first two gear items.
+   "+N more" opens the whole list over that card, like the room cards on the home page (the card keeps its height). */
+const gearOpen = new Set();   // studios whose full gear list is showing
+const SHOW_GEAR = 2;
+
+function roomText(s, i) {
+    const { tagline, items, notes } = specsOf(s.desc, s.specs);
+    const extra = items.length - SHOW_GEAR;
+    const li = t => `<li><i aria-hidden="true"></i><span>${esc(t)}</span></li>`;
+    return (tagline ? `<p class="rm-tag${items.length ? ' one' : ''}">${esc(tagline)}</p>` : '') +
+        (items.length ? `<ul class="rm-specs">${items.slice(0, SHOW_GEAR).map(li).join('')}</ul>` : '') +
+        (extra > 0 || (notes.length && items.length) ? `<button type="button" class="rm-more" data-pk-more="${i}" aria-expanded="${gearOpen.has(i)}">${extra > 0 ? `+${extra} more &middot; see all gear` : 'See details'}</button>` : '');
+}
+
+function gearPanel(s, i) {
+    const { items, notes } = specsOf(s.desc, s.specs);
+    if (!gearOpen.has(i) || !items.length)
+        return '';
+    return `<div class="rm-panel" data-pk-panel="${i}">
+      <div class="rm-ph"><h3>Studio ${esc(s.id)} &middot; In the room</h3><button type="button" class="rm-x" data-pk-more="${i}" aria-label="Close">&times;</button></div>
+      <ul class="rm-specs all">${items.map(t => `<li><i aria-hidden="true"></i><span>${esc(t)}</span></li>`).join('')}</ul>
+      ${notes.length ? `<p class="rm-note">${notes.map(esc).join('<br>')}</p>` : ''}
+    </div>`;
+}
+
 let lastDay = null;      // the calendar day that was selected on the last draw
 let lastPicked = null;   // the studio card that was selected on the last draw
 
@@ -137,9 +162,10 @@ function renderBook() {
       <svg class="pk-b" aria-hidden="true" focusable="false"><rect pathLength="1"></rect><rect class="m" pathLength="1"></rect></svg>
       ${studioThumb(s)}
       <div class="row"><h3>Studio ${s.id}</h3>${badge(s.status)}</div>
-      ${descHTML(descWithSpecs(s.desc, s.specs))}
+      <div class="rm-body pk-body">${roomText(s, i)}</div>
       ${cachedAvailLine(i)}
       <p style="margin-top:6px"><b>${peso(s.rate)}</b> <span class="mut">per hour</span></p>
+      ${gearPanel(s, i)}
     </div>`).join('');
 
     fillAvailLines($('#cs'));
@@ -215,9 +241,27 @@ export async function refreshBook() {
 }
 
 export function initBookTab() {
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && gearOpen.size) {
+            gearOpen.clear();
+            renderBook();
+        }
+    });
     $('#c-book').addEventListener('click', e => {
         const pick = e.target.closest('.pick'), day = e.target.closest('.cd'), room = e.target.closest('[data-room]');
         const quick = e.target.closest('[data-quick]');
+        const more = e.target.closest('[data-pk-more]');
+        if (more) {   // open or close the gear list without picking the room
+            const k = +more.dataset.pkMore;
+            gearOpen.has(k) ? gearOpen.delete(k) : gearOpen.add(k);
+            renderBook();
+            const again = $(`[data-pk-panel="${k}"] .rm-x`) || $(`[data-pk-more="${k}"]`);
+            if (again)
+                again.focus();
+            return;
+        }
+        if (e.target.closest('.rm-panel'))
+            return;   // clicks inside the open list do nothing
         if (quick)
             return pickQuick(quick.dataset.quick);
         if (pick)
