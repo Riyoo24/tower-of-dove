@@ -1,145 +1,555 @@
-> **Reports export, analytics and room calendar (no database changes):** Reports has "Download CSV" (one file with a summary plus the detail tables of the selected report; `js/admin/export.js`) and "Save as PDF" (prints only the report; pick Save as PDF in the print window; rules in `css/print.css`). A new **Analytics** report (`js/admin/analytics.js`, `js/admin/charts.js`) shows revenue trend, busy times by weekday and hour, studio utilisation, repeat-customer rate and equipment usage. A new **Room Calendar** tab (`js/admin/calendar.js`, owner and staff) shows every studio on a day grid (hours down, studios across) and a week overview (one row per studio) so free time is easy to see; click a booking for details. Utilisation assumes open hours of 10 AM to 10 PM (`OPEN` / `CLOSE` at the top of `analytics.js` and `calendar.js`).
+# 🕊️ Tower of Dove Music Studio
 
-> **Before you book, FAQ, cost estimate and Add to calendar (no database changes):**
-> - Home: a "Before you book" strip and a FAQ (`js/home/info.js`, drawn into `#byb-list` and `#faq-list` in `pages/customer.html`). The rules written there are the ones the system already enforces; the no-show minutes are read from the database (`loadGrace()`), the other numbers are constants at the top of that file (`HOLD_MINUTES`, `CUTOFF_HOURS`, and `BOOKING_WINDOW_DAYS` from `shared/availability.js`). If a rule changes, update that file too.
-> - Cost estimate: the Book tab shows a 1 to 4 hour table under the selected day. Both come from `js/shared/estimate.js`, which uses the same `dueNow()` rule as the booking form.
-> - Add to calendar: `js/shared/calendar.js` builds a `.ics` file (Apple, Outlook, Android) and a Google Calendar link. Buttons appear in the booking success pop-up (marked tentative while the booking is Pending), in the booking receipt (Pending and Confirmed), and as "Add to calendar" in My bookings > Actions. The event UID is the booking reference, so adding it again after a reschedule replaces the old entry in most calendar apps. Alarms: 1 day before and 2 hours before.
-> - `js/shared/venue.js` holds the studio name, phone, address and Maps link, used by Contact Us and by the calendar file.
-> - Styles: end of `css/home.css`, `css/customer.css` and `css/modals.css`.
+**A full-stack studio room booking and equipment rental platform** for a rehearsal studio in the Philippines, with a customer-facing site, a staff and owner admin dashboard, GCash payment verification, and a Supabase backend.
 
-> **One Browse equipment window:** the customer's "Add equipment to your booking" window and the staff's "Add equipment to the rental" window are both drawn by `js/shared/eqBrowse.js` (search box, category tabs, suggestions, cards with + / -, the Added list, toasts), so they stay identical. Each page only supplies its data and wording.
+🌐 **Live site:** [tower-of-dove.vercel.app](https://tower-of-dove.vercel.app)
 
-> **Equipment search, "In stock only" and "Frequently added with" (no database changes):** the Rent tab has a search box and an "In stock only" switch above the equipment cards, and the booking form's "Browse equipment" window has the search box. A "Frequently added with ..." strip suggests gear that goes with the studio or with what is already in the cart (for example a drum room suggests cymbals or a snare). The logic is in `js/shared/eqFilter.js`; the suggestions come from keyword rules (`RULES` in that file) matched against equipment names, categories and descriptions, so edit `RULES` to change what goes with what. Styles: end of `css/modals.css`.
+![HTML5](https://img.shields.io/badge/HTML5-E34F26?logo=html5&logoColor=white)
+![CSS3](https://img.shields.io/badge/CSS3-1572B6?logo=css3&logoColor=white)
+![JavaScript](https://img.shields.io/badge/JavaScript-ES%20Modules-F7DF1E?logo=javascript&logoColor=black)
+![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%7C%20Auth%20%7C%20Storage-3FCF8E?logo=supabase&logoColor=white)
+![No build step](https://img.shields.io/badge/build-none-blue)
 
+---
 
-> **UI polish update (no database changes):** light/dark theme toggle (`css/theme.css`, `js/shared/themeInit.js`), share/install metadata and `manifest.webmanifest`, responsive photos (`photo()` in `js/shared/cards.js`; set `IMAGE_TRANSFORMS = true` in `js/config/paths.js` only on the Supabase Pro plan), "Print receipt" + `css/print.css`, tab cross-fade, `404.html`, sticky price bars on phones, and phone fixes in `css/mobile.css`. Before going live: replace `https://tidings-unreal-gratuity.ngrok-free.dev` in the `og:image` tags of `index.html` and `pages/*.html` with the real domain, and set `ROOT` in `404.html` if the site is in a sub-folder. No new SQL files.
-# Tower of Dove Music Studio - booking system (modular version)
+## Table of Contents
 
-> **Onsite booking / Onsite rental (GCash):** when the payment is GCash, staff now see the studio's GCash QR, an "Attach GCash Screenshot" field and the reference number box, the same as the customer booking window. The 13-digit reference number is read from the screenshot automatically (OCR) and can be corrected. The screenshot is required and is saved in the `gcash-screenshots` bucket under its reference number. No new SQL file: it uses `38_gcash_screenshots.sql` and `69_onsite_gcash_required.sql`, which should already be run.
+1. [Project Overview](#project-overview)
+2. [Key Features](#key-features)
+3. [Tech Stack & Architecture](#tech-stack--architecture)
+4. [Directory Structure](#directory-structure)
+5. [Getting Started](#getting-started)
+6. [Database & Migrations](#database--migrations)
+7. [Edge Functions](#edge-functions)
+8. [Deployment](#deployment)
+9. [Security Notes](#security-notes)
+10. [Further Documentation](#further-documentation)
 
-Vanilla HTML5 + CSS3 + ES6 modules + Supabase. No build tools, no frameworks.
+---
 
-## Run it
-ES modules do not load from `file://`. Serve the folder with any static server, then open the address:
+## Project Overview
 
-    python3 -m http.server 8000      # then visit http://localhost:8000/
+Tower of Dove is a web platform that lets a music studio:
 
-(VS Code "Live Server" works too.) Database scripts are in `supabase/` (unchanged).
+- take **room bookings** (open daily, 10 AM – 10 PM, Asia/Manila time),
+- **rent out equipment**, either as an add-on to a studio session or as an outside rental to take away,
+- **verify GCash payments** with a reference number and screenshot,
+- and run day-to-day operations (sessions, check-in, returns, damage fees, no-shows, reports) from one admin dashboard.
 
-## Directory tree
+Customers can book **as a guest (no account needed)** or register to keep their history. Studio staff and the owner work from a role-based dashboard. All business rules (no double booking, stock limits, payment math, the 28-day booking window, no-show release) are **enforced in the database**, not only in the browser.
+
+---
+
+## Key Features
+
+### Customer-facing site
+
+- **Studio booking**: pick a studio and a date on a live availability calendar, choose hourly slots, and see a cost estimate before you commit.
+- **2-minute slot hold**: chosen hours are held while the customer fills in the form, so two people can't grab the same slot.
+- **Guest or member checkout**: continue as a guest, or register at checkout. Guest bookings made on the same device are claimed by the account after login.
+- **Equipment rental**: add gear to a studio session (**add-on**) or rent it for pick-up (**outside rental**). A shared cart with search, category tabs, an "In stock only" switch and "Frequently added with…" suggestions.
+- **Flexible payments**: **50% down payment or 100% full payment** via GCash. A session can also be extended and paid **after** the session.
+- **GCash proof**: the studio's QR code is shown, the customer attaches a screenshot, and the 13-digit reference number is **read from the screenshot automatically (OCR)** and can be corrected.
+- **Self-service management**: reschedule, cancel (24-hour rule), extend a running session, "Running late" (+15 min no-show grace), and "Book again".
+- **Guest lookup**: find a booking or rental by reference code plus phone number.
+- **Receipts and emails**: booking and rental receipts, "payment verified" and "fully paid" emails, no-show reminders, and replacement-item notices.
+- **Calendar export**: add a booking to Apple/Outlook (`.ics`) or Google Calendar.
+- **Replacement choice**: when a unit becomes unavailable, customers can pick a replacement item from options offered by staff.
+- **Account page**: change username, name, email and password via Supabase email links.
+- **Polish**: light/dark theme, installable PWA (`manifest.webmanifest`), skeleton loaders, inline field validation, empty states, print-friendly receipts, and a mobile-first layout.
+
+### Admin dashboard (Owner & Staff)
+
+| Area | What it does |
+|---|---|
+| **Overview** | Live counts, alerts and a global search across bookings, rentals and customers. |
+| **Bookings** | Full booking list with approve / reject (with reason), reschedule, cancel, extend, check-in, history trail and actions menu. |
+| **Room Calendar** | Day grid (hours × studios) and week overview to spot free time at a glance. |
+| **Studio Sessions** | Start, extend, check in and complete sessions. Sessions end by themselves at their end time, unless a balance is still owed. |
+| **Payments** | **GCash verification queue**: review the screenshot and reference number, then **verify or reject**. Verification moves the booking or rental forward and emails the customer. |
+| **Balance collection** | Collect the remaining balance (cash with change calculation, or GCash reference) before starting a session, issuing equipment or completing an extended session. |
+| **Rentals & equipment tracking** | Approve, issue, return and swap items. Overdue rentals are flagged and late fees are calculated automatically. |
+| **Condition logging** | Before-photos, handover proof and return inspection photos, with damaged units marked **Out of service** or removed from stock. |
+| **Damage fees** | Record, collect, verify, waive or defer damage fees. Unpaid fees block new bookings, and every change is logged. |
+| **Equipment** | Stock levels (owned / out of service / rentable), pricing, categories, and **drag-and-drop ordering** of what customers see. |
+| **Studios** | Manage studio details, rates, photos and availability (owner only). |
+| **Onsite booking / Onsite rental** | Walk-in bookings and rentals with cash or GCash, a 2-minute "held by staff" slot lock, and optional down payments. |
+| **Customers** | Customer list, spending, and **reputation flags** (late returns, damage fees, no-shows) with notes and dismissals. |
+| **No-show handling** | Auto-release of unpaid bookings after a grace period, hold / release controls, and forfeiture emails. |
+| **Reports & Analytics** | Revenue, utilisation, busy hours, repeat customers and equipment usage, with **CSV export** and **Save as PDF**. |
+| **Settings & Profile** | GCash QR, staff accounts (created through an Edge Function), no-show grace time, and profile management. |
+
+**Roles:** *Owner* has full control (studios, staff, overrides, undo check-in, fee waivers). *Staff* run daily operations only.
+
+---
+
+## Tech Stack & Architecture
+
+| Layer | Technology |
+|---|---|
+| **Frontend** | Vanilla **HTML5**, **CSS3**, and **ES6 modules**: no framework, no bundler, no build step |
+| **Backend** | **Supabase**: PostgreSQL, Auth, Storage, Row Level Security, RPC functions, `pg_cron` |
+| **Serverless** | Supabase **Edge Functions** (Deno / TypeScript) |
+| **Email** | SMTP (e.g. Gmail App Password) through the `send-receipt` Edge Function |
+| **Client libraries (CDN)** | `@supabase/supabase-js` v2, `tesseract.js` (GCash OCR), Google Fonts (Bricolage Grotesque, Instrument Sans) |
+| **Hosting** | Any static host (deployed on Vercel) |
+
+### How the frontend is organised
+
+- **One feature = one folder.** Each page loads a single entry script, `js/<feature>/index.js`, which imports the rest of that feature's modules.
+- **One shared client.** Every module imports `sb` from `js/config/supabaseClient.js`.
+- **Shared logic lives in `js/shared/`**: availability, slot holds, session handling, catalog, cart helpers, the date picker, receipts, and the equipment browser used by both customer and staff.
+- **Shared state** (for example `state.js` in `customer/` and `admin/`) holds variables that several modules change, since an imported binding can't be reassigned.
+- **Customer pages are a single-page app.** Home, Book, Rent, My Bookings, My Rental and Contact are tabs of `pages/customer.html`, so moving between them never reloads the page and the cart is preserved.
+- **CSS is layered by role**: `base → components → layout → modals`, then a page-specific file, then the theme, motion, mobile and print layers.
+
+### How the backend is organised
+
+- **The schema is built from numbered SQL files**, run in order, with later files layering features on top. They are safe to re-run.
+- **Business rules live in Postgres.** Constraints, triggers and `SECURITY DEFINER` RPCs enforce no double booking (a `btree_gist` exclusion constraint), stock by time window, payment maths, the booking window, and no-show release.
+- **Row Level Security** means customers see only their own data. Guests can only use specific RPCs. Only staff can see GCash screenshots and inspection photos.
+- **Core tables:** `app_user`, `customer`, `studio`, `equipment_category`, `equipment`, `booking`, `booking_extension`, `booking_event`, `rental_order`, `rental_detail`, `payment`, `slot_hold`, `equipment_hold`, `damage_charge`, `damage_charge_log`, `late_fee_log`, `rental_item_swap`, `rental_swap_offer`, `incident_review`, `app_setting`, and more.
+- **Storage buckets:** `studio-images` and `equipment-images` (public), `rental-ids`, `rental-photos` and `gcash-screenshots` (private).
+- **Scheduled jobs (`pg_cron`)** auto-complete sessions, release no-shows, expire swap offers, and trigger reminder emails.
+
+---
+
+## Directory Structure
+
+This tree lists every file in the repository.
+
+- `pages/` holds the four HTML pages.
+- `css/` and `js/` sit at the top level, next to `assets/`.
+- `assets/` contains only images (`assets/img/`).
+
+<details>
+<summary><strong>Click to expand the full file tree</strong></summary>
+
+```text
+riyoo24-tower-of-dove/
+├── .vscode
+│   └── settings.json
+├── assets
+│   └── img
+│       ├── reviewers
+│       │   ├── reviewer-1.jpg
+│       │   ├── reviewer-2.jpg
+│       │   └── reviewer-3.jpg
+│       ├── apple-touch-icon.png
+│       ├── favicon-32.png
+│       ├── icon-192.png
+│       ├── icon-512.png
+│       ├── icon-maskable-512.png
+│       ├── logo.png
+│       └── og-cover.png
+├── css
+│   ├── admin.css
+│   ├── base.css
+│   ├── components.css
+│   ├── customer.css
+│   ├── depth.css
+│   ├── home.css
+│   ├── layout.css
+│   ├── login.css
+│   ├── mobile.css
+│   ├── modals.css
+│   ├── motion.css
+│   ├── mycards-sticky.css
+│   ├── mycards.css
+│   ├── print.css
+│   ├── refresh.css
+│   ├── signal.css
+│   ├── skeleton-extra.css
+│   └── theme.css
+├── docs
+│   └── supabase_setup_summary.md
+├── js
+│   ├── account
+│   │   ├── index.js
+│   │   ├── profilePanel.js
+│   │   └── profileService.js
+│   ├── admin
+│   │   ├── alerts.js
+│   │   ├── analytics.js
+│   │   ├── balance.js
+│   │   ├── bookings.js
+│   │   ├── calendar.js
+│   │   ├── cashBox.js
+│   │   ├── charts.js
+│   │   ├── checkIn.js
+│   │   ├── checkInInfo.js
+│   │   ├── customers.js
+│   │   ├── damage.js
+│   │   ├── data.js
+│   │   ├── equipCalendar.js
+│   │   ├── equipment.js
+│   │   ├── export.js
+│   │   ├── globalSearch.js
+│   │   ├── handoff.js
+│   │   ├── helpers.js
+│   │   ├── index.js
+│   │   ├── jump.js
+│   │   ├── noShow.js
+│   │   ├── onsite.js
+│   │   ├── overview.js
+│   │   ├── payments.js
+│   │   ├── profile.js
+│   │   ├── rentals.js
+│   │   ├── reports.js
+│   │   ├── reputation.js
+│   │   ├── sessions.js
+│   │   ├── settings.js
+│   │   ├── state.js
+│   │   ├── studios.js
+│   │   ├── swapOffer.js
+│   │   ├── topbar.js
+│   │   ├── trail.js
+│   │   └── verify.js
+│   ├── auth
+│   │   ├── authService.js
+│   │   ├── index.js
+│   │   └── passwordToggle.js
+│   ├── config
+│   │   ├── paths.js
+│   │   └── supabaseClient.js
+│   ├── customer
+│   │   ├── alerts.js
+│   │   ├── book.js
+│   │   ├── bookingForm.js
+│   │   ├── cart.js
+│   │   ├── cartStore.js
+│   │   ├── damageBlock.js
+│   │   ├── data.js
+│   │   ├── index.js
+│   │   ├── myBookings.js
+│   │   ├── myCards.js
+│   │   ├── myRentals.js
+│   │   ├── noShow.js
+│   │   ├── registerModal.js
+│   │   ├── rent.js
+│   │   ├── returnCountdown.js
+│   │   ├── state.js
+│   │   ├── swapChoice.js
+│   │   └── ui.js
+│   ├── home
+│   │   ├── availability.js
+│   │   ├── carousel.js
+│   │   ├── contact.js
+│   │   ├── index.js
+│   │   ├── info.js
+│   │   ├── render.js
+│   │   └── reviews.js
+│   └── shared
+│       ├── actionMenu.js
+│       ├── availability.js
+│       ├── backToTop.js
+│       ├── boot.js
+│       ├── btnState.js
+│       ├── calendar.js
+│       ├── cards.js
+│       ├── catalog.js
+│       ├── datepicker.js
+│       ├── emptyState.js
+│       ├── eqBrowse.js
+│       ├── eqFilter.js
+│       ├── eqModal.js
+│       ├── estimate.js
+│       ├── fieldCheck.js
+│       ├── flair.js
+│       ├── formRules.js
+│       ├── gcashProof.js
+│       ├── guestStore.js
+│       ├── holds.js
+│       ├── holdTimer.js
+│       ├── imageViewer.js
+│       ├── inspectionPhoto.js
+│       ├── layout.js
+│       ├── liveAvail.js
+│       ├── mobileUx.js
+│       ├── modalTop.js
+│       ├── motion.js
+│       ├── navigation.js
+│       ├── path.js
+│       ├── payOption.js
+│       ├── qrZoom.js
+│       ├── query.js
+│       ├── receipt.js
+│       ├── rollup.js
+│       ├── session.js
+│       ├── sideSkeleton.js
+│       ├── skeleton.js
+│       ├── themeInit.js
+│       ├── topSkeleton.js
+│       ├── utils.js
+│       └── venue.js
+├── pages
+│   ├── account.html
+│   ├── admin.html
+│   ├── customer.html
+│   └── login.html
+├── supabase
+│   ├── functions
+│   │   ├── create-staff
+│   │   │   └── index.ts
+│   │   └── send-receipt
+│   │       └── index.ts
+│   ├── tests
+│   │   └── qa_tests.sql
+│   ├── 01_schema.sql
+│   ├── 02_functions.sql
+│   ├── 03_security.sql
+│   ├── 04_seed.sql
+│   ├── 05_booking_addons.sql
+│   ├── 06_lookup_addons.sql
+│   ├── 07_auto_approve_addons.sql
+│   ├── 08_outside_rental.sql
+│   ├── 09_random_refs.sql
+│   ├── 10_guest_lookup_privacy.sql
+│   ├── 11_cash_autostart_addons.sql
+│   ├── 12_rental_base_hours_autostatus.sql
+│   ├── 13_overdue_hours_addon_return.sql
+│   ├── 14_email_login_names_id_view.sql
+│   ├── 15_extend_booking.sql
+│   ├── 16_extension_slot_hold.sql
+│   ├── 17_customer_extend.sql
+│   ├── 18_booking_reject_reason.sql
+│   ├── 19_remove_drum_vip_capacity.sql
+│   ├── 20_booking_down_payment.sql
+│   ├── 21_fix_rental_total_8h.sql
+│   ├── 22_owner_email.sql
+│   ├── 23_extension_payment.sql
+│   ├── 24_onsite_gcash_optional.sql
+│   ├── 25_reschedule_slot_hold.sql
+│   ├── 26_profile_management.sql
+│   ├── 27_allow_username_change.sql
+│   ├── 28_default_username_first_name.sql
+│   ├── 29_optional_backfill_first_name_usernames.sql
+│   ├── 30_claim_guest_bookings.sql
+│   ├── 31_payment_options.sql
+│   ├── 32_balance_collection.sql
+│   ├── 33_booking_window.sql
+│   ├── 34_receipt_emails.sql
+│   ├── 35_verified_emails.sql
+│   ├── 36_onsite_slot_hold.sql
+│   ├── 37_hold_two_minutes.sql
+│   ├── 38_gcash_screenshots.sql
+│   ├── 39_addon_auto_issue_return.sql
+│   ├── 40_addon_balance_collection.sql
+│   ├── 41_auto_complete_sessions.sql
+│   ├── 42_onsite_receipt_email.sql
+│   ├── 43_onsite_outside_down_payment.sql
+│   ├── 44_onsite_booking_down_payment.sql
+│   ├── 45_addon_balance_on_booking.sql
+│   ├── 46_equipment_condition_docs.sql
+│   ├── 47_fix_customer_photo_policy.sql
+│   ├── 48_performance_indexes.sql
+│   ├── 49_cron_auto_complete.sql
+│   ├── 50_addon_full_payment_when_started.sql
+│   ├── 51_stock_by_time.sql
+│   ├── 52_stock_on_booking_time_change.sql
+│   ├── 53_pending_orders_hold_stock.sql
+│   ├── 54_reschedule_stock_slots.sql
+│   ├── 55_extend_without_addons.sql
+│   ├── 56_balance_payment_proof.sql
+│   ├── 57_handover_proof.sql
+│   ├── 58_damage_charges.sql
+│   ├── 59_remove_damaged_stock.sql
+│   ├── 60_out_of_service_stock.sql
+│   ├── 61_swap_rental_item.sql
+│   ├── 62_stock_preview.sql
+│   ├── 63_out_of_stock_status.sql
+│   ├── 64_damage_block_reputation.sql
+│   ├── 65_outside_no_auto_issue.sql
+│   ├── 66_balance_receipt_email.sql
+│   ├── 67_balance_cash_tendered.sql
+│   ├── 68_damage_paid_email.sql
+│   ├── 69_onsite_gcash_required.sql
+│   ├── 70_no_max_booking_hours.sql
+│   ├── 71_customer_swap_choice.sql
+│   ├── 72_customer_swap_followup.sql
+│   ├── 73_approve_after_swap.sql
+│   ├── 75_onsite_cash_tendered.sql
+│   ├── 76_replacement_emails.sql
+│   ├── 77_equipment_sort_order.sql
+│   ├── 78_no_show_release.sql
+│   ├── 79_no_show_emails.sql
+│   ├── 80_lock_equipment_on_request.sql
+│   ├── 81_qa_fixes.sql
+│   ├── 82_no_show_in_flag.sql
+│   ├── 83_late_fee_collection.sql
+│   ├── 84_late_fee_block.sql
+│   ├── 85_collect_balance_on_complete.sql
+│   ├── 86_block_autocomplete_with_balance.sql
+│   ├── 87_booking_check_in.sql
+│   ├── 88_late_fee_preview.sql
+│   ├── 89_equipment_checkout_hold.sql
+│   ├── 90_addon_balance_in_session.sql
+│   ├── 91_extension_pay_later.sql
+│   ├── 92_extension_active_no_down.sql
+│   ├── 93_staff_extend_session_payment.sql
+│   ├── 94_qa_hardening .sql
+│   ├── all_in_one.sql
+│   └── README.md
+├── 404.html
+├── index.html
+├── manifest.webmanifest
+├── README.md
+└── settings.json
 ```
-tower-of-dove-system/
-├─ index.html                 forwards to pages/customer.html#home (old links keep working)
-├─ pages/  login.html  customer.html (Home, Book, Rent, My Bookings, My Rental, Contact Us = tabs, no reloads)  admin.html  account.html
-├─ css/
-│  ├─ base.css                palette variables, reset, typography
-│  ├─ components.css          cards, buttons, badges, forms, tables, tabs, alerts
-│  ├─ layout.css              sidebar, mobile bar, page grids, phone rules
-│  ├─ modals.css              toast, dialogs, drawers, success pop-up
-│  ├─ home.css  customer.css  admin.css  login.css     (one per page)
-├─ js/
-│  ├─ config/    supabaseClient.js  paths.js
-│  ├─ shared/    utils  catalog  cards  availability  holds  session  navigation  layout  datepicker
-│  ├─ auth/      index  authService  passwordToggle
-│  ├─ account/   index  profilePanel  profileService
-│  ├─ home/      index  render  carousel  availability
-│  ├─ customer/  index  state  ui  book  bookingForm  data  rent  myBookings  myRentals
-│  └─ admin/     index  state  helpers  data  overview  bookings  payments  sessions
-│                studios  equipment  rentals  verify  customers  settings  profile  onsite  reports
-├─ assets/   supabase/
+
+</details>
+
+**What each top-level folder is for:**
+
+| Path | Purpose |
+|---|---|
+| `pages/` | `customer.html` (single-page customer app), `admin.html` (Owner / Staff dashboard), `login.html`, `account.html` |
+| `css/` | Layered stylesheets: `base → components → layout → modals`, then page files (`home`, `customer`, `admin`, `login`), plus theme, motion, mobile and print |
+| `js/config/` | Shared Supabase client and route/path settings |
+| `js/shared/` | Modules used by several pages (availability, holds, session, catalog, receipts, GCash OCR proof, date picker, skeletons, ...) |
+| `js/auth/`, `js/account/`, `js/home/`, `js/customer/`, `js/admin/` | One folder per feature, each with an `index.js` entry point |
+| `assets/img/` | Logo, favicons, PWA icons, social cover image, reviewer photos |
+| `supabase/` | Numbered SQL migrations (`01`–`94`), `all_in_one.sql`, Edge Functions and QA tests |
+| `docs/` | Backend reference (`supabase_setup_summary.md`) |
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- A modern browser
+- A static file server (Python 3, Node, or VS Code **Live Server**)
+- A free [Supabase](https://supabase.com) account (to run your own backend)
+
+> ES modules do not load from `file://`, so **do not** open `index.html` by double-clicking it. Serve the folder over `http://`.
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/<your-username>/tower-of-dove.git
+cd tower-of-dove
 ```
-Each HTML page links the 4 shared stylesheets + its own, and loads ONE script: `js/<feature>/index.js`.
-That entry file imports the other modules. The supabase-js library is still loaded by a normal
-`<script>` tag first, so `window.supabase` exists before any module runs.
 
-## Date pickers
-`js/shared/datepicker.js` (a plain script, loaded with `defer` on the home, customer and admin pages) replaces every
-`<input type="date">` with a dropdown-style button and calendar. Styles: the "DATE PICKERS" section at the end of `css/motion.css`.
-The real date input stays in the page (hidden), so `.value`, `.min`, `.max`, `.disabled` and the `input` / `change` events work as before.
-No database changes. Browsers without the Popover API keep the normal date field.
+### 2. Run it locally
 
-## Module responsibility map
-| File | Feature / UI | Database |
-|---|---|---|
-| config/supabaseClient.js | the one shared `sb` client | - |
-| config/paths.js | site root and page links | - |
-| admin/damage.js | Damage fees of outside rentals: Damage fee window (photos, collect, verify / reject, change / waive, history), Cash / GCash fields used by the return window | v_damage_charge, damage_charge_log, rpc staff_collect_damage, staff_reject_damage_payment, staff_update_damage_charge; run supabase/58_damage_charges.sql (and 59_remove_damaged_stock.sql, then 60_out_of_service_stock.sql, then 61_swap_rental_item.sql for "Swap item", for "Remove from stock" / "Out of service") |
-| admin/swapOffer.js, customer/swapChoice.js | "Let customer choose": staff offer 1 to 5 replacement items (shortage pop-up, Equipment warning, Rentals > Actions); the customer picks one in My rental / My bookings; deadline fallback | rental_swap_offer, rental_swap_offer_option, rpc staff_create_swap_offer, staff_cancel_swap_offer, my_swap_offers, customer_choose_swap, customer_decline_swap, expire_swap_offers; run supabase/71_customer_swap_choice.sql (after 61) |
-| shared/utils.js | $, esc, peso, dates (Manila), time slots, toast, username->email | - |
-| shared/catalog.js | studios and equipment lists, GCash QR link | studio, v_equipment_stock, storage studio-images |
-| shared/availability.js | taken / held hours, past-hour rules | rpc get_busy_slots |
-| shared/holds.js | 2-minute slot hold while booking | rpc hold_slot, release_hold |
-| shared/session.js | who is logged in, logout, admin guard | auth session, customer, app_user |
-| shared/layout.js, navigation.js | sidebar, mobile bar, page links | - |
-| shared/cards.js | studio/equipment picture blocks | - |
-| account/profileService.js, profilePanel.js, index.js | change username (shown in the sidebar) and first/last name, email and password through Supabase email links (customer account page; Owner/Staff profile view) | auth.updateUser (email), auth.resetPasswordForEmail, customer, app_user; run supabase/27_allow_username_change.sql |
-| auth/authService.js | log in, register | auth sign-in / sign-up, app_user, customer |
-| auth/index.js, passwordToggle.js | login/register forms, eye button | - |
-| home/* | hero slider, cards, availability bar | via shared/catalog + availability |
-| customer/book.js | Book tab: studio picker + calendar | via availability |
-| customer/bookingForm.js | booking dialog, slots, add-ons, payment | holds, booking rpc, storage upload |
-| customer/rent.js | Rent tab | rental request rpc, ID upload |
-| customer/myBookings.js, myRentals.js | My bookings / My rental | bookings, rentals |
-| customer/data.js | loads this customer's data | customer, bookings, rentals |
-| customer/state.js, ui.js | shared page variables; tabs, tables, dialogs | - |
-| admin/data.js | loads and refreshes all dashboard data | views, payments, staff, studios |
-| admin/overview, bookings, payments, sessions | those tabs | booking, payment |
-| admin/studios, equipment, rentals, customers | those tabs | studio, equipment, rentals, customer |
-| admin/verify.js | payment verify drawer | payment |
-| admin/settings.js, onsite.js, reports.js | settings/staff/QR, walk-ins, reports | app_user, storage, rpc |
-| admin/helpers.js, state.js | shared helpers, click dispatcher; shared variables | - |
+```bash
+python3 -m http.server 8000
+# then open http://localhost:8000/
+```
 
-## Notes for defending the design
-* **No inline handlers existed**, so nothing needs to be put on `window`; all events use `addEventListener` / `.onclick` inside modules.
-* **Shared variables**: a module cannot reassign a variable it imported, so variables several modules change live in `state.js` (`state.selStudio`). Admin lists such as `BK` are loaded in `admin/data.js` and exported as live bindings.
-* **CSS order matters**: keep the link order base, components, layout, modals, page file.
-* Every function and rule was moved, not rewritten. The original `style.css` / `js/*.js` are intentionally gone.
+Or use any equivalent (`npx serve`, VS Code Live Server, etc.). There is no `npm install` and no build.
 
-## Update: shared equipment cart (customer page)
-- `js/customer/cart.js` (new): one cart for Studio Add-ons + Outside Rent, combined stock rules, allocation message.
-- `state.cart` is now `{ addon: {}, out: {} }` keyed by equipment id; switching modes no longer clears it.
-- The booking form's "Browse equipment" window has its own cart (`state.cart.book`); it is not copied from the Rent tab, but all carts share the same stock.
-- `ui.js`: new `showStockAlert()` popup. No Supabase changes are needed.
+> With the bundled config the site will talk to the original Supabase project. To use **your own** backend, continue below.
 
-## Update: payment options (50% down payment or full payment)
-- `supabase/31_payment_options.sql` (run once): `payment.payment_option`, new RPC parameters, `request_addon_rental`, updated views and revenue report.
-- `js/shared/payOption.js`: the shared chooser and amount helper used by the booking form, Rent equipment page and Extend window.
+### 3. Create your Supabase backend
 
-## Update: verify the remaining balance before starting a session / issuing equipment
-- `supabase/32_balance_collection.sql` (run once, after 31): `payment.balance_paid_*` columns, `booking_balance_due()`, `rental_balance_due()`, RPC `staff_collect_balance`, guard triggers, `start_due_sessions()` no longer auto-starts while a balance is due, extra view columns, `lookup_booking`.
-- `js/admin/balance.js` (new): the verification window. Start session / Issue equipment open it when a 50% down payment still has a balance. Confirming turns the payment into a full payment and moves the booking to Active / the rental to In Use in one database call.
+1. Create a new project at [supabase.com](https://supabase.com).
+2. Open **SQL Editor** and run, in order: `01_schema.sql`, `02_functions.sql`, `03_security.sql`, `04_seed.sql`.
+3. Then run the numbered migrations `05_…` through `94_…` **in numeric order**. Each is safe to re-run. See [Database & Migrations](#database--migrations).
+4. Enable **Authentication → Providers → Email → Confirm email**, and configure a custom SMTP sender so real customers receive the confirmation link.
+5. Under **Authentication → URL Configuration**, set the **Site URL** and add a **Redirect URL** such as `http://localhost:8000/**` (and your production URL with `/**`).
+6. **Create the owner account** by following the comment block at the bottom of `04_seed.sql` (create the Auth user, then insert the matching `app_user` row with role `Owner`).
+7. Deploy the two [Edge Functions](#edge-functions).
 
-## Update: 4-week booking window
-- Customers can book studios and pick up outside rentals only up to 28 days ahead (`lastBookableDate()` in `js/shared/availability.js`). `supabase/33_booking_window.sql` (run once) makes the database enforce it too.
+### 4. Point the frontend at your project
 
-## Performance pass
+Edit `js/config/supabaseClient.js`:
 
-- Animations use only `transform` / `opacity`. The desktop sidebar collapse changes the page margin once and the page then slides with a `transform` (see `toggleSidebar` in `js/shared/layout.js`); the phone drawer already used `translateX`. No `transition: all` anywhere, and `will-change` is kept only on the phone drawer.
-- Timers: `everyVisible()` in `js/shared/utils.js` pauses background polling while the tab is hidden and catches up once when it is shown again. The admin 30-second refresh also skips redrawing the tables when the data has not changed.
-- Images: equipment / studio / admin thumbnails and ID / GCash / inspection photos use `loading="lazy"`, `decoding="async"` and `width` / `height`. The first carousel slide loads right away.
-- Supabase reads go through `js/shared/query.js`: only the columns the site uses, and capped lists (newest 1000 bookings / payments, 1500 rental lines, 300 per customer). If a column is missing in an older database the read repeats once with `select('*')`.
-- Fonts: Bricolage Grotesque is requested only at weight 700 (the only weight used).
-- `path.js` + `css/signal.css`: the "How booking works" strip on the Home tab: round step nodes joined by a line; once, when it scrolls into view, node 1 lights, a red line travels to node 2, and so on to node 3, then it rests (no looping motion; stacks with a vertical line on phones; shown finished with reduced motion or without the script) (markup is in `pages/customer.html`, class `hx-how`).
-- `rollup.js`: totals count up or down to their new peso value. The ids it watches are listed at the top of the file; add an id there to roll another total.
-- Scripts: `flair.js` is only on `index.html`; `datepicker.js` only on the pages with date fields.
-- Optional SQL: `supabase/48_performance_indexes.sql`.
+```js
+export const SUPABASE_URL = 'https://<your-project-ref>.supabase.co';
+export const SUPABASE_ANON_KEY = '<your-anon-public-key>';
+```
 
-## Update: button loading and success states
+> Use only the **anon** key here. **Never** put the `service_role` key in frontend code.
 
-Submit buttons no longer just disable. `js/shared/btnState.js` (styles in `css/components.css`) shows a small spinner with "Sending…" while a request runs, then a brief check mark ("Sent", "Booked", "Saved"…) before the window moves on. If the request fails the button goes back to normal so the person can try again. Used by: the booking form, equipment/outside rental requests, extension and reschedule windows, log in / register / password reset, profile saves, and the staff windows (collect balance, extend, return, before photos, GCash QR, staff accounts). With reduced-motion turned on the spinner pulses instead of spinning. No database changes.
+### 5. Open the app
 
-## Update: friendly empty states and inline field validation
+| Page | URL |
+|---|---|
+| Customer site | `http://localhost:8000/pages/customer.html` |
+| Login / Register | `http://localhost:8000/pages/login.html` |
+| Admin dashboard | `http://localhost:8000/pages/admin.html` (Owner / Staff login) |
 
-- `js/shared/emptyState.js` draws an icon, one line and a button where a list is empty: My bookings ("Book a studio"), My rental ("Rent equipment"), the rental cart ("Browse equipment") and the equipment list.
-- `js/shared/fieldCheck.js` marks a wrong field with a red border and a short message under it, and scrolls to the first one. A field is checked when it is left, and again on every key while it shows an error, so the message disappears as soon as it is fixed. Used by the booking form, the rental checkout (names, contact numbers, ID, GCash screenshot and reference, terms), the extension window, the register window and the log in / register / password pages. Messages about the server or the schedule (a slot taken, a hold expired) still use the banner of each form.
-- Styles are in `css/components.css`. No database changes.
+### Optional configuration
 
+- **Domain-specific tags:** update the `og:image`, `og:url` and `canonical` tags in `index.html` and `pages/*.html` to your own domain, and set `ROOT` in `404.html` if the site lives in a sub-folder.
+- **Image transformations:** set `IMAGE_TRANSFORMS = true` in `js/config/paths.js` only on the Supabase **Pro** plan.
+- **Studio details:** edit `js/shared/venue.js` (name, phone, address, map link).
+- **Opening hours** used by analytics and the room calendar: `OPEN` / `CLOSE` at the top of `js/admin/analytics.js` and `js/admin/calendar.js`.
 
-## Check-in: the time a customer arrived (87_booking_check_in.sql)
-Run `supabase/87_booking_check_in.sql` once (after 86). Safe to re-run; no Edge Function change. Until it is run the admin page works as before and the check-in buttons are hidden.
-* **What it is**: a record of when the customer arrived, for 50% down-payment bookings and fully paid ones alike. It does **not** start the session: fully paid bookings still start by themselves at their start time, and a booking with a balance is still started from Studio Sessions with **Collect balance & start**.
-* **Staff**: Studio Sessions shows **Check in** on a confirmed booking whose time has come (and on a running session that has not been checked in). Bookings has an **Arrived** column, a **Check in** item in Actions, and an "Arrived" line in Details. Checking in twice keeps the first time.
-* **No-show**: a customer who has checked in is not a no-show. The release countdown, **Hold** and **Release** disappear for that booking and the automatic release skips it while its session time is still running (a checked-in booking that is never paid or started is left for staff to cancel from Bookings).
-* **Walk-ins**: an onsite booking that starts now (or within 15 minutes) is checked in automatically.
-* **History**: every check-in is written to the booking's History ("Arrived 7 min late" / "10 min early" / "on time"). Only the **owner** can undo a check-in (Actions > Undo check-in, a note is required; the undo is logged too).
-* **DB**: columns `booking.checked_in_at / checked_in_by / checked_in_by_name`; RPCs `staff_check_in`, `staff_undo_check_in`, `staff_check_in_times`; `release_no_show_bookings`, `staff_release_booking`, `staff_release_times`, `booking_release_time` and `my_booking_release` now skip a checked-in booking.
+---
+
+## Database & Migrations
+
+The `supabase/` folder contains the full schema history as numbered scripts:
+
+| Range | Focus |
+|---|---|
+| `01`–`04` | Core schema, functions, security (RLS), seed data |
+| `05`–`18` | Add-ons, guest lookup privacy, random references, extensions, reject reasons |
+| `19`–`37` | Down payments, profile management, payment options, balance collection, booking window, receipt/verification emails, slot holds |
+| `38`–`58` | GCash screenshots, automatic session completion (`pg_cron`), stock-by-time checks, equipment condition docs, handover proof, damage fees |
+| `59`–`73` | Out-of-service stock, item swaps, customer replacement choice, damage-based reputation blocks, balance receipts |
+| `75`–`94` | Equipment ordering, no-show release and emails, QA fixes, late fees, check-in, pay-later extensions, QA hardening |
+
+Notes:
+
+- There is intentionally no `74_*.sql`.
+- `29_optional_backfill_first_name_usernames.sql` is optional.
+- `79_no_show_emails.sql` needs extra setup (a `CRON_SECRET` secret and an `email_job_config` row, described at the bottom of the file and in `supabase/README.md`).
+- `all_in_one.sql` bundles only the early files. For a fresh install, follow the numbered order above.
+- Existing databases: run only the newest files you have not yet applied.
+- **Tests:** paste `supabase/tests/qa_tests.sql` into the SQL Editor to check double-booking, payment maths, no-show release and data-access rules. Everything is rolled back.
+
+For the full table, RPC, RLS and storage reference, see [`docs/supabase_setup_summary.md`](docs/supabase_setup_summary.md) and [`supabase/README.md`](supabase/README.md).
+
+---
+
+## Edge Functions
+
+| Function | Purpose |
+|---|---|
+| `create-staff` | Lets the **Owner** create staff accounts, reset staff passwords and remove customer accounts. Uses the `service_role` key server-side only. |
+| `send-receipt` | Sends booking/rental receipts, "payment verified" and "fully paid" emails, damage and late-fee receipts, replacement-item notices, and no-show reminders / forfeiture notices. |
+
+**Deploy (CLI):**
+
+```bash
+supabase functions deploy create-staff --project-ref <your-project-ref>
+supabase functions deploy send-receipt --project-ref <your-project-ref>
+```
+
+**Secrets for `send-receipt`** (Dashboard → Edge Functions → Secrets):
+`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, and `CRON_SECRET` for the no-show jobs. Optional: `RECEIPT_FROM_EMAIL`, `STUDIO_NAME`, `STUDIO_CONTACT_EMAIL`.
+
+---
+
+## Deployment
+
+The app is plain static files, so it deploys to Vercel, Netlify, GitHub Pages or Cloudflare Pages with no build command. After deploying:
+
+1. Set the Supabase **Site URL** and **Redirect URLs** to your production domain (`https://your-domain/**`).
+2. Update the `og:*` / `canonical` tags to the new domain.
+3. Make sure SMTP secrets are set so confirmation and receipt emails are delivered.
+
+---
+
+## Security Notes
+
+- The Supabase **anon key is public by design**. Data is protected by **Row Level Security** and `SECURITY DEFINER` RPCs.
+- The **`service_role` key never touches the browser**. Staff creation goes through the `create-staff` Edge Function.
+- Guest lookups require the **reference code and the phone number** used for the booking.
+- `hold_slot` is rate-limited per caller to prevent slot hoarding.
+- GCash screenshots, rental IDs and inspection photos are stored in **private buckets** that only staff can read.
+
+---
+
+## Further Documentation
+
+- [`supabase/README.md`](supabase/README.md): setup order, email verification, forgot password, per-migration instructions
+- [`docs/supabase_setup_summary.md`](docs/supabase_setup_summary.md): complete backend reference
+
+---
+
+© Tower of Dove Music Studio. All rights reserved.
