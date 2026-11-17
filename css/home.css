@@ -828,7 +828,7 @@
 }
 
 /* price and Book now sit at the bottom of every room card, even when the description is short */
-.hx-room>.hx-foot {
+.hx-room .fl-front>.hx-foot {
     margin-top: auto;
 }
 
@@ -870,6 +870,30 @@
 .hx-b.ok {
     background: var(--ok-bg);
     color: var(--ok);
+}
+
+.hx-b.ok i {
+    animation: dotBreathe 2.4s ease-in-out infinite;
+}
+
+@keyframes dotBreathe {
+    0%, 100% {
+        opacity: .55;
+        transform: scale(1);
+        box-shadow: 0 0 0 0 transparent;
+    }
+
+    50% {
+        opacity: 1;
+        transform: scale(1);
+        box-shadow: 0 0 1px 1px var(--ok);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hx-b.ok i {
+        animation: none;
+    }
 }
 
 .hx-b.warn {
@@ -1403,11 +1427,11 @@ body.hastop[data-active="home"] .hero {
 }
 
 /* room cards: the live "Next free" line sits just above the price row, so it lines up across cards of different heights */
-.hx-room>.avail-line {
+.hx-room .fl-front>.avail-line {
     margin-top: auto;
 }
 
-.hx-room>.avail-line+.hx-foot {
+.hx-room .fl-front>.avail-line+.hx-foot {
     margin-top: 6px;
 }
 
@@ -1703,7 +1727,7 @@ body.hastop[data-active="home"] .hero {
 }
 
 .hx-room .rm-body {
-    min-height: 112px;
+    min-height: 0;
 }
 
 /* shared by the home cards and the Book a studio cards */
@@ -1777,6 +1801,9 @@ body.hastop[data-active="home"] .hero {
 }
 
 .rm-more {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     padding: 0;
     background: none;
     border: 0;
@@ -1792,38 +1819,81 @@ body.hastop[data-active="home"] .hero {
     text-decoration: underline;
 }
 
-.hx-room>.avail-line {
+.hx-room .fl-front>.avail-line {
     margin: 14px 0 0;
 }
 
-.hx-room>.avail-line+.hx-foot {
+.hx-room .fl-front>.avail-line+.hx-foot {
     margin-top: 14px;
 }
 
-.hx-room>.hx-foot {
+.hx-room .fl-front>.hx-foot {
     margin-top: auto;
 }
 
-.hx-room>.rm-body+.hx-foot {
+.hx-room .fl-front>.rm-body+.hx-foot {
     margin-top: 14px;
 }
 
-/* the full gear list, laid over the card */
-.rm-panel {
-    position: absolute;
-    inset: 0;
-    z-index: 5;
+/* ---------- flip: the card turns over to show every room spec ----------
+   .fl holds the card content; the two faces are full-size plates (they reach out over the card's 18px padding),
+   so the whole card interior turns while the card border stays put. */
+.fl {
+    --pad: 18px;
     display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 18px;
-    background: var(--surface);
-    border-radius: inherit;
-    overflow-y: auto;
+    flex: 1;
+    min-width: 0;
+    perspective: 2000px;
 }
 
-.rm-panel[hidden] {
-    display: none;
+.fl-in {
+    position: relative;
+    display: grid;   /* both faces share one cell, so the card is as tall as the taller face and never needs to scroll */
+    flex: 1;
+    min-width: 0;
+    transform-style: preserve-3d;
+    transition: transform .6s cubic-bezier(.4, .15, .2, 1);
+}
+
+.fl.flipped .fl-in {
+    transform: rotateY(180deg);
+}
+
+.fl-front,
+.fl-back {
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    background: linear-gradient(180deg, #1B1B20 0%, var(--surface) 100%);
+    border-radius: calc(var(--r-raised, 12px) - 1px);
+}
+
+.fl-front,
+.fl-back {
+    grid-area: 1 / 1;
+    min-width: 0;
+    margin: calc(var(--pad) * -1);
+    padding: var(--pad);
+}
+
+.hx-room .fl-front {
+    display: flex;
+    flex-direction: column;
+}
+
+/* the back: the full list, with the title and a button to turn the card back */
+.rm-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: calc(var(--pad) * -1);
+    padding: var(--pad);
+    transform: rotateY(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fl-in {
+        transition: none;
+    }
 }
 
 .rm-ph {
@@ -1861,7 +1931,7 @@ body.hastop[data-active="home"] .hero {
 
 .rm-specs.all li {
     align-items: flex-start;
-    padding: 11px 0;
+    padding: 9px 0;
     border-top: 1px solid var(--line);
 }
 
@@ -1889,6 +1959,37 @@ body.hastop[data-active="home"] .hero {
     margin: 6px 0 4px;
 }
 
-.pick .rm-panel .rm-specs.all {
+.rm-panel {
+    gap: 6px;
+}
+
+/* the back is set tight so it is never taller than the front: the card keeps the height of its front */
+.rm-panel .rm-ph h3 {
+    font-size: 15px;
+}
+
+.rm-panel .rm-x {
+    width: 36px;
+    height: 36px;
+    margin: -8px -8px -8px 0;
+}
+
+.rm-panel .rm-specs.all {
     gap: 0;
+}
+
+.rm-panel .rm-specs.all li {
+    padding: 5px 0;
+    font-size: 13px;
+    line-height: 1.35;
+}
+
+.rm-panel .rm-note {
+    padding: 7px 11px;
+    font-size: 12px;
+}
+
+/* the red selected outline stays above the turning faces */
+.pick .pk-b {
+    z-index: 6;
 }

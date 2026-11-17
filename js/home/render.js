@@ -4,10 +4,11 @@
    ===================================================================== */
 
 import { equipmentImage, studioThumb } from '../shared/cards.js';
-import { firstBookableDate, isPastSlot, loadBusy, takenSlots } from '../shared/availability.js';
 import { EQUIPMENT, STUDIOS, isClosed } from '../shared/catalog.js';
 import { cachedAvailLine, fillAvailLines } from '../shared/liveAvail.js';
-import { $, $$, SLOTS, badge, esc, manilaDay, peso, specsOf } from '../shared/utils.js';
+import { flipCard, specsButton } from '../shared/roomFlip.js';
+import { showRoomStatus } from '../shared/roomStatus.js';
+import { $, badge, esc, peso, specsOf } from '../shared/utils.js';
 
 /* ============================ RENDERING ============================ */
 
@@ -21,23 +22,11 @@ export function renderStudioOptions() {
 export function renderStudios() {
     $('#studio-grid').innerHTML = STUDIOS.map((s, i) => {
         const closed = isClosed(s);
+        const key = 'h' + i;
         const { tagline, items, notes } = specsOf(s.desc, s.specs);
-        const SHOW = 2, extra = items.length - SHOW;
-        const li = t => `<li><i aria-hidden="true"></i><span>${esc(t)}</span></li>`;
-        const specs = (tagline ? `<p class="rm-tag${items.length ? ' one' : ''}">${esc(tagline)}</p>` : '') +
-            (items.length
-                ? `<ul class="rm-specs">${items.slice(0, SHOW).map(li).join('')}</ul>` +
-                    (extra > 0 || notes.length ? `<button type="button" class="rm-more" data-room-specs="${i}" aria-expanded="false">${extra > 0 ? `+${extra} more &middot; see all gear` : 'See details'}</button>` : '')
-                : '');
-        const panel = items.length && (extra > 0 || notes.length)
-            ? `<div class="rm-panel" data-room-panel="${i}" hidden>
-          <div class="rm-ph"><h3>Studio ${esc(s.id)} &middot; In the room</h3><button type="button" class="rm-x" data-room-specs="${i}" aria-label="Close">&times;</button></div>
-          <ul class="rm-specs all">${items.map(li).join('')}</ul>
-          ${notes.length ? `<p class="rm-note">${notes.map(esc).join('<br>')}</p>` : ''}
-        </div>`
-            : '';
-        return `
-      <div class="card hx-room">
+        // the front shows only the short description and one "See room specs" button; the full gear list is on the back
+        const specs = (tagline ? `<p class="rm-tag">${esc(tagline)}</p>` : '') + (items.length ? specsButton(key) : '');
+        const front = `
         ${studioThumb(s)}
         <div class="rm-head"><h3>Studio ${esc(s.id)}</h3>${closed ? badge(s.status) : `<span class="hx-b" data-room-status="${i}"><i></i>Checking...</span>`}</div>
         <div class="rm-body">${specs}</div>
@@ -45,73 +34,14 @@ export function renderStudios() {
         <div class="row hx-foot">
           <span><b>${peso(s.rate)}</b> <span class="mut">/ hour</span></span>
           <button class="btn gold" data-book-studio="${i}" ${closed ? 'disabled' : ''}>${closed ? 'Closed' : 'Book now'}</button>
-        </div>
-        ${panel}
+        </div>`;
+        return `
+      <div class="card hx-room">
+        ${flipCard(key, s, items, notes, front)}
       </div>`;
     }).join('');
     showRoomStatus();
     fillAvailLines($('#studio-grid'));
-}
-
-/* "see all gear" opens the full list over the card (the card keeps its height); the x button, Escape or a click elsewhere closes it */
-function closeRoomPanels(except) {
-    $$('[data-room-panel]').forEach(p => {
-        if (p === except)
-            return;
-        p.hidden = true;
-        const b = document.querySelector(`.rm-more[data-room-specs="${p.dataset.roomPanel}"]`);
-        if (b)
-            b.setAttribute('aria-expanded', 'false');
-    });
-}
-
-document.addEventListener('click', e => {
-    const b = e.target.closest('[data-room-specs]');
-    if (!b) {
-        if (!e.target.closest('[data-room-panel]'))
-            closeRoomPanels();
-        return;
-    }
-    const panel = document.querySelector(`[data-room-panel="${b.dataset.roomSpecs}"]`);
-    if (!panel)
-        return;
-    const open = panel.hidden;
-    closeRoomPanels(open ? panel : null);
-    panel.hidden = !open;
-    const opener = document.querySelector(`.rm-more[data-room-specs="${b.dataset.roomSpecs}"]`);
-    if (opener)
-        opener.setAttribute('aria-expanded', String(open));
-    if (open)
-        panel.querySelector('.rm-x').focus();
-    else if (opener)
-        opener.focus();
-});
-
-document.addEventListener('keydown', e => {
-    if (e.key === 'Escape')
-        closeRoomPanels();
-});
-
-/* Live badge on each room card: how many start times are still open on the first bookable day.
-   Runs after the cards are drawn (one small request per room); a failed request just shows "Open". */
-async function showRoomStatus() {
-    const date = firstBookableDate(), when = date === manilaDay(0) ? 'today' : 'tomorrow';
-    await Promise.all($$('[data-room-status]').map(async el => {
-        const i = +el.dataset.roomStatus;
-        let cls = '', text = 'Open';
-        try {
-            await loadBusy(i, date, date);
-            const taken = takenSlots(i, date);
-            const n = SLOTS.filter((_, k) => !taken.has(k) && !isPastSlot(date, k)).length;
-            [cls, text] = n === 0 ? ['bad', `Fully booked ${when}`]
-                : n <= 3 ? ['warn', `${n} slot${n > 1 ? 's' : ''} left ${when}`]
-                    : ['ok', `Available ${when}`];
-        } catch (e) {
-            /* keep the plain "Open" badge */
-        }
-        el.className = 'hx-b ' + cls;
-        el.innerHTML = `<i></i>${text}`;
-    }));
 }
 
 export function renderEquipment() {

@@ -9,6 +9,8 @@ import { blockMessage, isBlocked } from './damageBlock.js';
 import { firstBookableDate, isPastSlot, lastBookableDate, loadBusy, takenSlots } from '../shared/availability.js';
 import { studioThumb } from '../shared/cards.js';
 import { cachedAvailLine, fillAvailLines } from '../shared/liveAvail.js';
+import { flipCard, specsButton } from '../shared/roomFlip.js';
+import { showRoomStatus } from '../shared/roomStatus.js';
 import { STUDIOS, isClosed } from '../shared/catalog.js';
 import { $, SLOTS, badge, esc, longDate, manilaDay, pad, peso, specsOf, toast } from '../shared/utils.js';
 
@@ -123,29 +125,17 @@ const roomLine = s => {
     return `Studio ${s.id}${line ? ' \u00b7 ' + line : ''}`;
 };
 
-/* Room card text, kept short so the cards stay low: the description on one line and the first two gear items.
-   "+N more" opens the whole list over that card, like the room cards on the home page (the card keeps its height). */
-const gearOpen = new Set();   // studios whose full gear list is showing
-const SHOW_GEAR = 2;
-
-function roomText(s, i) {
+/* Room card front: only the short description and a "See room specs" button. The button turns the card over to all
+   the specs, like the room cards on the home page (shared/roomFlip.js). */
+function roomCard(s, i) {
     const { tagline, items, notes } = specsOf(s.desc, s.specs);
-    const extra = items.length - SHOW_GEAR;
-    const li = t => `<li><i aria-hidden="true"></i><span>${esc(t)}</span></li>`;
-    return (tagline ? `<p class="rm-tag${items.length ? ' one' : ''}">${esc(tagline)}</p>` : '') +
-        (items.length ? `<ul class="rm-specs">${items.slice(0, SHOW_GEAR).map(li).join('')}</ul>` : '') +
-        (extra > 0 || (notes.length && items.length) ? `<button type="button" class="rm-more" data-pk-more="${i}" aria-expanded="${gearOpen.has(i)}">${extra > 0 ? `+${extra} more &middot; see all gear` : 'See details'}</button>` : '');
-}
-
-function gearPanel(s, i) {
-    const { items, notes } = specsOf(s.desc, s.specs);
-    if (!gearOpen.has(i) || !items.length)
-        return '';
-    return `<div class="rm-panel" data-pk-panel="${i}">
-      <div class="rm-ph"><h3>Studio ${esc(s.id)} &middot; In the room</h3><button type="button" class="rm-x" data-pk-more="${i}" aria-label="Close">&times;</button></div>
-      <ul class="rm-specs all">${items.map(t => `<li><i aria-hidden="true"></i><span>${esc(t)}</span></li>`).join('')}</ul>
-      ${notes.length ? `<p class="rm-note">${notes.map(esc).join('<br>')}</p>` : ''}
-    </div>`;
+    const key = 'b' + i;
+    const front = `${studioThumb(s)}
+      <div class="row"><h3>Studio ${s.id}</h3>${isClosed(s) ? badge(s.status) : `<span class="hx-b" data-room-status="${i}"><i></i>Checking...</span>`}</div>
+      <div class="rm-body pk-body">${tagline ? `<p class="rm-tag">${esc(tagline)}</p>` : ''}${items.length ? specsButton(key) : ''}</div>
+      ${cachedAvailLine(i)}
+      <p style="margin-top:6px"><b>${peso(s.rate)}</b> <span class="mut">per hour</span></p>`;
+    return flipCard(key, s, items, notes, front);
 }
 
 let lastDay = null;      // the calendar day that was selected on the last draw
@@ -157,16 +147,27 @@ function renderBook() {
     // the red border "draws itself" only on the card that was just clicked, not every time the page redraws (e.g. a date click)
     const drawIdx = lastPicked !== null && lastPicked !== state.selStudio ? state.selStudio : -1;
     lastPicked = state.selStudio;
-    $('#cs').innerHTML = STUDIOS.map((s, i) => `
-    <div class="card pick ${i === state.selStudio ? 'sel' : ''}${i === drawIdx ? ' draw' : ''}" data-i="${i}">
+    // The room cards are drawn once and then only get their classes updated. Redrawing them on every click would
+    // replace a card that is still turning back over, and cut its flip animation short.
+    const grid = $('#cs');
+    const sig = STUDIOS.map(s => [s.id, s.img, s.desc, s.specs, s.rate, s.status].join('|')).join('~');
+    if (grid.dataset.sig !== sig || grid.children.length !== STUDIOS.length) {
+        grid.dataset.sig = sig;
+        grid.innerHTML = STUDIOS.map((s, i) => `
+    <div class="card pick" data-i="${i}">
       <svg class="pk-b" aria-hidden="true" focusable="false"><rect pathLength="1"></rect><rect class="m" pathLength="1"></rect></svg>
-      ${studioThumb(s)}
-      <div class="row"><h3>Studio ${s.id}</h3>${badge(s.status)}</div>
-      <div class="rm-body pk-body">${roomText(s, i)}</div>
-      ${cachedAvailLine(i)}
-      <p style="margin-top:6px"><b>${peso(s.rate)}</b> <span class="mut">per hour</span></p>
-      ${gearPanel(s, i)}
+      ${roomCard(s, i)}
     </div>`).join('');
+        showRoomStatus();
+    }
+    [...grid.children].forEach((card, i) => {
+        card.classList.toggle('sel', i === state.selStudio);
+        card.classList.remove('draw');
+        if (i === drawIdx) {
+            void card.offsetWidth;   // restart the border animation
+            card.classList.add('draw');
+        }
+    });
 
     fillAvailLines($('#cs'));
 
@@ -241,25 +242,11 @@ export async function refreshBook() {
 }
 
 export function initBookTab() {
-    document.addEventListener('keydown', e => {
-        if (e.key === 'Escape' && gearOpen.size) {
-            gearOpen.clear();
-            renderBook();
-        }
-    });
     $('#c-book').addEventListener('click', e => {
         const pick = e.target.closest('.pick'), day = e.target.closest('.cd'), room = e.target.closest('[data-room]');
         const quick = e.target.closest('[data-quick]');
-        const more = e.target.closest('[data-pk-more]');
-        if (more) {   // open or close the gear list without picking the room
-            const k = +more.dataset.pkMore;
-            gearOpen.has(k) ? gearOpen.delete(k) : gearOpen.add(k);
-            renderBook();
-            const again = $(`[data-pk-panel="${k}"] .rm-x`) || $(`[data-pk-more="${k}"]`);
-            if (again)
-                again.focus();
-            return;
-        }
+        if (e.target.closest('[data-flip]'))
+            return;   // the room specs button and x turn the card over (shared/roomFlip.js) without picking the room
         if (e.target.closest('.rm-panel'))
             return;   // clicks inside the open list do nothing
         if (quick)
