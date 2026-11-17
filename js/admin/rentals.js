@@ -6,7 +6,7 @@
 import { afterAction, balanceOf, closeOverlays, findBk, startLabel } from './bookings.js';
 import { PAY, RL, refresh } from './data.js';
 import { state } from './state.js';
-import { ACT, CONFIRM, askConfirm, dOf, dayDiff, mailNoteOf, money, notifyDamagePaid, notifyLateFeePaid, notifyReplacement, num, rnStatus, run, stampLabel, tOf, tbl, tblGrouped } from './helpers.js';
+import { ACT, CONFIRM, askConfirm, btn, dOf, dayDiff, emptyState, mailNoteOf, money, notifyDamagePaid, notifyLateFeePaid, notifyReplacement, num, rnStatus, run, stampLabel, tOf, tbl, tblGrouped } from './helpers.js';
 import { bindCollect, collectBox, dmgError, dmgOf, dmgOwed, dmgStatus } from './damage.js';
 import { dueToday } from './overview.js';
 import { repFlag } from './reputation.js';
@@ -332,6 +332,12 @@ export function revealRental(ref) {
     focusRows('a-rent', '#arn', ref);
 }
 
+ACT['rn-clear'] = () => {   // "Clear filters" in the empty state
+    rf = 'All';
+    rsrc = '';
+    renderRentals();
+};
+
 export function renderRentals() {
     const gs = groups();
     const list = gs.filter(g => gMatch(g, rf) && (!rsrc || g.source === rsrc)).sort(rnOrder);
@@ -347,6 +353,19 @@ export function renderRentals() {
         rnBadge(g),
         rnActions(g)
     ];
+    // nothing to show: say why, and offer the next step (same as the Bookings tab)
+    const filtered = rf !== 'All' || !!rsrc;
+    const empty = filtered
+        ? emptyState({
+            title: 'No rentals match these filters',
+            hint: 'Try a different status or source.',
+            action: btn('rn-clear', '', 'Clear filters', 1)
+        })
+        : emptyState({
+            title: 'No rentals yet',
+            hint: 'Online rentals appear here as customers rent. Walk-ins can be recorded at the counter.',
+            action: '<a class="btn sm gold" href="#a-onr">Record an onsite rental</a>'
+        });
     let table;
     if (rf === 'All') {
         // Like the customer's My rental: open orders first, Returned / Rejected / Cancelled tucked into a closed "Past and closed" group
@@ -361,9 +380,9 @@ export function renderRentals() {
                 rows: past.map(cells),
                 dimmed: i => ['Rejected', 'Cancelled'].includes(past[i].status)
             }
-        ]);
+        ], undefined, empty);
     } else
-        table = tbl(head, list.map(cells));   // a status tab is picked on purpose: show all of its rows
+        table = tbl(head, list.map(cells), undefined, empty);   // a status tab is picked on purpose: show all of its rows
     $('#arn').innerHTML = `<div class="row" style="margin-bottom:10px;justify-content:flex-start"><select id="rn-src" style="max-width:190px" aria-label="Rental source"><option value="">Online and onsite</option><option value="Online" ${rsrc === 'Online' ? 'selected' : ''}>Online rentals</option><option value="Onsite" ${rsrc === 'Onsite' ? 'selected' : ''}>Onsite rentals</option></select></div><div class="tabs">${RF.map(x => `<button data-rf="${x}" class="${x === rf ? 'on' : ''}">${RF_LABEL[x] || x}${cnt(x)}</button>`).join('')}</div>` +
         '<div class="card">' + table + '</div>';
 }
