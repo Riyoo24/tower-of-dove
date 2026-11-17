@@ -56,7 +56,7 @@ Customers can book **as a guest (no account needed)** or register to keep their 
 - **Calendar export**: add a booking to Apple/Outlook (`.ics`) or Google Calendar.
 - **Replacement choice**: when a unit becomes unavailable, customers can pick a replacement item from options offered by staff.
 - **Account page**: change username, name, email and password via Supabase email links.
-- **Polish**: light/dark theme, installable PWA (`manifest.webmanifest`), skeleton loaders, inline field validation, empty states, print-friendly receipts, and a mobile-first layout.
+- **Polish**: dark-themed UI, installable PWA (`manifest.webmanifest`), skeleton loaders, inline field validation, empty states, print-friendly receipts, and a mobile-first layout.
 
 ### Admin dashboard (Owner & Staff)
 
@@ -399,18 +399,48 @@ riyoo24-tower-of-dove/
 
 </details>
 
-**What each top-level folder is for:**
+**What each file and folder is for:**
 
 | Path | Purpose |
 |---|---|
-| `pages/` | `customer.html` (single-page customer app), `admin.html` (Owner / Staff dashboard), `login.html`, `account.html` |
-| `css/` | Layered stylesheets: `base → components → layout → modals`, then page files (`home`, `customer`, `admin`, `login`), plus theme, motion, mobile and print |
-| `js/config/` | Shared Supabase client and route/path settings |
-| `js/shared/` | Modules used by several pages (availability, holds, session, catalog, receipts, GCash OCR proof, date picker, skeletons, ...) |
-| `js/auth/`, `js/account/`, `js/home/`, `js/customer/`, `js/admin/` | One folder per feature, each with an `index.js` entry point |
-| `assets/img/` | Logo, favicons, PWA icons, social cover image, reviewer photos |
-| `supabase/` | Numbered SQL migrations (`01`–`94`), `all_in_one.sql`, Edge Functions and QA tests |
-| `docs/` | Backend reference (`supabase_setup_summary.md`) |
+| `index.html` | Entry point; forwards to `pages/customer.html#home` so old links keep working |
+| `404.html` | Custom "page not found" screen |
+| `manifest.webmanifest` | PWA manifest (installable app, icons, shortcuts to Book / Rent / My bookings) |
+| `settings.json`, `.vscode/settings.json` | Editor settings (Live Server port) |
+| `README.md` | This file |
+| **`pages/`** | |
+| `pages/customer.html` | Customer single-page app: Home, Book, Rent, My Bookings, My Rental, Contact (tabs, no reloads) |
+| `pages/admin.html` | Owner / Staff dashboard |
+| `pages/login.html` | Log in, register, forgot / reset password |
+| `pages/account.html` | Customer profile (username, name, email, password) |
+| **`assets/`** | |
+| `assets/img/` | Logo, favicons, PWA icons (standard and maskable), Apple touch icon, social cover image (`og-cover.png`) |
+| `assets/img/reviewers/` | Reviewer photos used by the Home testimonials |
+| **`css/`** | |
+| `base.css`, `components.css`, `layout.css`, `modals.css` | Core layers, loaded in this order: palette and reset, UI components, page grids and sidebar, dialogs and toasts |
+| `home.css`, `customer.css`, `admin.css`, `login.css` | Page-specific styles |
+| `theme.css`, `depth.css`, `refresh.css`, `motion.css` | Dark theme, depth / shadow system, customer-page visual refresh, animations (all respect reduced motion) |
+| `mycards.css`, `mycards-sticky.css` | Card layout of My bookings / My rental and its sticky side panel |
+| `signal.css`, `skeleton-extra.css` | "How booking works" strip and rolling totals; navbar and Contact skeleton loaders |
+| `mobile.css`, `print.css` | Phone fixes; printable receipts and reports (Save as PDF) |
+| **`js/`** | |
+| `js/config/` | `supabaseClient.js` (the one shared client) and `paths.js` (site root, routes, image-transform switch) |
+| `js/shared/` | Modules used by several pages: availability and live availability, slot / equipment holds, session and navigation, layout, catalog, cards, date picker, equipment browser and filters, cost estimate, calendar export, receipts, GCash proof (OCR), guest storage, form validation, skeleton loaders, motion, mobile UX, utilities |
+| `js/auth/` | Log in / register / password reset (`index`, `authService`, `passwordToggle`) |
+| `js/account/` | Customer profile page (`index`, `profilePanel`, `profileService`) |
+| `js/home/` | Home tab: studio cards, carousel, availability bar, reviews, FAQ / "Before you book", contact |
+| `js/customer/` | Customer app: book, booking form, cart and cart store, rent, My bookings, My rental, cards, replacement choice, no-show and damage-block notices, alerts, return countdown, register modal, state and UI helpers |
+| `js/admin/` | Dashboard: overview, bookings, room and equipment calendars, sessions, payments and verify drawer, balance collection, rentals, equipment, damage fees, studios, customers, onsite booking / rental, reports, analytics and charts, CSV export, settings, profile, alerts, global search, check-in, no-show, swap offers, reputation flags, history trail |
+| **`supabase/`** | |
+| `01_schema.sql` → `04_seed.sql` | Core schema, functions, security (RLS and storage buckets), seed data |
+| `05_…` → `94_qa_hardening .sql` | Incremental feature migrations (no `74_*`; `94` has a space before `.sql` in its filename) |
+| `all_in_one.sql` | Combined script covering the early files only |
+| `functions/create-staff/` | Edge Function: Owner creates staff, resets passwords, removes customers |
+| `functions/send-receipt/` | Edge Function: receipts, verification, balance, damage, late-fee, replacement and no-show emails |
+| `tests/qa_tests.sql` | Database QA suite (runs in a rolled-back transaction) |
+| `README.md` | Detailed Supabase setup and per-migration notes |
+| **`docs/`** | |
+| `docs/supabase_setup_summary.md` | Full backend reference: tables, RPCs, views, triggers, RLS, storage, Edge Functions, migration history |
 
 ---
 

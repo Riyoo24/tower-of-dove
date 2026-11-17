@@ -1,200 +1,571 @@
-# Supabase setup
+# Supabase Backend
 
-1. Create a Supabase project.
-2. SQL Editor: run `01_schema.sql`, `02_functions.sql`, `03_security.sql`, `04_seed.sql` in order
-   (or paste `all_in_one.sql`, which already includes every numbered file up to `18_...` plus `20_booking_down_payment.sql`, `21_fix_rental_total_8h.sql` and `23_extension_payment.sql` and `24_onsite_gcash_optional.sql` and `25_reschedule_slot_hold.sql`).
-   Existing projects: just run the newest numbered file(s) you have not run yet (latest: `91_extension_pay_later.sql` lets a customer extend a session and pay after it; before it `90_addon_balance_in_session.sql` lets equipment added to a running session be paid after the session, as a balance collected at Collect balance & complete, like an extension; before it `89_equipment_checkout_hold.sql` holds the items in a rental checkout window for 2 minutes (studio add-on and outside rental), like the studio booking hold, so two customers cannot both reserve the last unit; run it, or the checkout window will not open; before it `70_no_max_booking_hours.sql` removes the 4-hour limit of a studio booking and of an extension (run it, or bookings over 4 hours are refused by the database); before it `69_onsite_gcash_required.sql` makes the 13-digit GCash reference required for onsite bookings and rentals paid by GCash; before it `68_damage_paid_email.sql` emails the customer the same fully paid receipt when a damage fee gets paid (staff collect it, accept the customer's GCash payment, or collect it at the return; send-once, staff only; it also saves the cash received so the email shows Cash received and Change; deploy the `send-receipt` Edge Function again); before it `67_balance_cash_tendered.sql` saves the cash tendered when a balance is collected so the fully paid email shows Cash received and Change; before it `66_balance_receipt_email.sql` emails the customer a fully paid receipt when staff collect the remaining balance of a booking or rental (send-once, staff only; deploy the `send-receipt` Edge Function again); before it `65_outside_no_auto_issue.sql` stops the database from ever issuing an outside rental by itself at its pick-up time, even when fully paid; staff issue it on the admin page with the before photos and handover proof; before it `64_damage_block_reputation.sql` blocks a customer with an unpaid damage fee (Unpaid, or Pending until staff check the GCash payment) from creating a new studio booking or rental, online or onsite, matched by account and by phone number so guests are covered; the block is a database trigger on `booking` and `rental_order`, the customer pages show the message with a Pay now button, and only the owner can waive or defer a fee or lift the block, with a required reason that is logged; it also adds staff-only customer reputation flags (late returns and damage fees of the last 12 months) with notes and dismissals, in tables that customers cannot read; before it `63_out_of_stock_status.sql` shows Out of Stock in Equipment when no unit is rentable; before it `62_stock_preview.sql` shows, inside the return window, which upcoming rentals would be short if the damaged units are taken out, each with a Swap item button; before it `61_swap_rental_item.sql` lets staff swap an item on a rental that has not been issued yet for an equivalent one at no extra charge (the customer keeps the agreed price, nothing is refunded), from the rental's Actions menu or from the shortage warning in Equipment, logs it in the rental's History and adds the line id and booking time to the shortage list; before it `60_out_of_service_stock.sql` adds Owned and Out of service quantities to Equipment (Rentable = owned - out of service), lets the return window mark a damaged item Out of service or Remove it permanently, never cancels the return, and lists the upcoming rentals / bookings that no longer have enough (checked by date); it replaces the function from 59; before it `59_remove_damaged_stock.sql` lets staff take a damaged item out of stock (Total stock goes down) when they record its return, and logs it in the Damage fee history; before it `58_damage_charges.sql` adds damage fees for outside rentals (its own `damage_charge` table with an audit log, kept apart from the payment table; the customer can pay now with GCash or pay later; reports count a fee only once it is Paid); before it `57_handover_proof.sql` adds the handover proof photo; before it `56_balance_payment_proof.sql` makes staff enter the cash tendered (change is shown) or the 13-digit GCash reference when collecting a balance; before it `55_extend_without_addons.sql` lets a session be extended, after a confirmation, when its add-on equipment is not free for the extra hours (only the booking is extended; the add-on keeps its original hours); before it `54_reschedule_stock_slots.sql` greys out reschedule times where the add-on equipment is not free; before it `53_pending_orders_hold_stock.sql` makes a Pending add-on / outside-rental request hold its equipment until staff verify or reject it; before it `52_stock_on_booking_time_change.sql` re-checks the add-on equipment of a studio session whenever its hours are extended or rescheduled, so the new hours can no longer double-book an item; before it `51_stock_by_time.sql` checks equipment stock for the hours it is needed (studio add-ons and outside rentals), when the customer submits the request and when staff approve it; before it `50_addon_full_payment_when_started.sql` makes equipment added to a session that has already started full payment only (100%); before it `49_cron_auto_complete.sql` schedules the session start / end check inside Supabase (pg_cron) so a studio session completes at its end time even when no admin / staff page is open; before it `45_addon_balance_on_booking.sql` shows the balance of a later add-on (paid 50%) on its booking, also when the booking was paid in full, and collects it when the session starts; before it `44_onsite_booking_down_payment.sql` lets an onsite studio booking for a later day take a 50% down payment; before it `43_onsite_outside_down_payment.sql` lets an onsite outside rental for a later day take a 50% down payment; before it `42_onsite_receipt_email.sql` lets onsite bookings and rentals email a receipt; before it `41_auto_complete_sessions.sql` completes a studio session by itself at its end time; before it `40_addon_balance_collection.sql` keeps a later add-on paid 50% as a down payment until staff collect the rest at the studio (it is not issued before that); before it `39_addon_auto_issue_return.sql` issues add-on equipment when its studio session starts and returns it when the session is completed, also for add-ons added later; before it `38_gcash_screenshots.sql` adds the private `gcash-screenshots` storage bucket for the required "Attach GCash Screenshot" field; before it `31_payment_options.sql` lets customers pay 50% (down payment) or 100% (full payment) for bookings, outside rentals, add-on rentals and extensions; before it `25_reschedule_slot_hold.sql` holds the new hours while a customer reschedules; `24_onsite_gcash_optional.sql` makes the GCash reference optional for onsite bookings and rentals; `20_booking_down_payment.sql` adds the 50% studio down payment; `23_extension_payment.sql` makes customers pay a 50% down payment, verified by staff, to extend a session). Every file is safe to re-run.
-3. Email verification is ON: customers must open the link in a confirmation email before they can log in.
-   Follow **Email verification setup** below (turn on "Confirm email", set the URLs, add an SMTP sender).
-   Customers and staff sign in with their real email address (stored as the Supabase Auth email).
-   Accounts made before file 14 keep their old login written as an email (for example `owner@towerofdove.app`). The owner login is now `towerofdovemusic@gmail.com`: for an existing database run `22_owner_email.sql` once.
-4. Create the owner: follow the comment block at the bottom of `04_seed.sql`.
+Everything the Tower of Dove website needs on the server side: the PostgreSQL schema and business rules, Row Level Security, Storage buckets, scheduled jobs, and two Edge Functions.
+
+> The frontend only ever uses the public **anon** key. All rules (no double booking, stock limits, payment maths, booking window, no-show release) are enforced here in the database, so they hold no matter which client calls it.
+
+For a deeper reference (every table, view, trigger and policy) see [`../docs/supabase_setup_summary.md`](../docs/supabase_setup_summary.md).
+
+---
+
+## Contents
+
+1. [What is in this folder](#what-is-in-this-folder)
+2. [Quick start (fresh install)](#quick-start-fresh-install)
+3. [Migration reference](#migration-reference)
+4. [Authentication setup](#authentication-setup)
+5. [Edge Functions](#edge-functions)
+6. [Scheduled jobs (pg_cron)](#scheduled-jobs-pg_cron)
+7. [Storage buckets](#storage-buckets)
+8. [What the website calls](#what-the-website-calls)
+9. [Rules the database enforces](#rules-the-database-enforces)
+10. [Testing](#testing)
+11. [Updating an existing database](#updating-an-existing-database)
+12. [Security checklist](#security-checklist)
+
+---
+
+## What is in this folder
+
+```text
+supabase/
+├── 01_schema.sql              Tables, constraints, indexes, helpers, triggers
+├── 02_functions.sql           RPC functions and views the website calls
+├── 03_security.sql            Privileges, Row Level Security, Storage buckets and policies
+├── 04_seed.sql                Starting data (studios, categories, equipment) + owner setup notes
+├── 05_… → 94_…                Incremental feature migrations (see the reference below)
+├── all_in_one.sql             Combined script of the early files (not a full replacement, see below)
+├── functions/
+│   ├── create-staff/index.ts  Edge Function: staff accounts and customer removal (Owner only)
+│   └── send-receipt/index.ts  Edge Function: receipts and notification emails
+└── tests/
+    └── qa_tests.sql           Database QA suite (everything is rolled back)
+```
+
+Notes on the file set:
+
+- There is intentionally **no `74_*.sql`**.
+- `29_optional_backfill_first_name_usernames.sql` is **optional**.
+- `48_performance_indexes.sql` is **optional** (speeds up "newest N" reads).
+- `94_qa_hardening .sql` currently has a **space before `.sql`** in its filename. Rename it to `94_qa_hardening.sql` to keep the numbering tidy.
+- Every migration is **safe to re-run**.
+
+---
+
+## Quick start (fresh install)
+
+**Prerequisites:** a [Supabase](https://supabase.com) project, access to its **SQL Editor**, and (for emails) an SMTP account such as Gmail with an App Password.
+
+1. **Create a Supabase project.**
+2. **Run the core files** in the SQL Editor, in order:
+   `01_schema.sql` → `02_functions.sql` → `03_security.sql` → `04_seed.sql`
+3. **Run every numbered migration `05` → `94` in numeric order.**
+   Skip the optional ones if you do not need them. Use the numbered files rather than `all_in_one.sql` for a fresh install; `all_in_one.sql` does not cover every migration.
+4. **Configure authentication** (email confirmation, SMTP, redirect URLs). See [Authentication setup](#authentication-setup).
+5. **Create the first Owner account.** Follow the comment block at the bottom of `04_seed.sql`:
+   1. In **Authentication → Users → Add user**, create the owner's email and password and tick **Auto Confirm User**.
+   2. Run the `insert into public.app_user …` statement from that comment block with the same email.
+6. **Deploy the Edge Functions** and add their secrets. See [Edge Functions](#edge-functions).
+7. **Finish `79_no_show_emails.sql`.** It needs a secret and one config row (details in [Scheduled jobs](#scheduled-jobs-pg_cron)).
+8. **Point the frontend at your project** by editing `js/config/supabaseClient.js` with your project URL and anon key.
+9. *(Optional)* Paste `tests/qa_tests.sql` into the SQL Editor and run it to confirm the rules work.
+
+> Run the SQL **before** uploading a new version of the site files. Several migrations add functions the new pages call.
+
+---
+
+## Migration reference
+
+Every file is **safe to re-run**. Each one lists what it does and what it must come after. Unless stated otherwise, run it once in the **Supabase SQL Editor**, and no Edge Function change is needed.
+
+> **Reading tip:** later files often change or replace behavior added by earlier ones. Where a rule was changed later, the entry says so (for example, the 4-hour limit of file 15 is lifted by file 70).
+
+### Core schema (run first, in this order)
+
+#### `01_schema.sql`
+Creates the extensions (including `btree_gist`), all core tables (`app_user`, `customer`, `studio`, `equipment_category`, `equipment`, `booking`, `rental_order`, `rental_detail`, `payment`, `slot_hold`, `app_setting`), their constraints, indexes, helper functions, triggers and reference-number sequences. The **no-overlap exclusion constraint** on studio + time range is what makes double booking impossible. Business timezone is Asia/Manila, opening hours 10:00 to 22:00.
+
+#### `02_functions.sql`
+The RPC functions the website calls (booking, rescheduling, cancelling, guest lookups, slot holds, rental requests, staff actions) and the reporting views (`v_booking_summary`, `v_rental_lines`, `v_payment_queue`, `v_dashboard_counts`, `v_revenue_daily`, ...). All are `SECURITY DEFINER` and validate their own input, so the tables themselves stay locked down.
+
+#### `03_security.sql`
+Table privileges, **Row Level Security** policies, and the first Storage buckets (`studio-images`, `equipment-images`, `rental-ids`) with their policies. Defines the access model: guests can read the catalogue and call guest RPCs; customers see only their own data; staff run operations; the Owner also manages studios, equipment and staff.
+
+#### `04_seed.sql`
+Starting data: Studios A to D, the equipment categories, and sample equipment (add-on price is per session, outside price is per day, `min_hours` is the minimum outside rental). The **bottom comment block explains how to create the first Owner account**.
+
+### Add-ons, outside rentals and extensions (05 to 25)
+
+#### `05_booking_addons.sql`
+Book a studio **and** add equipment in one transaction, paying one combined amount (studio total + add-on total). If anything fails (for example an item is unavailable), nothing is saved. Staff verify a single payment.
+
+#### `06_lookup_addons.sql`
+The guest "find my booking" lookup now also returns the booking's add-on equipment and a grand total.
+
+#### `07_auto_approve_addons.sql`
+Verifying a booking payment automatically approves its add-on equipment (no second trip to Rentals). Rejecting the payment rejects the pending add-on too. If an item is out of stock, the add-on stays Pending for staff to review.
+
+#### `08_outside_rental.sql`
+Outside (take-home) rentals: logged-in customers only, priced per hour (the item price covers 8 hours, each extra hour adds price / 8), 50% GCash down payment with the request and the balance at pick-up, late returns charged price / 8 per hour. Customers can cancel under the same 24-hour rule as bookings. Online outside rentals can only be created through `request_outside_rental()`.
+
+#### `09_random_refs.sql`
+Reference codes become random so they cannot be guessed: bookings `TOD-9F3A21C7`, outside rentals `OUT-5B07E1AA`, add-on rentals `RA-C41D90E2`. Existing codes keep working.
+
+#### `10_guest_lookup_privacy.sql`
+The reference-code lookup works for **guest** bookings only. A booking made with an account can only be read by that account or by staff, and the lookup answers "not found" so it never confirms that a code exists.
+
+#### `11_cash_autostart_addons.sql`
+Online bookings cannot be paid in cash. Confirmed bookings start by themselves at their start time. Add-ons added later follow rules (a guest cannot attach equipment to a registered customer's booking; the payment amount follows the add-ons while still Pending). Optionally schedules a `pg_cron` job (superseded by file 49).
+
+#### `12_rental_base_hours_autostatus.sql`
+Outside rentals get an **8-hour base**: returns under 8 hours keep the base price, each extra hour adds price / 8, and late fees or "Overdue" only begin after the full 8-hour window. Onsite rentals take a start date and time and are saved as Approved. Add-ons go In Use when their booking starts; outside rentals go In Use at pick-up time (later changed by 65). Staff can disable and re-enable customer accounts.
+
+#### `13_overdue_hours_addon_return.sql`
+Adds `hours_overdue` to `v_rental_lines` (the Rentals page shows "3 hours overdue"). When a studio booking becomes Completed, its Approved / In Use add-ons are marked Returned automatically so stock comes back. Includes a one-time clean-up of add-ons on bookings that were already Completed. *After 12.*
+
+#### `14_email_login_names_id_view.sql`
+Customers and staff log in with a **real email address** (the `username` column accepts an email up to 254 characters). New sign-ups copy the email into the customer's email column. Names can no longer contain digits. Customers can open the valid ID they uploaded with their own outside rental. Old accounts are not touched. *After 13.*
+
+#### `15_extend_booking.sql`
+Staff can extend a Confirmed or Active booking. `staff_extension_info()` tells how many extra hours are free; `staff_extend_booking()` moves the end time and adds the cost to the bill and payment. The database refuses overlaps with the next booking, other people's holds, an unavailable studio, and anything past 10:00 PM. (The original 1 to 4 extra hours limit was lifted by file 70.) *After 14.*
+
+#### `16_extension_slot_hold.sql`
+While staff have the Extend window open, the extra hours are held ("Held by Staff") and renewed every minute, so two people can never extend the same slot at once. Replaces the two functions from file 15 with hold-aware versions. (The hold length became 2 minutes in file 37.) *After 15.*
+
+#### `17_customer_extend.sql`
+The extension functions accept either staff or the customer who owns the booking, so customers can extend their own Confirmed or Active booking from My bookings. (Customer extensions later require a verified payment, see 23.) *After 16.*
+
+#### `18_booking_reject_reason.sql`
+Rejecting a booking needs a reason, and the customer sees it. Adds `staff_reject_booking(ref, reason)`, a `rejected_reason` column on `v_booking_summary`, and the same field in `lookup_booking`. *After 17.*
+
+#### `19_remove_drum_vip_capacity.sql`
+Removes `is_drum_set`, `drum_kit` and `is_vip` from equipment and `capacity` from studios. All drum categories are consolidated into one `Drums` category, with model details moved into the item's name and description.
+
+#### `20_booking_down_payment.sql`
+Online studio bookings need a **50% GCash down payment**, set by the server (the browser cannot change it). The other 50% is paid at the studio. The down payment is non-refundable on cancellation. Later add-ons and extensions are paid at the studio as part of the balance. Walk-in bookings are unchanged (paid in full). The revenue report counts the down payment when verified and the balance when the session starts. *After 18.*
+
+#### `21_fix_rental_total_8h.sql`
+Restores 8-hour billing for outside rentals (price covers 8 hours, +price / 8 per extra hour, rounded up). File 19 had replaced it with per-day billing, which made the server total differ from what the site showed. *After 20.*
+
+#### `22_owner_email.sql`
+**One-time fix for an existing database only.** Changes the owner login from `owner@towerofdove.app` to `towerofdovemusic@gmail.com` in Supabase Auth and `app_user` (the password stays the same). Fresh installs do not need it; create the owner with the new email instead.
+
+#### `23_extension_payment.sql`
+Customers pay for extensions like bookings: pick extra hours and pay a **50% down payment by GCash**. The request is saved as Pending and the extra hours are **reserved** until staff decide. Verifying moves the booking's end time and adds to its down payment; rejecting (with a reason) releases the hours. One pending extension per booking; reschedule is blocked while one is pending. Customers can no longer call `staff_extend_booking` directly. *After 21.*
+
+#### `24_onsite_gcash_optional.sql`
+The GCash reference becomes optional for staff-recorded onsite bookings and rentals (online payments still require it). Later made required again by file 69.
+
+#### `25_reschedule_slot_hold.sql`
+Rescheduling **holds the new hours for 2 minutes** while the customer chooses, like booking does. Adds `hold_reschedule_slot()`; `reschedule_booking()` now takes the hold token, refuses the same start time, and frees the hold afterwards. *After 24.*
+
+### Accounts, payment options and emails (26 to 45)
+
+#### `26_profile_management.sql`
+When someone confirms a new login email (Supabase sends the link), copies it into their profile row. A different contact email chosen by staff is left alone. Name and password changes need nothing here.
+
+#### `27_allow_username_change.sql`
+Relaxes the `protect_user_columns` trigger so any logged-in user can change their **own username**. Role, status and `auth_user_id` stay owner-only. Needed by the account page.
+
+#### `28_default_username_first_name.sql`
+New accounts default to their **first name** as username (`maria`, `maria2`, ...). Letters and numbers only, lowercase, at least 3 characters. Login still uses the email. Existing usernames are not changed. Redeploy `create-staff` afterwards.
+
+#### `29_optional_backfill_first_name_usernames.sql`
+**Optional.** Renames existing accounts whose username is still their email to their first name. Accounts already changed by the person and the owner account are skipped. *After 28.*
+
+#### `30_claim_guest_bookings.sql`
+After a guest registers or logs in, `claim_guest_bookings()` moves their guest bookings onto the account. A booking moves only when its code exists **and** the phone number matches. Add-ons, extension requests and payments follow.
+
+#### `31_payment_options.sql`
+Customers choose **50% down payment** or **100% full payment** for studio bookings, outside rentals, later add-on rentals and extensions. The server calculates the amount; the choice is stored in `payment.payment_option`. Walk-in records are unchanged. *After 30.*
+
+#### `32_balance_collection.sql`
+Staff must **collect the remaining balance** before a session starts or equipment is issued. Adds `booking_balance_due()`, `rental_balance_due()`, and `staff_collect_balance()` (one transaction that records the balance, turns the payment into a full payment and moves the booking to In Progress / the rental to Active). A guard trigger blocks starting anything with a balance, and `start_due_sessions()` no longer auto-starts those. Views gain `balance_due` columns. *After 31.*
+
+#### `33_booking_window.sql`
+The database refuses online bookings and pick-ups more than **28 days** ahead. Staff and onsite records are not limited. Existing bookings are untouched. (Now driven by `app_setting` since 94.)
+
+#### `34_receipt_emails.sql`
+Receipt emails. Guests type an email in the booking form (required, validated here too); signed-in customers use their account email, read by the database. Stored as `receipt_email` and `receipt_sent_at` so the Edge Function sends once and never accepts an address from the browser. **Also deploy `functions/send-receipt`.** *After 33.*
+
+#### `35_verified_emails.sql`
+"Your payment is verified" emails. Adds `payment.verified_email_sent_at` so each verification sends exactly one email. **Redeploy `send-receipt`.** *After 34.*
+
+#### `36_onsite_slot_hold.sql`
+The onsite booking form **holds the chosen hours for 2 minutes** ("Held by Staff", renewed every minute, released on inactivity). Adds `staff_hold_onsite` and replaces `staff_create_onsite_booking` with a version accepting the hold token. **Run it before uploading new site files**, or the onsite form cannot record bookings. *After 16 and 24.*
+
+#### `37_hold_two_minutes.sql`
+Makes the Extend hold last 2 minutes like every other hold (replaces `staff_hold_extension`). *After 36.*
+
+#### `38_gcash_screenshots.sql`
+Creates the private `gcash-screenshots` bucket (images only, 5 MB) for the required **Attach GCash Screenshot** field. Files go in `<13-digit reference>/`. Anyone filling a payment form can upload; only staff can open them (Verify drawer). No table changes.
+
+#### `39_addon_auto_issue_return.sql`
+Add-on equipment follows its studio session, even when added later: session starts means the add-on is issued; session completed means it is returned. One function, `sync_addon_orders`, does this and also runs every 30 seconds to catch missed items. Pending add-ons of ended bookings are cancelled. *After 38.*
+
+#### `40_addon_balance_collection.sql`
+A later add-on paid at 50% stays a down payment until staff collect the rest ("Collect balance & issue" in Rentals), and is not issued before that, even in a running session. Starting the session collects it together with the booking balance. *After 39.*
+
+#### `41_auto_complete_sessions.sql`
+A session that reaches its end time is **marked Completed automatically** (inside `start_due_sessions()`), which also returns its add-ons and frees the studio. A session with an extension still awaiting verification is not completed yet. *After 40.*
+
+#### `42_onsite_receipt_email.sql`
+Onsite bookings and rentals can email a receipt through an optional "Email for the receipt" box. Adds `staff_set_receipt_email()`. Needs files 34 and 35 and the `send-receipt` function. *After 41.*
+
+#### `43_onsite_outside_down_payment.sql`
+An onsite **outside rental for a later day** can take a 50% down payment. It shows "Balance PHP x" and is not issued until "Collect balance & issue". Today's rentals stay full payment. *After 42.*
+
+#### `44_onsite_booking_down_payment.sql`
+An onsite **studio booking for a later day** can take a 50% down payment; its Start button reads "Collect balance & start". Today's bookings stay full payment. *After 43.*
+
+#### `45_addon_balance_on_booking.sql`
+A booking now shows the **balance of its add-on equipment**, even when the booking itself was paid in full. `booking_balance_due()` counts add-ons with their own down payment, starting the session collects it, `staff_collect_balance()` only collects add-ons whose payment staff verified, and `lookup_booking()` returns `addon_balance`. *After 44.*
+
+### Condition logging, stock and damage fees (46 to 77)
+
+#### `46_equipment_condition_docs.sql`
+Equipment condition documentation for **outside rentals**: a "before" photo per item when issuing; a return condition (No issue, Scratch, Damaged, Severely damaged, Others), optional notes and an "after" photo on return. Adds columns to `rental_detail`, the private `rental-photos` bucket, `staff_set_before_photo()` and `staff_return_rental_with_condition()`, and four columns on `v_rental_lines`. *After 45.*
+
+#### `47_fix_customer_photo_policy.sql`
+Fixes customers being unable to open their own before / after photos (the policy compared the wrong path form). Adds the helper `customer_owns_rental_photo()`.
+
+#### `48_performance_indexes.sql`
+**Optional.** Indexes for the newest-first, capped reads the site uses (newest bookings, payments, rentals, extensions). Changes nothing else.
+
+#### `49_cron_auto_complete.sql`
+Schedules `start_due_sessions()` with **`pg_cron` every 30 seconds** (falls back to every minute) so sessions start and complete even when no admin page is open. Requires file 41. The admin page still calls it too (harmless, idempotent). Job: `tod-start-sessions`.
+
+#### `50_addon_full_payment_when_started.sql`
+Equipment added to a session that has already started had to be paid in full. (Relaxed by file 90, which adds "pay after the session".)
+
+#### `51_stock_by_time.sql`
+Equipment stock is checked **for the hours it is needed** (studio add-ons and outside rentals). Two orders only compete when their hours overlap. The check also runs when the customer submits, so "not enough" shows before paying. Adds `equipment_available_between(from, to)`. Orders that are Approved or Active hold stock. *After 50.*
+
+#### `52_stock_on_booking_time_change.sql`
+Re-checks add-on equipment whenever a booking is **extended or rescheduled**, so new hours cannot double-book an item. The Extend window shows the problem before the customer pays, and the same check runs when staff verify an extension. *After 51.*
+
+#### `53_pending_orders_hold_stock.sql`
+A **Pending** add-on or outside-rental request now holds its equipment (no time limit) until staff verify, reject or cancel it, so a customer who paid cannot lose items because staff were slow. Stale holds from Rejected / Cancelled / Completed bookings are ignored. *After 52.*
+
+#### `54_reschedule_stock_slots.sql`
+The Reschedule window **greys out start times** where the booking's add-on equipment is not free. Adds `reschedule_blocked_slots(ref, date)`, using the same check as the save, so what is greyed out is exactly what would be refused. *After 53.*
+
+#### `55_extend_without_addons.sql`
+A session can still be **extended when its add-on equipment is not free** for the extra hours, after a confirmation ("Extend without the add-on?"). Only the booking is extended; the add-on keeps its original hours (`rental_order.addon_cut_hours`). For customer requests the choice is saved in `booking_extension.without_addons` and applied on verification.
+
+#### `56_balance_payment_proof.sql`
+Collecting a balance now requires proof: **Cash** (amount tendered, change shown, database refuses less than the balance) or **GCash** (13-digit reference saved in `payment.balance_paid_reference`). Adds `staff_collect_balance_proof()`, which checks the proof and calls the existing function in the same transaction. *After 55.*
+
+#### `57_handover_proof.sql`
+Outside rentals need a **handover proof photo** (one per rental) in addition to per-item before photos. Adds `rental_order.handover_photo_path`, `staff_set_handover_photo()`, and extends the issue guard, the customer photo policy and `v_rental_lines`. Customers see it in My rental > Details. *After 56 (needs 46 and 47).*
+
+#### `58_damage_charges.sql`
+**Damage fees** for outside rentals. A fee is money owed, kept in its own tables (`damage_charge`, `damage_charge_log`) and view (`v_damage_charge`), separate from the payment table. Status flows Unpaid, Pending (GCash sent, awaiting staff check), Paid; Waived means 0. Every change is logged with who, when and why. Returns never depend on payment: staff can collect now (Cash / GCash) or the customer pays later. Reports count a fee only once Paid.
+
+#### `59_remove_damaged_stock.sql`
+In the return window, staff can tick **Remove from stock** for a damaged item and choose how many. Confirming lowers Total stock in the same transaction and logs a "Stock removed" line. *After 58.*
+
+#### `60_out_of_service_stock.sql`
+Equipment gets **Owned** and **Out of service** quantities (Rentable = owned - out of service; `total_quantity` is kept equal to rentable by a trigger so existing checks keep working). The return window offers per damaged item: Back in stock, Out of service, or Remove permanently. A return is **never cancelled** because of this; the app lists upcoming rentals and bookings that no longer have enough (checked by date). Replaces the function from 59. *After 59.*
+
+#### `61_swap_rental_item.sql`
+Staff can **swap an item** on a not-yet-issued rental for an equivalent one at no extra charge (the customer keeps the agreed price; nothing is refunded). Adds the `rental_item_swap` log, `staff_swap_options()`, `staff_swap_rental_item()`, and an updated `equipment_stock_conflicts()` that returns the line id and booking time. *After 60.*
+
+#### `62_stock_preview.sql`
+`equipment_stock_preview()` shows which upcoming rentals would be short **before** a return is confirmed, when staff tick "Remove from stock", so they can swap right there. Read-only. *After 61.*
+
+#### `63_out_of_stock_status.sql`
+Equipment with 0 rentable units shows **Out of Stock** instead of "In Use". "In Use" is kept for items with units rented out and none left. *After 62.*
+
+#### `64_damage_block_reputation.sql`
+Two features. **(1)** A customer with an **unpaid damage fee** (Unpaid, or Pending until staff check the GCash payment) cannot create a new booking or rental, online or onsite. Enforced by `BEFORE INSERT` triggers on `booking` and `rental_order`, matched by account **and** phone number (last 10 digits) so guests are covered. A phone-only match gets a generic message with no amount. Only the Owner can waive, defer or lift a block, with a required, logged reason. **(2)** Staff-only **reputation flags** (late returns and damage fees of the last 12 months) with notes and dismissals, in tables customers cannot read (`incident_review`, `incident_review_log`). *After 63.*
+
+#### `65_outside_no_auto_issue.sql`
+An outside rental is **never issued automatically**, even when fully paid and past pick-up time. Staff issue it from the admin page after attaching the before photos and handover proof. Sessions, extensions and add-ons behave as before.
+
+#### `66_balance_receipt_email.sql`
+A **"fully paid" receipt email** is sent when staff collect a booking or rental balance (once per collection, staff only, via `send-receipt` kind `balance`). **Redeploy `send-receipt`.** *After 65.*
+
+#### `67_balance_cash_tendered.sql`
+The fully paid email also shows **Cash received and Change**; the tendered amount is saved in `payment.balance_tendered`. **Redeploy `send-receipt`.** *After 66.*
+
+#### `68_damage_paid_email.sql`
+The same fully paid receipt is emailed when a **damage fee gets paid** (staff collect it, accept the customer's GCash payment, or collect it at the return). Sent once, within 30 minutes of payment. Saves cash received in `damage_charge.paid_tendered` and replaces `staff_collect_damage()` and `staff_return_rental_with_damage()`. **Redeploy `send-receipt`.** *After 67.*
+
+#### `69_onsite_gcash_required.sql`
+Onsite bookings and rentals paid by **GCash require the 13-digit reference** (same rule as online). Cash is unchanged. *After 68.*
+
+#### `70_no_max_booking_hours.sql`
+Removes the **4-hour maximum** of a booking and of an extension. A booking can be 1 hour up to the whole day; the only limits are the schedule and the 10:00 PM close. It patches function text, so **if you ever re-run an older file such as 55, run 70 again afterwards.**
+
+#### `71_customer_swap_choice.sql`
+**"Let customer choose"**: staff offer 1 to 5 equivalent items (free for the rental's hours), set an answer deadline, and decide whether to swap in the first choice automatically if the customer does not answer. While an offer is Open the offered items are **held**. The customer picks one (swapped at once, no extra charge) or declines. At the deadline the first choice is swapped in, or the offer closes or is marked Expired. Adds the offer tables, `staff_create_swap_offer`, `my_swap_offers`, `customer_choose_swap`, `customer_decline_swap`, `expire_swap_offers`, and the `pg_cron` job `tod-expire-swap-offers` (every minute). `staff_swap_rental_item` now shares one routine, `swap_apply_internal`. *After 61 and 70.*
+
+#### `72_customer_swap_followup.sql`
+When a customer declines (or does not answer and nothing can be assigned), My rental shows **"Studio will contact you"** instead of "Approved", until staff swap the item or the rental is issued, returned, rejected or cancelled. *After 71.*
+
+#### `73_approve_after_swap.sql`
+**One Verify only.** If a rental's payment is verified but the item is out of stock, the order stays Pending until a replacement is in; then it is **approved automatically**, with no second Verify. The approver recorded is the staff member who verified the payment. *After 72.*
+
+> There is intentionally **no `74_*.sql`**.
+
+#### `75_onsite_cash_tendered.sql`
+Onsite bookings and rentals paid in cash save the **cash tendered**, so the receipt email can show Cash received and Change. Adds `payment.cash_tendered` and a fourth argument to `staff_set_receipt_email()`. **Redeploy `send-receipt`.** *After 73.*
+
+#### `76_replacement_emails.sql`
+Automatic emails when a rental item becomes unavailable: the **"choose your replacement" email** (lists options, prices, deadline, default item) and the **"your item was replaced" email**. Each is sent once (`customer_emailed_at`). **Redeploy `send-receipt`.** *After 75.*
+
+#### `77_equipment_sort_order.sql`
+Adds `equipment.sort_order` so the Owner can **drag equipment rows** in Admin > Equipment to set the order customers see (Rent page, "Browse equipment" window, home page). New items go to the end. Until run, the drag handles are hidden.
+
+### No-shows, late fees, check-in and hardening (78 to 94)
+
+#### `78_no_show_release.sql`
+**No-show release.** A confirmed booking with an unpaid balance is held for a grace period after its start (default 15 minutes, `app_setting` key `no_show_grace_minutes`). If the balance is not paid and the session not started, it is **cancelled automatically** ("No-show: ...") and the slot is freed; its Pending and Approved add-ons are cancelled too. Payments already made are not refunded. Staff can hold longer (staff once, owner up to 3 times) or release at once; customers get one extra 15 minutes with "Running late". Runs from the existing 30-second `pg_cron` job. *After 77.*
+
+#### `79_no_show_emails.sql`
+Three emails for the no-show release: the verified email now shows **"Pay the balance by <time>"** and the terms; a **reminder** about 2 hours before the start (only if a balance is due); and a **forfeiture** notice when released. Needs setup: add the `CRON_SECRET` Edge Function secret, run the `insert into public.email_job_config ...` statement from the bottom of the file with your project URL, anon key and that secret, and redeploy `send-receipt`. Adds the `pg_cron` job `tod-no-show-emails` (every 5 minutes, through `pg_net`). Until the config row exists the job does nothing. *After 78.*
+
+#### `80_lock_equipment_on_request.sql`
+Fixes a **last-item race**: two customers requesting the last unit at the same moment (even for different studios) could both pass the stock check. Adds a lock inside `request_rental()`.
+
+#### `81_qa_fixes.sql`
+QA fixes: re-creates the `customer.number` check (the old copy rejected spaces), stops the internal helper `assert_order_stock` from being callable from the API, and makes the no-show release **re-check the balance** so a booking paid at the desk at that very moment is never released.
+
+#### `82_no_show_in_flag.sql`
+No-shows appear **inside the reputation flag** (last 12 months, people sharing a phone number together). Staff can Add note and Dismiss a no-show (note required) and later Count again; everything is logged. One counted no-show is yellow, two or more red (display only, never blocks anyone). *After 78 and 64.*
+
+#### `83_late_fee_collection.sql`
+The **late fee is collected at the return**, together with any damage fee, in one payment (Cash with change, or GCash with reference). The fee is price / 8 per hour per item, a started hour counts as a full hour, counted from the end of the 8-hour window. Adds `staff_return_rental_with_fees()` (return, late fee and damage fee in one transaction) and stores how the late fee was paid on the rental line. *After 82 and 68.*
+
+#### `84_late_fee_block.sql`
+A late fee left unpaid at the return ("Not now") now works like an unpaid damage fee: it **blocks new bookings and rentals** (including the same phone number) and forces a red flag. The Owner's Waive / Defer / Lift tools work for it too. *After 83 and 64.*
+
+#### `85_collect_balance_on_complete.sql`
+**Mark completed collects the balance of an extended session.** For an In Progress booking with a balance, the window asks for Cash (tendered, change) or GCash (reference), records the balance as fully paid, completes the booking and emails the fully paid receipt. `staff_collect_balance()` accepts an In Progress booking when `p_start = false`. *After 84.*
+
+#### `86_block_autocomplete_with_balance.sql`
+A session that **still owes a balance is never completed by itself**. It stays In Progress ("Over time", with the amount due) until staff press **Collect balance & complete**. Sessions with nothing owed complete exactly as before. No trigger is used on purpose, so one error cannot roll back the whole batch. *After 85.*
+
+#### `87_booking_check_in.sql`
+**Check-in:** staff record when the customer arrived (`booking.checked_in_at / checked_in_by / checked_in_by_name`), for down-payment and fully paid bookings alike. It does not start the session. A checked-in customer is **not a no-show** (the countdown, Hold and Release stop). Adds `staff_check_in`, `staff_undo_check_in` (Owner only, note required) and `staff_check_in_times`. Walk-ins starting within 15 minutes are checked in automatically. Every action is logged in the booking's History. *After 86.*
+
+#### `88_late_fee_preview.sql`
+The Return window asks the **database** how much late fee will be charged (`staff_late_fee_preview`), instead of calculating in the browser, so the window and the actual charge can never disagree. Read-only. *After 87 (needs 83).*
+
+#### `89_equipment_checkout_hold.sql`
+**Checkout hold:** while a customer has the rental checkout window open, the items in their cart are held for 2 minutes (new `equipment_hold` table, `hold_equipment()`, `release_equipment_hold()`), so two customers cannot both reserve the last unit. `equipment_available_between()` subtracts other customers' holds; the request RPCs take an optional `p_hold_token`. Holds never block staff. **Run it, or the checkout window will not open.** *After 88.*
+
+#### `90_addon_balance_in_session.sql`
+Equipment added to a **running (Active) session** can be paid **after the session**. The customer gets a "Pay after my session" option (`request_addon_rental_later()`); staff get "After the session (added to the balance)" in Onsite > Rental. The equipment is marked In Use right away and its price becomes part of the booking balance, collected with **Collect balance & complete**. `staff_create_onsite_rental()` gains a last argument `p_pay_later`. Stored as `rental_order.balance_deferred = true` plus a PHP 0.00 Verified payment row. *After 89.*
+
+#### `91_extension_pay_later.sql`
+A customer can **extend now and pay after the session**. `customer_extend_pay_later()` extends at once (same studio, closing-time and add-on checks) and adds the cost to the balance. A booking that was paid in full is switched to the down-payment model so the extra hours show as a balance. *After 90.*
+
+#### `92_extension_active_no_down.sql`
+Extending an **Active** session offers only **Pay after my session** or **Full payment**; the 50% down payment is refused by the database too. Before the session starts, 50% / 100% / pay later work as before. *After 91.*
+
+#### `93_staff_extend_session_payment.sql`
+Staff extending a **running session** get the same two choices: **Full payment (paid now)**, Cash with change or GCash with reference and screenshot, or **After the session** (added to the balance). Adds `staff_extend_session()`. Confirmed (not started) bookings still use `staff_extend_booking` from 55. *After 91.*
+
+#### `94_qa_hardening.sql`
+Fixes from the QA audit. **(B-01)** Guest lookups by reference code now **require the phone number**. **(B-02)** `hold_slot` is throttled (60 attempts per IP per 10 minutes, and at most 10 different people holding one studio at once). **(B-03)** Online guest bookings and outside-rental contact numbers must be a real 11-digit Philippine mobile number (`09` + 9 digits). **(B-04)** The booking window (28 days), change / cancel cutoff (24 hours) and slot-hold length (2 minutes) now live in `app_setting` and are enforced from there; the website reads them through `get_public_settings()`. No new jobs, buckets or policies. *Rename the file to remove the space before `.sql`.*
+
+### Other files
+
+#### `all_in_one.sql`
+The four core files plus a selection of later migrations (05 to 18, 20, 21, 23 to 28, 30, 38 to 45, 65 to 67). A convenience for early setups only; it is **not** a full replacement. For a complete, current database, run the numbered files.
+
+#### `tests/qa_tests.sql`
+The database QA suite. See [Testing](#testing).
+
+**Dependency tips**
+
+- Files 83 to 93 build on each other. Run them in order.
+- If you re-run an older file that redefines extension functions (for example 55), run 70 again afterwards.
+- Redeploy `send-receipt` after 35, 66, 67, 68, 75, 76 and 79 (the `functions/send-receipt/index.ts` in this repo already includes all of them).
+
+---
+
+## Authentication setup
+
+Customers and staff log in with their **real email address**. Email confirmation is on, so these settings matter.
+
+1. **Authentication → Providers → Email:** turn on **Confirm email**.
+2. **Authentication → URL Configuration:**
+   - **Site URL:** the address where the site is hosted (for example `https://tower-of-dove.vercel.app/`).
+   - **Redirect URLs:** add the same address followed by `**` (and `http://localhost:8000/**` for local work). Without this, confirmation and reset links will not return to the site. The site must be opened over `http(s)`, not by double-clicking a file.
+3. **Custom SMTP sender:** Supabase's built-in sender only emails project team members and allows very few emails per hour. Under **Authentication → Emails → SMTP Settings**, enable custom SMTP using a service such as Resend, Brevo, or Gmail with an App Password (`smtp.gmail.com`, port `465`). Raise **Authentication → Rate Limits → Emails sent per hour** if you expect many sign-ups.
+4. *(Optional)* Edit the **Confirm signup**, **Reset password** and **Change email address** templates. Keep the `{{ .ConfirmationURL }}` link in each.
+5. **Secure email change** (Providers → Email): turn it on so a changed email must be confirmed from both inboxes.
+
+**Behaviour to know about:**
+
+- **Forgot password** sends a reset link that returns to `pages/login.html?reset=1`.
+- **Profile changes:** email changes go through `auth.updateUser` and are confirmed by link (trigger from `26_profile_management.sql` then syncs the profile row). Passwords are changed through the emailed reset link, so the old password keeps working until then.
+- **Usernames** default to the first name (`maria`, then `maria2` if taken). Login always uses the email. Accounts created before the email-login change may still use a fake `@towerofdove.app` address. Change that email under **Authentication → Users** before expecting emails to arrive.
+- **Guest checkout:** a guest can continue without an account or register during checkout. Guest bookings from the same device are claimed by the account after login (booking code and phone must match).
+
+---
+
+## Edge Functions
+
+Both functions run on Supabase's servers and keep **Verify JWT on**. Supabase provides `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` to them automatically.
+
+| Function | Purpose |
+|---|---|
+| `create-staff` | **Owner only.** Creates staff accounts, resets staff passwords, removes customer accounts. Uses the `service_role` key server-side so it never reaches the browser. |
+| `send-receipt` | Sends booking and rental receipts, "payment verified" emails, "fully paid" balance / damage / late-fee receipts, replacement-item notices, and no-show reminder and forfeiture emails. |
+
+### Deploy
+
+**Dashboard:** Edge Functions → **Deploy a new function** → **Via Editor**, name it exactly (`create-staff` or `send-receipt`), paste the file's contents, keep **Verify JWT** on, then **Deploy**.
+
+**CLI:**
+
+```bash
+supabase functions deploy create-staff --project-ref <your-project-ref>
+supabase functions deploy send-receipt --project-ref <your-project-ref>
+```
+
+> After pulling a new version of the code, **redeploy** the functions. Several migrations (for example 35, 66, 68, 76, 79) change what `send-receipt` handles.
+
+### Secrets for `send-receipt`
+
+Add under **Edge Functions → Secrets**:
+
+| Secret | Required | Notes |
+|---|---|---|
+| `SMTP_HOST` | Yes | For Gmail: `smtp.gmail.com` |
+| `SMTP_PORT` | Yes | For Gmail: `465` |
+| `SMTP_USER` | Yes | Your sending address |
+| `SMTP_PASS` | Yes | For Gmail: an App Password |
+| `CRON_SECRET` | For no-show emails | Any long random text; must match the value in `email_job_config` |
+| `RECEIPT_FROM_EMAIL` | No | Defaults to `SMTP_USER` |
+| `STUDIO_NAME` | No | Defaults to "Tower of Dove Music Studio" |
+| `STUDIO_CONTACT_EMAIL` | No | Shown in emails |
+
+### Email safety rules built into `send-receipt`
+
+- The recipient is **never taken from the request**. It is the address saved with the booking or rental, or the signed-in account's email.
+- Each receipt is sent **once** and only within 30 minutes of being created.
+- Everything shown in an email is read from the database, not from the browser.
+- Staff-only email kinds (verified, balance, damage, late fee, replacement) require an active staff login.
+- Bookings created before `34_receipt_emails.sql` have no saved email, so no receipt is sent for them.
+
+---
+
+## Scheduled jobs (pg_cron)
+
+| Job | Schedule | What it does | Set up by |
+|---|---|---|---|
+| `tod-start-sessions` | Every 30 seconds | `start_due_sessions()`: starts paid sessions at their start time, completes sessions at their end time (skipping any that still owe a balance), and runs the no-show release | `49_cron_auto_complete.sql` |
+| `tod-expire-swap-offers` | Every minute | `expire_swap_offers()`: settles replacement offers at their deadline | `71_customer_swap_choice.sql` |
+| `tod-no-show-emails` | Every 5 minutes | `send_no_show_emails()`: calls `send-receipt` (through `pg_net`) for reminders and forfeiture notices | `79_no_show_emails.sql` |
+
+If `pg_cron` is unavailable on your plan, the admin dashboard also runs the session check about every 30 seconds while it is open, and the customer pages settle expired swap offers when they load.
+
+### Finishing `79_no_show_emails.sql`
+
+1. Run `79_no_show_emails.sql`.
+2. Add the `CRON_SECRET` Edge Function secret (your own long random text).
+3. Run the `insert into public.email_job_config …` statement from the bottom of that file, using your project URL, anon key and the same secret.
+4. Deploy the current `send-receipt` function.
+
+Until step 3 is done the email job does nothing.
+
+---
+
+## Storage buckets
+
+| Bucket | Visibility | Used for | Created in |
+|---|---|---|---|
+| `studio-images` | Public | Studio photos | `03_security.sql` |
+| `equipment-images` | Public | Equipment photos | `03_security.sql` |
+| `rental-ids` | Private | Customer ID uploads for rentals | `03_security.sql` |
+| `rental-photos` | Private | Before / after / handover / return inspection photos (staff upload; customers can view their own) | `46_equipment_condition_docs.sql` |
+| `gcash-screenshots` | Private | GCash payment screenshots, stored under `<13-digit reference>/` (anyone can upload, only staff can view) | `38_gcash_screenshots.sql` |
+
+Images are limited to JPEG / PNG / WebP (PDF also allowed for IDs) and 5 MB (10 MB for rental photos).
+
+---
 
 ## What the website calls
 
 | Screen / action | Call |
 |---|---|
-| Register | `auth.signUp({ email, password, options: { data: { kind: 'customer', first_name, last_name, username: email, number } } })` (a trigger creates the customer row) |
-| Log in | `auth.signInWithPassword({ email, password })`, then read `app_user` to see if it is staff |
+| Register | `auth.signUp({ email, password, options: { data: { kind: 'customer', first_name, last_name, username, number } } })`; a trigger creates the `customer` row |
+| Log in | `auth.signInWithPassword({ email, password })`, then read `app_user` to see if the user is staff |
 | Studios, equipment | `from('studio')`, `from('v_equipment_stock')` (readable without login) |
+| Public settings (booking window, cutoff, hold length) | `rpc('get_public_settings')` |
 | Calendar occupied times | `rpc('get_busy_slots', { p_studio_id, p_from, p_to, p_token })` |
-| Hold a slot (2 min) / release | `rpc('hold_slot', ...)`, `rpc('release_hold', { p_token })` |
-| Hold rental equipment at checkout (2 min) | `rpc('hold_equipment', { p_items, p_start_at, p_end_at, p_token })`; freed by `release_hold`; `request_addon_rental` / `request_outside_rental` take `p_hold_token` |
-| Book a studio (guest or customer) | `rpc('create_booking', ...)` |
+| Hold / release a slot (2 min) | `rpc('hold_slot', …)`, `rpc('release_hold', { p_token })` |
+| Hold rental equipment at checkout (2 min) | `rpc('hold_equipment', { p_items, p_start_at, p_end_at, p_token })`; request RPCs take `p_hold_token` |
+| Book a studio (guest or customer) | `rpc('create_booking', …)` |
 | My bookings | `from('v_booking_summary')` (customers see only their own) |
-| Extend a session (customer, 50% GCash down payment) | `rpc('customer_request_extension', { p_booking_ref, p_extra_hours, p_token, p_gcash_reference })`; staff verify in Payments (`update payment set status = 'Verified'`) or `rpc('staff_reject_extension', { p_extension_id, p_reason })`; read with `from('v_booking_extension')` |
-| Reschedule / cancel | `rpc('hold_reschedule_slot')` while picking, then `rpc('reschedule_booking', { ..., p_token })`, `rpc('cancel_booking')` (24h rule enforced) |
-| Guest lookup | `rpc('lookup_booking', { p_ref })`, `rpc('lookup_rental', { p_ref })` |
-| Request a rental | `rpc('request_rental', ...)`; upload the ID photo to the `rental-ids` bucket first |
-| Onsite booking / rental | `rpc('staff_create_onsite_booking')`, `rpc('staff_create_onsite_rental')` |
-| Verify / reject payment | `update payment set status = 'Verified' | 'Rejected'` (booking updates itself) |
-| Approve / reject / issue rental | `update rental_order set status = ...` (reject needs `rejected_reason`; stock is checked) |
-| Return equipment | `rpc('staff_return_rental', { p_rental_ref, p_equipment_id })` (outside rentals: `rpc('staff_return_rental_with_damage', ...)` records the condition and an optional damage fee) |
-| Damage fee | `rpc('staff_collect_damage')`, `rpc('staff_reject_damage_payment')`, `rpc('staff_update_damage_charge')` (staff); `rpc('customer_pay_damage')` (customer, GCash); read with `v_damage_charge` |
-| Dashboard, Bookings, Rentals, Payments, Customers, Reports | `v_dashboard_counts`, `v_booking_summary`, `v_rental_lines`, `v_payment_queue`, `v_customer_spending`, `v_revenue_daily` |
+| Extend a session | `rpc('customer_request_extension', …)` (GCash) or `rpc('customer_extend_pay_later', …)`; staff verify in Payments or `rpc('staff_reject_extension', …)` |
+| Reschedule / cancel | `rpc('hold_reschedule_slot', …)`, `rpc('reschedule_booking', …)`, `rpc('cancel_booking', …)` (24-hour rule) |
+| Guest lookup | `rpc('lookup_booking', …)`, `rpc('lookup_rental', …)` (reference code **and** phone number) |
+| Request a rental | `rpc('request_rental' / 'request_addon_rental' / 'request_outside_rental', …)`; upload the ID photo to `rental-ids` first |
+| Onsite booking / rental | `rpc('staff_create_onsite_booking', …)`, `rpc('staff_create_onsite_rental', …)` |
+| Verify / reject payment | `update payment set status = 'Verified' \| 'Rejected'` (the booking updates itself) |
+| Collect balance | `rpc('staff_collect_balance', …)` |
+| Check in a customer | `rpc('staff_check_in', …)`, `rpc('staff_undo_check_in', …)` (Owner, note required) |
+| Approve / reject / issue rental | `update rental_order set status = …` (rejecting needs a reason; stock is checked) |
+| Return equipment | `rpc('staff_return_rental_with_fees', …)` (condition, late fee, damage fee in one step) |
+| Damage fees | `rpc('staff_collect_damage' / 'staff_reject_damage_payment' / 'staff_update_damage_charge', …)`; customers use `rpc('customer_pay_damage', …)`; read `v_damage_charge` |
+| Replacement items | `rpc('staff_swap_rental_item', …)`, `rpc('staff_create_swap_offer', …)`, `rpc('customer_choose_swap', …)` |
+| Dashboard and reports | `v_dashboard_counts`, `v_booking_summary`, `v_rental_lines`, `v_payment_queue`, `v_customer_spending`, `v_revenue_daily` |
+
+---
 
 ## Rules the database enforces
 
-- No double booking: an exclusion constraint on studio + time range (Pending, Approved and In Progress bookings count).
-- Opening hours 10:00 to 22:00 Manila, whole hours, 1 to 4 hours.
-- Changes and cancellations close 24 hours before the session (customers; staff may override).
-- Equipment cannot be approved or issued beyond the stock owned.
-- Customers can only see their own bookings, rentals and payments. Guests can only use the RPCs.
-- Staff cannot edit studios, equipment or staff accounts. Only the owner can.
+- **No double booking:** an exclusion constraint on studio + time range (Pending, Approved and In Progress bookings count).
+- **Opening hours:** 10:00 to 22:00 Asia/Manila, whole hours. There is no maximum booking length (removed in `70`).
+- **Booking window:** online bookings and outside rentals cannot start more than **28 days** ahead. Staff and onsite records are not limited.
+- **Change / cancel cutoff:** customers can change or cancel up to **24 hours** before the session. Staff may override.
+- **Slot hold length:** **2 minutes**.
+- **Rule settings:** the three values above live in `app_setting` (`booking_window_days`, `change_cutoff_hours`, `slot_hold_minutes`) and the website reads them through `get_public_settings()`, so the site and the database cannot disagree (`94`).
+- **Phone numbers:** online guest bookings and outside-rental contact numbers must be a real 11-digit Philippine mobile number (`09` + 9 digits). Staff and onsite records use a lenient check.
+- **Stock:** equipment cannot be approved, issued or requested beyond the units free for the hours needed; Pending requests and checkout holds count.
+- **Payments:** 50% down payment or 100% full payment; any balance must be collected (cash with change, or GCash reference) before a session starts, gear is issued, or an extended session completes.
+- **No-shows:** a confirmed booking with an unpaid balance is released after the grace period (`app_setting` key `no_show_grace_minutes`, default 15 minutes). A checked-in customer is never a no-show. Payments already made are not refunded.
+- **Unpaid fees:** an unpaid damage or late fee blocks new bookings and rentals (matched by account and phone number). Only the Owner can waive, defer or lift a block, with a logged reason.
+- **Data access:** customers see only their own bookings, rentals and payments. Guests can only use specific RPCs. GCash screenshots and inspection photos are staff-readable.
+- **Roles:** staff cannot edit studios, equipment or staff accounts. Only the Owner can.
 
-## Before launch
+---
 
-- Guest lookup currently needs only the reference code (matches the site). References like `TOD-1042` are
-  guessable, so pass `p_phone` too once the lookup form asks for it. The result never includes names.
-- `hold_slot` is open to anyone, so add a rate limit (Edge Function or Supabase rate limits) if abuse is a concern.
-- Reference numbers can skip values when a booking attempt fails (the sequence still advances).
-- Creating staff accounts needs the `service_role` key, so it lives in an Edge Function, never in the browser.
-  The function is `functions/create-staff/index.ts`. Deploy it once (below) and **Settings > Add staff** works.
+## Testing
 
-## Deploy the create-staff function
+`tests/qa_tests.sql` checks double-booking, 50% / full payment maths, cancelling after payment (no refund), staff extension cost, the no-show release, and who can read whose data.
 
-**Dashboard (no tools needed):**
-1. Supabase > **Edge Functions** > **Deploy a new function** > **Via Editor**.
-2. Name it exactly `create-staff`.
-3. Replace the sample code with the contents of `functions/create-staff/index.ts`.
-4. Leave **Verify JWT** on, then click **Deploy**.
+1. Paste the whole file into the **SQL Editor** and run it.
+2. Everything is rolled back, so no data is changed.
+3. The result appears as a **"QA RESULTS"** error box. That is expected: the error is how the results are reported.
 
-**Or with the CLI:** `supabase functions deploy create-staff --project-ref xwdpduwgswyxqhbrvpay`
+Re-run it after applying new migrations.
 
-Supabase gives the function `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` itself, so there are no secrets to set.
-Only an active Owner can call it. It creates staff accounts, resets staff passwords and removes customer accounts.
-**Staff are now created with an email address, so if you deployed it earlier, open the function in the dashboard, paste the new code over the old and press Deploy again** (the customer removal needs it).
+---
 
-## Email verification setup
+## Updating an existing database
 
-1. **Authentication > Providers > Email**: turn **on** "Confirm email" and save.
-2. **Authentication > URL Configuration**: set **Site URL** to the address where the site is hosted
-   (for example `https://yourname.github.io/tower-of-dove-main/`). Under **Redirect URLs** add the same address followed by `**`
-   (for example `https://yourname.github.io/tower-of-dove-main/**`). Without this the confirmation link does not return to the site.
-   The site must be opened over `http(s)` (not by double-clicking `index.html`) for the link to work.
-3. **Your own email sender (SMTP)**: Supabase's built-in sender only mails project team members and allows just a few emails per hour,
-   so real customers will not get it. In **Authentication > Emails > SMTP Settings** (older dashboards: Project Settings > Authentication) turn on **Enable custom SMTP**
-   and enter the details from an email service (for example Resend, Brevo, or Gmail with an App Password: host `smtp.gmail.com`, port `465`).
-   Then raise **Authentication > Rate Limits > Emails sent per hour** if you expect many sign-ups.
-4. Optional: **Authentication > Emails > Confirm signup** lets you edit the message. Keep the `{{ .ConfirmationURL }}` link in it.
-5. Test: register with a real inbox, open the link, then log in. Accounts created before this change stay confirmed.
+1. Find the newest numbered file you have already applied.
+2. Run each later file in numeric order. They are safe to re-run, so running one twice does no harm.
+3. Redeploy the Edge Functions if the release notes (or the migration's header comment) say so.
+4. Re-run `tests/qa_tests.sql`.
 
-## Forgot password
+Each migration's header comment explains what it changes, which file it must follow, and whether an Edge Function needs redeploying.
 
-Works with the same setup as email verification (SMTP sender + Redirect URLs `.../**`). The login page's **Forgot password?** sends a reset link
-to the account's email; the link returns to `pages/login.html?reset=1`, where the person chooses a new password.
-Old accounts that still use a fake `@towerofdove.app` login cannot receive the email: change their email under **Authentication > Users** first.
-Optional: edit the message in **Authentication > Emails > Reset password** (keep `{{ .ConfirmationURL }}`).
+---
 
-## Changing email or password from the profile page
+## Security checklist
 
-The profile page (customers: `pages/account.html`, owner/staff: the sidebar name in `pages/admin.html`) never changes a login directly:
-
-- **Email**: `auth.updateUser({ email })` makes Supabase email a confirmation link. The login email only changes after the link is opened;
-  trigger `supabase/26_profile_management.sql` then copies the new address into the profile row. Turn on **Authentication > Providers > Email > Secure email change**
-  so the link must be opened from both the old and the new inbox. Optional: edit **Authentication > Emails > Change email address** (keep `{{ .ConfirmationURL }}`).
-- **Password**: the button calls `auth.resetPasswordForEmail`; the new password is typed on `pages/login.html?reset=1` after the emailed link is opened.
-  Your current password keeps working until then.
-- **Redirect URLs** must include `.../pages/account.html`, `.../pages/admin.html` and `.../pages/login.html` (the `.../**` entry from the steps above covers all three).
-- **Name**: the Account name card saves first and last name and displays the stored values immediately.
-- **Username**: the Account name card saves username, first name and last name together. The username is read from the signed-in account row in `customer` or `app_user` and displayed in the sidebar; it is never substituted with the login email. Sidebars query the database on page load and update immediately after saving, including in other open tabs. Login still uses email.
-- Existing installations must run `supabase/27_allow_username_change.sql`. It allows users to update their own username, accepts usernames alongside legacy email values, and prevents email changes from overwriting usernames. New installations using `all_in_one.sql` include these changes.
-- **Default username**: new customer and staff accounts start with their first name as the username (`maria`, then `maria2` if taken), not their email. Existing installations run `supabase/28_default_username_first_name.sql`, then redeploy the `create-staff` Edge Function. `supabase/29_optional_backfill_first_name_usernames.sql` is optional and renames existing accounts that still use their email as username.
-
-- **Guest or register at checkout**: a customer who is not logged in chooses **Continue as Guest** or **Register an account to save your data** in the booking form. Register saves the selection in the browser (24 hours), opens a Create your account pop-up (same fields as the register page), and restores the booking form after the first login. Guest bookings made on the same device are moved onto the account after login by `supabase/30_claim_guest_bookings.sql` (a booking moves only when its code and phone number match). Existing installations run that file once; new installations using `all_in_one.sql` already have it. No new settings are needed, but email confirmation must already be set up (see above), and the Redirect URLs entry `.../**` covers the return trip.
-
-## Balance collection (32_balance_collection.sql)
-Run `32_balance_collection.sql` once after `31_payment_options.sql` (not included in `all_in_one.sql`). It adds the columns and functions that let staff confirm the remaining balance of a 50% down payment before a session starts or equipment is issued, and stops sessions / outside rentals with a balance from starting by themselves. No other Supabase settings change; the `create-staff` Edge Function is untouched.
-
-## Booking window (33_booking_window.sql)
-Run once after 32. Online bookings and outside rentals cannot start more than 28 days ahead; staff and onsite records are not limited.
-
-## Receipt emails (34_receipt_emails.sql + send-receipt Edge Function)
-Guests type an email address in the booking form (required, checked in the browser and again in the database). Logged-in customers see no email field: the database reads the email of the signed-in account. After a booking, outside rental or add-on rental the site calls the `send-receipt` Edge Function, which emails the receipt (one template for guests and members) to the address saved with the booking / rental, once.
-1. Run `34_receipt_emails.sql` once in the SQL Editor (after 33).
-2. Deploy `functions/send-receipt/index.ts` as an Edge Function named `send-receipt` (leave **Verify JWT** on; guests use the public anon key, which passes).
-3. Edge Functions > Secrets: add `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` (your own email account; Gmail: `smtp.gmail.com`, `465`, your address, an App Password). Optional: `RECEIPT_FROM_EMAIL`, `STUDIO_NAME`, `STUDIO_CONTACT_EMAIL`.
-Bookings made before this update have no saved email, so no receipt is sent for them.
-
-## "Your payment is verified" emails (35_verified_emails.sql)
-When staff verify a payment (Bookings, Rentals or Payments tab, including session extensions), the website asks the `send-receipt` Edge Function (`kind: "verified"`) to email the customer. Only an active staff login can trigger it, the address comes from the database (the saved receipt email, then the customer's email / account email for older records) and each payment sends once (`payment.verified_email_sent_at`).
-1. Run `35_verified_emails.sql` once in the SQL Editor (after 34).
-2. Re-deploy the `send-receipt` Edge Function with the new `functions/send-receipt/index.ts`. The SMTP secrets stay the same.
-
-## Onsite booking slot hold (36_onsite_slot_hold.sql)
-Run once in the SQL Editor (after 35; not included in `all_in_one.sql`). While staff fill in the Onsite booking form, the chosen hours are held ("Held by Staff") for 2 minutes, renewed every minute, with a "Closes in m:ss if idle" countdown (2 minutes of inactivity releases the hold). It adds `staff_hold_onsite` and replaces `staff_create_onsite_booking` with a version that accepts the hold token. No other Supabase settings change. Run the file BEFORE uploading the new site files, otherwise the onsite form cannot record bookings.
-
-## Hold length (37_hold_two_minutes.sql)
-Run once after 36. Every slot hold now expires after 2 minutes (the Extend windows and the Onsite form renew it every minute while open), matching the 2-minute idle countdown. It only replaces `staff_hold_extension`.
-
-## GCash screenshot (file 38)
-Every GCash payment form has a required **Attach GCash Screenshot** field under the QR code. The reference number is
-read from the picture in the browser (Tesseract.js, loaded from the jsDelivr CDN, nothing to configure) and the customer can correct it.
-Run `38_gcash_screenshots.sql` once: it creates the private bucket `gcash-screenshots` (images only, 5 MB) and two policies
-(anyone can upload into `<13-digit reference>/`, only staff can view). Staff see the screenshot in the Verify drawer.
-
-## Let the customer choose a replacement item (71_customer_swap_choice.sql)
-Run once in the SQL Editor (after 61_swap_rental_item.sql and 70_no_max_booking_hours.sql; safe to re-run). No Edge Function or other setting changes.
-When a unit is damaged and an upcoming rental can no longer get it, staff now have two ways to fix it, next to each other in the shortage pop-up, the Equipment tab warning and the Rentals > Actions menu:
-- **Swap item** (unchanged): staff pick the replacement at once. Use it when pick-up is soon.
-- **Let customer choose** (new): staff tick 1 to 5 equivalent items that are free for the rental's hours, set how long the customer has to answer (1 hour to 2 days, always ending at least 30 minutes before the rental starts) and decide whether the first choice is swapped in automatically if the customer does not answer.
-While the offer is open the offered items are **held** for those hours (`equipment_in_use_between` counts them), so nobody else can rent them. The customer sees a notice, a status chip and a pop-up in My rental / My bookings, and picks one (swapped at once, no extra charge, no refund) or presses "None of these suit me" (optional message). At the deadline the database either swaps in the first choice (if allowed and still free), closes the offer if the original item became free again, or marks it **Expired** and flags the rental "Replacement: follow up" for staff.
-Offer status: Open, Swapped (by the customer or automatically), Declined, Expired, Cancelled. Staff can cancel an open offer, and a direct "Swap item" on the same line closes it. Every step is in the rental's History.
-Expired offers are settled every minute by pg_cron (`tod-expire-swap-offers`; if pg_cron is not available the admin page and the customer's My rental page settle them when they load).
-`staff_swap_rental_item` now calls the same shared routine (`swap_apply_internal`), with the same checks and messages as before.
-
-## Studio will contact you (72_customer_swap_followup.sql)
-Run after 71. When a customer answers "None of these suit me" (or does not answer in time and nothing can be assigned), their My rental status shows "Studio will contact you" instead of "Approved", until staff swap the item or the rental is issued, returned, rejected or cancelled.
-
-
-## One Verify only: approve after the item is replaced (73_approve_after_swap.sql)
-When a rental's payment is verified but its item is out of stock, the order stays Pending and staff must **Let customer choose** or **Swap item** (the same pop-up as after a damaged return). Once the replacement is in (staff swap, customer choice, or the deadline's automatic first choice), the order is approved by itself, so there is no second Verify. Run once in the Supabase SQL Editor, after 72_customer_swap_followup.sql.
-
-## Drag equipment into the order customers see (77_equipment_sort_order.sql)
-Run once in the Supabase SQL Editor (safe to re-run). Adds `equipment.sort_order`. In Admin > Equipment the owner drags a row by its handle to set the order of the equipment on the Rent page, the booking "Browse equipment" window and the home page. New equipment is added at the end. The category / Low stock / Newest added filters in the admin never change what customers see. Until the file is run the site keeps its old order and the drag handles are hidden.
-
-## No-show release (78_no_show_release.sql)
-Run once in the Supabase SQL Editor (safe to re-run), after 77_equipment_sort_order.sql. A confirmed booking that still owes a balance is held for a grace period after its start time (default 15 minutes, `app_setting` `no_show_grace_minutes`). If the balance is not paid and the session not started by then, it is cancelled automatically ("No-show: ...") and the slot is freed; its Pending and Approved add-on orders are cancelled too. Payments already made are not refunded. Staff can hold a booking longer (staff once, owner up to 3 times) or release it at once; every action appears in the booking's History. Customers get one extra 15 minutes with "Running late", see the release time on their booking, and can "Book again" after a no-show. Called every 30 seconds by the existing pg_cron job (file 49), so no new job is needed.
-
-## No-show emails (79_no_show_emails.sql + send-receipt Edge Function)
-Three emails for the no-show release, sent to the booking's saved receipt email (guests get them too; only the "I'm running late" button and "Slot held until" on the site need a login):
-* **Confirmation**: the existing "Your booking is verified" email now shows "Pay the balance by <time>" and the no-show terms when a balance is left. The booking request receipt also carries the terms line.
-* **Reminder** about 2 hours before the start, only if a balance is still due and the booking was confirmed more than 2 hours before the start. Sent once.
-* **Forfeiture** when a booking is released as a no-show (automatically or by staff): the slot was released, the payment is kept. Sent once, within 6 hours of the release.
-
-Setup, once, after 78: 1) run `79_no_show_emails.sql`; 2) Edge Functions > Secrets: add `CRON_SECRET` (your own long random text); 3) run the `insert into public.email_job_config ...` statement from the bottom of that file with your project URL, anon key and the same secret; 4) deploy the new `functions/send-receipt/index.ts` (Verify JWT stays on). A pg_cron job (`tod-no-show-emails`, every 5 minutes) then calls the function through pg_net. Until step 3 is done the job does nothing.
-
-## QA fixes and tests (80_lock_equipment_on_request.sql, 81_qa_fixes.sql, tests/qa_tests.sql)
-Run `80_lock_equipment_on_request.sql` and `81_qa_fixes.sql` once in the SQL Editor (safe to re-run).
-* **80**: two customers asking for the last item at the same moment (even for two different studios) can no longer both get a Pending request.
-* **81**: re-creates the phone check on `customer.number` (the copy in the old `01_schema.sql` rejected spaces), stops the internal helper `assert_order_stock` from being callable from the API, and makes the no-show release re-check the balance so a booking paid at the desk at that very moment is never released.
-* **tests/qa_tests.sql**: paste into the SQL Editor and Run. It tests double-booking, the 50% / full payment maths, cancelling after payment (no refund), staff extension cost, the no-show release, and who can read whose data. Everything is rolled back; the result appears as a "QA RESULTS" error box.
-Note: `70_no_max_booking_hours.sql` raises the extension limit to 12 hours by patching function text. If you ever re-run an older file such as `55_extend_without_addons.sql`, run 70 again afterwards.
-
-## No-shows inside the flag window (82_no_show_in_flag.sql)
-Run once in the SQL Editor (safe to re-run), after 78 and 64. Clicking a flag in the admin lists the customer's no-shows of the last 12 months (booking, date, what happened, who released it). Staff can **Add note** and **Dismiss** a no-show (a note is required) and later press **Count again**, exactly like a late return or damage fee; every note and dismissal is logged with who and when. A dismissed no-show stops counting. A customer who only has no-shows gets the flag too (1 counted no-show = yellow, 2 or more = red; display only, it never blocks anyone). The separate "No-show x1" chip was removed; the flag replaces it everywhere (bookings, customers, Studio sessions). Dismissing does not reopen the booking or change what the customer sees on it. Until the file is run the window shows no No-shows section.
-
-## Late fee collected at the return (83_late_fee_collection.sql)
-Run once in the SQL Editor (safe to re-run), after 82 and 68. When staff press **Actions > Process return** on an overdue outside rental, the Return window works out the late fee by itself (price / 8 per hour, per item, a started hour counts as a full hour, counted from the end of the 8-hour window, the same moment the list says Overdue) and adds the damage fee the staff enter. One payment covers both: **Cash** (the amount tendered must cover the total, the change is shown) or **GCash** (13-digit reference). A late fee is always collected at the return (there is no "Not now"); a damage fee alone can still be left unpaid. How the late fee was paid (method, reference, cash tendered, when, by whom) is saved on the rental line and shown in the rental's details. The Rentals list shows the late fee so far next to Overdue. Return, late fee and damage fee are saved in one step (`staff_return_rental_with_fees`); if an hour ticks over while the window is open, nothing is saved and staff are asked to open it again. Until the file is run, a return with no late fee works as before and a return with a late fee asks to run it.
-
-## Mark completed collects the balance of an extended session (85_collect_balance_on_complete.sql)
-Run once in the SQL Editor (safe to re-run), after 84. When staff **Extend** an Active session, the extra hours are added to the bill and the booking shows **Balance ₱...** in the Payment column. **Mark completed** on such a session now opens the same window as **Collect balance & start**: the amount to collect, **Cash** (amount tendered, change to return, quick-cash chips) or **GCash** (13-digit reference number). Confirming records the balance as fully paid, marks the booking **Completed**, and emails the customer the fully paid receipt. A session with nothing left to pay keeps the normal "Mark this session as completed?" question. The file lets `staff_collect_balance` accept an In Progress booking when it is called with `p_start = false` (starting a session still needs a Confirmed booking) and clears `payment.balance_email_sent_at` so a second collection is emailed again. Until the file is run, the window shows a message asking to run it and the booking is not completed. No Edge Function change.
-
-## A session that owes a balance is never completed by itself (86_block_autocomplete_with_balance.sql)
-Run once in the SQL Editor (safe to re-run), after 85. Until now `start_due_sessions()` (every 30 seconds, pg_cron file 49) completed every In Progress session at its end time, so an extended session whose extra hours were not paid was completed with its balance never collected. The auto-complete step now skips a booking whose balance due is above zero: it stays In Progress, shows **Over time by N min** with **Balance due** on the Studio Sessions card (the sidebar badge and the "Session is over time" pop-up stay on, with the amount), and its button reads **Collect balance & complete** (Studio Sessions, Bookings Actions menu, Verify window). Pressing it opens the file 85 window; once the balance is saved the session is completed. Sessions with nothing owed still complete at their end time exactly as before. No trigger is used on purpose: one that raises an error would roll back the whole batch and stop other sessions from completing. Add-on equipment of such a session is returned when the session is completed, so until then it can show as Overdue in Rentals.
-
-
-## 87_booking_check_in.sql  (check-in: when the customer arrived)
-Run once in the SQL Editor (safe to re-run), after 86. Adds `booking.checked_in_at / checked_in_by / checked_in_by_name`, the RPCs `staff_check_in`, `staff_undo_check_in` (owner only, note required) and `staff_check_in_times`, a guard so only staff can change the check-in, and an automatic check-in for onsite walk-ins. A checked-in customer is not a no-show: `release_no_show_bookings`, `staff_release_booking`, `staff_release_times`, `booking_release_time` and `my_booking_release` skip a checked-in booking. Check-in is a record only; fully paid bookings still start by themselves at their start time. Every check-in and undo is written to `booking_event` (the booking's History).
-
-## Equipment added during a session is paid after it (90_addon_balance_in_session.sql)
-Run once in the SQL Editor (safe to re-run), after 89. No Edge Function change. Until now (file 50) equipment added to a session that had already started had to be paid in full with GCash first. Now, while a session is **Active**:
-* **Customer** (Rent equipment > Add-on, member or guest with the booking code): a new option **Pay after my session**. Nothing is paid now and no GCash QR, screenshot or reference is asked. The equipment is marked In Use right away and its price is added to the booking's balance. **Full Payment (100%)** with GCash is still offered. The new RPC is `request_addon_rental_later()`.
-* **Staff** (Onsite > Rental > Add-on, booking that is Active): a new **When is it paid?** choice, **After the session (added to the balance)**. Nothing is received; the payment method is hidden. `staff_create_onsite_rental()` has a new last argument `p_pay_later` (the old 13-argument version is dropped).
-* The balance behaves like the extra hours of an extension: the booking shows **Balance P...** in the Payment column, the session is not completed by itself (86), and **Collect balance & complete** (85) collects it (Cash with change, or GCash with the 13-digit reference), records it as fully paid and completes the session. A booking paid in full online and a booking with a down payment both work.
-* Stored as `rental_order.balance_deferred = true` (down_payment 0) plus one payment row of PHP 0.00 (Verified, Cash) where the collected balance is recorded. `rental_balance_due`, `booking_balance_due`, `staff_collect_balance`, `rental_addon_inprogress` and `sync_addon_orders` were updated for it.
-* A session that is only Confirmed but past its start time (not Active yet) still needs full payment online, as before.
-
-## Extend now, pay later (91_extension_pay_later.sql)
-Run once in the SQL Editor (safe to re-run), after 90. No Edge Function change. The customer's Extend window has a new first choice, **Pay after my session**, next to 50% and 100%. Choosing it hides the GCash steps and nothing needs verifying: `customer_extend_pay_later()` extends the booking at once (same studio, closing-time and add-on checks as before) and the cost of the extra hours becomes part of the booking's balance, collected with **Collect balance & complete**. A booking that was paid in full is switched to the down-payment model with what it paid as its down payment, so the extra hours show as a balance. The extension is saved in History as Approved with no payment.
-
+- **Never** put the `service_role` key in frontend code. Only the Edge Functions use it.
+- The anon key in `js/config/supabaseClient.js` is public by design; Row Level Security and the RPC checks protect the data.
+- Guest lookups require the **reference code and the phone number** used for the booking (`94`).
+- `hold_slot` is throttled per caller IP and per studio (`94`). For heavier abuse protection, add a per-IP Edge Function with an external counter in front of Supabase.
+- Reference numbers are random but can skip values when a booking attempt fails.
+- Keep SMTP credentials and `CRON_SECRET` in Edge Function **Secrets**, never in the repo.
+- Make sure Redirect URLs contain only domains you control.
