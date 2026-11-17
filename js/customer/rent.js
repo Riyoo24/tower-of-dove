@@ -73,6 +73,19 @@ function outsideHours() {
 
 const billedHours = () => Math.max(8, Math.ceil(outsideHours() || 8));
 
+/* An outside rental can be kept for 2 days at most: the return is never more than 48 hours after the
+   chosen pick-up time (pick-up 11/18 at 10 AM -> the latest return is 11/20 at 10 AM). The database
+   enforces the same limit (supabase/96_outside_rental_max_48h.sql). */
+const MAX_OUTSIDE_HOURS = 48;
+const MAX_OUTSIDE_DAYS = MAX_OUTSIDE_HOURS / 24;
+
+/* 'YYYY-MM-DD' + n days (pure calendar maths, no time zone involved) */
+const addDays = (dateISO, n) => {
+    const d = new Date(dateISO + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+};
+
 function lineTotal(id) {
     const e = eqById(id), q = curCart()[id], unit = unitPrice(e);
     return state.rentMode === 'out' ? unit * q * billedHours() / 8 : unit * q;
@@ -156,6 +169,7 @@ function renderSummary() {
 function renderDuration() {
     const el = $('#rdur'), h = outsideHours(), w = windowFor('out'), when = $('#co-when');
     const msg = h === null ? 'The return must be after the pick-up.'
+        : h > MAX_OUTSIDE_HOURS ? `Rental length: ${h} hours. Outside rentals can be kept for 2 days (${MAX_OUTSIDE_HOURS} hours) at most. Choose an earlier return.`
         : h < 8 ? `Rental length: ${h} hour${h === 1 ? '' : 's'}. The price covers up to 8 hours, so returning early does not lower it.`
             : h === 8 ? 'Rental length: 8 hours (the full base duration, included in the price).'
                 : `Rental length: ${h} hours. ${Math.ceil(h) - 8} extra hour${Math.ceil(h) - 8 === 1 ? '' : 's'} added to the price.`;
@@ -644,11 +658,27 @@ function limitOutsidePickers() {
     if (rd.value && rd.value < rd.min)
         rd.value = rd.min;
 
+    // 2-day limit: the return date is at most 2 days after the pick-up date ...
+    if (pd.value) {
+        const latest = addDays(pd.value, MAX_OUTSIDE_DAYS);
+        if (latest < rd.max)
+            rd.max = latest;
+        if (rd.value && rd.value > rd.max)
+            rd.value = rd.max;
+    }
+    // ... and on that last day, not later than the pick-up hour (48 hours exactly)
+    const pickupMs = pd.value ? new Date(manilaTS(pd.value, +$('#pt').value)).getTime() : null;
+    const overLimit = (date, hour) => pickupMs !== null && !!date
+        && new Date(manilaTS(date, hour)).getTime() - pickupMs > MAX_OUTSIDE_HOURS * 3600e3;
+    if (rd.value && overLimit(rd.value, +$('#rt').value))
+        $('#rt').value = String(+$('#pt').value);   // the latest allowed return time
+
     refreshWindowStock();   // the hours may have moved (a past hour was skipped)
     [['#pd', '#pt'], ['#rd', '#rt']].forEach(([dateSel, timeSel]) => {
         const date = $(dateSel).value, list = $(timeSel);
         [...list.options].forEach(o => {
-            o.disabled = !!date && isPastSlot(date, +o.value - 10);
+            o.disabled = !!date && (isPastSlot(date, +o.value - 10)
+                || (timeSel === '#rt' && overLimit(date, +o.value)));
         });
         const chosen = list.selectedOptions[0];
         if (chosen && chosen.disabled) {
@@ -891,7 +921,11 @@ export function initRentTab() {
         limitOutsidePickers();
         renderCart();
     });
-    ['#pt', '#rt'].forEach(sel => $(sel).addEventListener('change', renderCart));
+    $('#pt').addEventListener('change', () => {
+        limitOutsidePickers();   // the latest return moves with the pick-up time
+        renderCart();
+    });
+    $('#rt').addEventListener('change', renderCart);
     $('#or-agree').addEventListener('change', e => {
         if (e.target.checked)
             $('#or-terms').classList.remove('err');
@@ -1186,6 +1220,8 @@ async function requestRental() {
             return say('The return time must be later than now.');
         if (hours === null)
             return say('The return time must be after the pick-up time.');
+        if (hours > MAX_OUTSIDE_HOURS)
+            return say(`Outside rentals can be kept for 2 days (${MAX_OUTSIDE_HOURS} hours) at most. Choose a return time within ${MAX_OUTSIDE_HOURS} hours of the pick-up.`);
         if (!payOpt)
             return say('Choose 50% Downpayment or Full Payment.');
 
