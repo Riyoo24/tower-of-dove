@@ -1,6 +1,6 @@
 /* =====================================================================
    home/carousel.js - studio showcase carousel on the landing page
-   Slides, prev/next arrows, dots, a "01 / 05" counter and auto-advance
+   Slides, prev/next arrows, dots, a "01 / 04" counter and auto-advance
    (stopped on hover, focus, touch, or when the visitor prefers reduced motion).
    ===================================================================== */
 
@@ -9,14 +9,12 @@ import { goBook } from '../shared/navigation.js';
 import { photo } from '../shared/cards.js';
 
 /* Carousel slides. index.js fills in `img`, `sub` (the studio's Description, never its Room specs) and `price` from the studio data (Supabase).
-   `studio` (set by index.js) is the studio's position in STUDIOS, so the button opens the booking page on that studio.
-   `scroll` makes the button jump to a section of the page instead of opening the booking page. */
+   `studio` (set by index.js) is the studio's position in STUDIOS, so the button opens the booking page on that studio. */
 export const SLIDES = [
     { label: 'Studio A', tag: 'Rehearsal room', price: 0, c1: '#C92C3E', c2: '#3D0C14', img: null, cta: 'Book this room' },
     { label: 'Studio B', tag: 'Rehearsal room', price: 0, c1: '#C98512', c2: '#33220A', img: null, cta: 'Book this room' },
     { label: 'Studio C', tag: 'Rehearsal room', price: 0, c1: '#8E161F', c2: '#1E0A0F', img: null, cta: 'Book this room' },
-    { label: 'Studio D', tag: 'Rehearsal room', price: 0, c1: '#4A4A55', c2: '#16161A', img: null, cta: 'Book this room' },
-    { label: 'Rental gear', tag: 'Equipment', sub: 'Add gear to a booking, or rent it to take outside the studio.', price: 0, c1: '#6E0F1C', c2: '#0B0B0D', img: null, cta: 'Browse gear', scroll: 'equipment' }
+    { label: 'Studio D', tag: 'Rehearsal room', price: 0, c1: '#4A4A55', c2: '#16161A', img: null, cta: 'Book this room' }
 ];
 
 /* Placeholder art for rooms without a photo: a quiet equalizer. Heights are fixed per slide, so they never jump around. */
@@ -131,14 +129,6 @@ export function initCarousel() {
         const b = e.target.closest('[data-book-studio]');
         if (b)
             goBook(b.dataset.bookStudio);
-    });
-
-    // "Browse gear" scrolls down to the equipment section
-    slider.addEventListener('click', e => {
-        const b = e.target.closest('[data-scroll]');
-        const el = b && document.getElementById(b.dataset.scroll);
-        if (el)
-            el.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
     });
 
     wrap.addEventListener('mouseenter', stop);

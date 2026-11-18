@@ -327,7 +327,8 @@
 
 #equipment-grid .eqimg {
     height: 150px;
-    margin-bottom: 14px;
+    margin: -18px -18px 14px;   /* run the photo edge to edge across the card (cancels the card's 18px padding) */
+    border-radius: calc(var(--r) - 1px) calc(var(--r) - 1px) 8px 8px;
 }
 
 #equipment-grid h3 {
@@ -1811,11 +1812,13 @@ body.hastop[data-active="home"] .hero {
     font-size: 13px;
     font-weight: 600;
     line-height: 1.2;
-    color: var(--link);
+    color: var(--mut);   /* neutral, not the red link colour, so it sits quietly under the description */
     cursor: pointer;
+    transition: color .15s;
 }
 
 .rm-more:hover {
+    color: var(--ink);
     text-decoration: underline;
 }
 

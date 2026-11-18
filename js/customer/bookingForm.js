@@ -158,7 +158,7 @@ function drawSlots() {
     const dr = state.draft, taken = takenSlots(dr.si, dr.d),
         held = heldSlots(dr.si, dr.d),
         staff = staffHeldSlots(dr.si, dr.d);
-    const none = !!dr.none, t = dr.t, picking = !none && dr.pick === 'end', endIdx = t + dr.h, reach = freeRun(t);
+    const none = !!dr.none, t = dr.t, picking = !none && dr.pick === 'end', complete = !none && !picking, endIdx = t + dr.h, reach = freeRun(t);
     const tip = (text, kind) => ` data-tip="${text}"${kind ? ` data-tip-kind="${kind}"` : ''}`;
     $('#bk-slots').innerHTML = Array.from({ length: SLOTS.length + 1 }, (_, i) => {
         const label = slotLabel(i), closing = i === SLOTS.length, past = !closing && isPastSlot(dr.d, i);
@@ -218,11 +218,11 @@ function drawSlots() {
         return `<button type="button" data-i="${i}" class="${cls}" ${ok ? '' : 'disabled'}${tipAttr}>${label}${closing ? '<span class="cl">Closing time \u00b7 end only</span>' : ''}${!none && !picking && i >= t && i < endIdx && i < SLOTS.length ? '<span class="ln" aria-hidden="true"></span>' : ''}</button>`;
     }).join('');
     if ($('#bk-pick'))
-        $('#bk-pick').innerHTML = `<span class="pk-steps" aria-hidden="true"><span class="pk-s${picking ? ' done' : ' on'}"><b>${picking ? '&#10003;' : '1'}</b>Start</span><span class="pk-line"></span><span class="pk-s${picking ? ' on' : ''}"><b>2</b>End</span></span>`
+        $('#bk-pick').innerHTML = `<span class="pk-steps" aria-hidden="true"><span class="pk-s${picking || complete ? ' done' : ' on'}"><b>${picking || complete ? '&#10003;' : '1'}</b>Start</span><span class="pk-line"></span><span class="pk-s${picking ? ' on' : complete ? ' done' : ''}"><b>${complete ? '&#10003;' : '2'}</b>End</span></span>`
             + `<span class="pk-txt">${picking
                 ? '<strong>Now click your end time.</strong> It can be any highlighted time. Click an earlier time to start over.'
                 : none ? '<strong>Click your start time, then click your end time.</strong> Nothing is chosen for you. Your duration and price are worked out from the two times.'
-                : '<strong>Click a start time, then click an end time.</strong> Your duration and price are worked out for you. Click a new start time to change your choice.'}</span>`;
+                : `<strong>Your time is set: ${SLOTS[t]} to ${endTime(SLOTS[t], dr.h)} (${pl(dr.h, 'hour')}).</strong> To change it, click a new start time and then a new end time.`}</span>`;
     if ($('#bk-range'))
         $('#bk-range').innerHTML = none
             ? '<span><i class="rg-start"></i>Start <b>Click a start time</b></span><span><i class="rg-end"></i>End <b>Click an end time</b></span>'
