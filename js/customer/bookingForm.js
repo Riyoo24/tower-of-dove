@@ -1027,6 +1027,3 @@ export async function openBook(startIndex, prefill = null) {
 
     bkDlg.showModal();
 }
-
-
-

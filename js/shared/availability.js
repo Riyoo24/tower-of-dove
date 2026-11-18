@@ -80,7 +80,7 @@ export const firstBookableDate = () => manilaDay(todayIsClosed() ? 1 : 0);
    (booking window, 24h change/cancel cutoff, hold length); get_public_settings() sends the same
    numbers here so the calendar and the FAQ can never drift from what the database actually does.
    Until the call answers, the defaults below apply (they match the seeded app_setting values). */
-export const RULES = { windowDays: 28, cutoffHours: 24, holdMinutes: 2 };
+export const RULES = { windowDays: 28, cutoffHours: 24, holdMinutes: 2, gcashName: '', gcashNumber: '' };
 
 export const rulesReady = (async () => {
     try {
@@ -89,6 +89,8 @@ export const rulesReady = (async () => {
             if (Number.isInteger(data.window_days)) RULES.windowDays = data.window_days;
             if (Number.isInteger(data.cutoff_hours)) RULES.cutoffHours = data.cutoff_hours;
             if (Number.isInteger(data.hold_minutes)) RULES.holdMinutes = data.hold_minutes;
+            if (typeof data.gcash_name === 'string') RULES.gcashName = data.gcash_name;       // shown under the GCash QR (supabase/97)
+            if (typeof data.gcash_number === 'string') RULES.gcashNumber = data.gcash_number;
         }
     } catch (e) {
         /* an older database without the RPC: the defaults above stay in force */
@@ -134,6 +136,3 @@ export function takenSlots(studioIdx, dateISO, ignoreRef) {
     }
     return taken;
 }
-
-
-

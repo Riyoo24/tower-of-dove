@@ -413,6 +413,14 @@
                             <label for="gq-file">New QR image (PNG, JPG or WebP, up to 5 MB)</label>
                             <input id="gq-file" type="file" accept="image/png,image/jpeg,image/webp">
                             <button class="btn full" id="gq-btn" type="button" style="margin-top:12px">Save QR code</button>
+                            <h3 style="margin:22px 0 4px">GCash account details</h3>
+                            <p class="mut">Shown under the QR code. A customer paying on the same phone cannot scan their own screen, so they can send the payment to this account instead. Use the name exactly as GCash shows it.</p>
+                            <label for="gq-name">GCash account name</label>
+                            <input id="gq-name" maxlength="80" autocomplete="off" placeholder="e.g. Juan D.">
+                            <label for="gq-num">GCash mobile number</label>
+                            <input id="gq-num" type="tel" inputmode="tel" maxlength="15" autocomplete="off" placeholder="e.g. 0917 123 4567">
+                            <div class="alert" id="gq-acct-err" hidden></div>
+                            <button class="btn full" id="gq-acct-btn" type="button" style="margin-top:12px">Save account details</button>
                         </div>
                     </section>
                 </div>

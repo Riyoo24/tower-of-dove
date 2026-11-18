@@ -32,6 +32,10 @@ document.addEventListener('input', e => {
         return;
     let clean = el.value.replace(bad, '');
     if (el.hasAttribute('data-phone')) {
+        /* a number pasted in international form (+63 917 123 4567) becomes 0917 123 4567 */
+        const all = clean.replace(/\D/g, '');
+        if (/^63\d{10}$/.test(all))
+            clean = '0' + all.slice(2);
         /* a Philippine mobile number has 11 digits (0917 123 4567); extra digits are dropped */
         let n = 0, out = '';
         for (const ch of clean) {

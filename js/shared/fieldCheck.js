@@ -13,7 +13,7 @@
    A field is an element or a selector. The "I agree" box (a label with class "terms") works too.
    ===================================================================== */
 
-import { isEmail, isName, reducedMotion } from './utils.js';
+import { isEmail, isName, isPhone, reducedMotion } from './utils.js';
 
 const find = t => typeof t === 'string' ? document.querySelector(t) : t;
 const isTerms = el => el.classList.contains('terms');
@@ -143,12 +143,10 @@ export function liveCheck(list) {
 
 /* ------------------------------ the rules ------------------------------ */
 
-const PHONE_OK = /^[\d\s-]{7,}$/;
-
 export const check = {
     first: v => !v.trim() ? 'Enter your first name.' : !isName(v) ? 'The first name can only contain letters.' : '',
     last: v => !v.trim() ? 'Enter your last name.' : !isName(v) ? 'The last name can only contain letters.' : '',
-    phone: (v, what = 'phone number') => !v.trim() ? `Enter your ${what}.` : (!PHONE_OK.test(v.trim()) || v.replace(/\D/g, '').length > 11) ? `Enter a valid ${what}, like 0917 123 4567.` : '',
+    phone: (v, what = 'phone number') => !v.trim() ? `Enter your ${what}.` : !isPhone(v) ? `Enter a valid ${what}: 11 digits starting with 09, like 0917 123 4567.` : '',
     email: v => !v.trim() ? 'Enter your email address.' : !isEmail(v) ? 'Enter a valid email address, like name@example.com.' : '',
     gcashRef: v => {
         const d = String(v).replace(/\s/g, '');

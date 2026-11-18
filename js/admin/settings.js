@@ -9,7 +9,7 @@ import { ACT, OWNER, btn, dlg, run, showDlg, tb, CONFIRM } from './helpers.js';
 import { sb } from '../config/supabaseClient.js';
 import { btnBusy, btnReset, btnSuccess } from '../shared/btnState.js';
 import { GCASH_QR_PATH, gcashQrUrl } from '../shared/catalog.js';
-import { $, esc, isEmail, isName, normalizeEmail, toast } from '../shared/utils.js';
+import { $, esc, isEmail, isName, isPhone, normalizeEmail, toast } from '../shared/utils.js';
 
 /* ============================ 9. SETTINGS & STAFF ============================ */
 
@@ -189,6 +189,50 @@ if (OWNER) {
         $('#gq-file').value = '';
         showQrPreview(gcashQrUrl(Date.now()));
         toast('GCash QR code saved. Customers will see it in the booking form.');
+    };
+}
+
+/* ---- GCash account name and number, shown under the QR for customers paying on the same phone (supabase/97) ---- */
+const ACCT_KEYS = { name: 'gcash_account_name', number: 'gcash_account_number' };
+
+async function loadAcctDetails() {
+    const { data, error } = await sb.from('app_setting').select('key, value').in('key', Object.values(ACCT_KEYS));
+    if (error)
+        return;   // the settings are not set up yet (supabase/97): the fields simply start empty
+    (data || []).forEach(r => {
+        if (r.key === ACCT_KEYS.name)
+            $('#gq-name').value = r.value || '';
+        if (r.key === ACCT_KEYS.number)
+            $('#gq-num').value = r.value || '';
+    });
+}
+
+if (OWNER) {
+    loadAcctDetails();
+    $('#gq-acct-btn').onclick = async () => {
+        const err = $('#gq-acct-err'), name = $('#gq-name').value.trim(), number = $('#gq-num').value.trim();
+        const show = m => {
+            err.textContent = m;
+            err.hidden = !m;
+        };
+        show('');
+        if (number && !isPhone(number))
+            return show('Enter the GCash number as 11 digits starting with 09, like 0917 123 4567. Leave it empty to hide it.');
+        if (number && !name)
+            return show('Enter the account name too, so customers can check who they are paying.');
+        const b = $('#gq-acct-btn');
+        btnBusy(b, 'Saving…');
+        const stamp = new Date().toISOString();
+        const res = await sb.from('app_setting').upsert([
+            { key: ACCT_KEYS.name, value: name, updated_at: stamp },
+            { key: ACCT_KEYS.number, value: number.replace(/[\s-]/g, ''), updated_at: stamp }
+        ], { onConflict: 'key' });
+        if (res.error) {
+            btnReset(b);
+            return show('Could not save: ' + res.error.message);
+        }
+        await btnSuccess(b, 'Saved');
+        toast(name || number ? 'GCash account details saved. Customers see them under the QR code.' : 'GCash account details removed.');
     };
 }
 

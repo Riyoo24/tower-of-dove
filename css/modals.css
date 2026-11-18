@@ -23,6 +23,23 @@
     max-width: calc(100vw - 32px);
 }
 
+/* toast() shows the message as a popover so it appears above open dialogs (see js/shared/utils.js).
+   A popover brings its own browser styles (inset: 0, centred, bordered, scrolling), so undo them here. */
+.toast[popover] {
+    inset: auto;
+    left: 50%;
+    bottom: 24px;
+    margin: 0;
+    width: max-content;
+    height: auto;
+    overflow: visible;
+    border: 1px solid #3A3A44;
+    border-left: 3px solid var(--brand);
+    padding: 10px 18px;
+    color: #fff;
+    background: var(--char);
+}
+
 /* dialogs */
 .dlg {
     margin: auto;

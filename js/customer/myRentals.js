@@ -41,7 +41,7 @@ export function applyAccessMode() {
 /* Phone as typed: digits only (spaces and dashes are dropped). */
 const phoneDigits = el => String(el.value).replace(/\D/g, '');
 
-const PHONE_HINT = 'Enter the 11-digit mobile number you used (e.g. 0917 123 4567).';
+const PHONE_HINT = 'Enter the mobile number you used: 11 digits starting with 09 (e.g. 0917 123 4567).';
 
 export function initRentalLookup() {
     $('#gr-form').addEventListener('submit', async e => {
@@ -986,5 +986,3 @@ export function initMyRentals() {
     $('#myrent').addEventListener('click', onClick);
     $('#mybk').addEventListener('click', onClick);
 }
-
-

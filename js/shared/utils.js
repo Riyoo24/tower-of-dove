@@ -167,14 +167,42 @@ export function endTime(startLabel, hours) {
 
 export let toastTimer;
 
+/* The toast is shown as a popover, which puts it in the browser's "top layer". Windows opened with showModal()
+   (cancel, reschedule, checkout, staff drawers...) sit in that layer too and would otherwise cover a normal fixed
+   element, so an error raised while a window was open used to be invisible. The last popover shown is the top-most,
+   so the toast is re-shown each time. Browsers without popover support fall back to the plain fixed toast. */
+function hideToast(t) {
+    if (typeof t.hidePopover === 'function') {
+        try {
+            if (t.matches(':popover-open'))
+                t.hidePopover();
+        } catch (e) {
+            /* already closed */
+        }
+    }
+    t.hidden = true;
+}
+
 export function toast(message) {
     const t = $('#toast');
     if (!t)
         return;
     t.textContent = message;
     t.hidden = false;
+    if (typeof t.showPopover === 'function') {
+        if (!t.hasAttribute('popover'))
+            t.setAttribute('popover', 'manual');
+        try {
+            if (t.matches(':popover-open'))
+                t.hidePopover();
+            t.showPopover();
+        } catch (e) {
+            /* not allowed right now: the plain fixed toast is still shown */
+        }
+    }
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => (t.hidden = true), 4000);
+    // longer messages (usually errors) stay a little longer so they can be read
+    toastTimer = setTimeout(() => hideToast(t), Math.min(9000, Math.max(4000, String(message).length * 70)));
 }
 
 /* Dates on the studio's clock (Manila), whatever the visitor's device says. */

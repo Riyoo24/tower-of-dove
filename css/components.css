@@ -1919,3 +1919,64 @@ textarea.invalid {
     font-weight: 700;
     font-variant-numeric: tabular-nums;
 }
+
+/* ===== Paying on the same phone: save the QR image, or use the account details (js/shared/qrZoom.js) ===== */
+.gq-acct {
+    display: grid;
+    gap: 6px;
+    padding: 12px 14px;
+    border: 1px dashed var(--line);
+    border-radius: 12px;
+}
+
+.gq-acct dl {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+}
+
+.gq-acct dl > div {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px 10px;
+}
+
+.gq-acct dt {
+    font-size: 12px;
+    color: var(--mut);
+}
+
+.gq-acct dd {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.gq-acct[hidden] {
+    display: none;
+}
+
+.gq-acct .btn.sm {
+    min-height: 40px;
+}
+
+/* inside the enlarged QR view */
+dialog.qr-zoom .gq-acct {
+    width: min(88vw, 360px);
+    text-align: left;
+    background: #ffffff0D;
+    border-color: #ffffff33;
+}
+
+dialog.qr-zoom .gq-acct dd {
+    color: #fff;
+}
+
+.qr-zoom-save {
+    margin-top: 4px;
+}
