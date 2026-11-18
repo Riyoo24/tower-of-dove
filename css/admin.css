@@ -555,6 +555,48 @@ tr.has-why td {
     grid-template-columns: minmax(0, 1fr);
 }
 
+/* Sessions: a Confirmed card that is due (check in, balance, release countdown, one Actions menu) */
+#admin .due-card {
+    padding: 22px 24px;
+}
+
+#admin .due-card .due-name {
+    margin: 12px 0 6px;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+#admin .due-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-top: 22px;
+}
+
+#admin .due-tags {
+    display: flex;
+    align-items: center;
+    gap: 10px 12px;
+    flex-wrap: wrap;
+}
+
+#admin .due-tags .b {
+    padding: 4px 13px;
+    font-size: 13px;
+}
+
+#admin .due-rel {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--warn);
+}
+
+#admin .due-rel.soon {
+    color: var(--bad);
+}
+
 /* ===== "Past and closed" groups (Bookings, Rentals, Payments): same look as the customer tables =====
    The group heading spans the whole row, so it must not be cut by the first-cell width limit of .bk-tbl. */
 #admin table.grouped .grp-row td,

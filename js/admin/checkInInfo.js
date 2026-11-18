@@ -37,3 +37,14 @@ export function arrivalLine(b, withButton) {
         return `<p style="margin:6px 0 0"><span class="b verified">Checked in</span> <span class="mut" title="${c.by_name ? 'Checked in by ' + esc(c.by_name) : ''}">${esc(arrivalText(b))}</span></p>`;
     return `<p style="margin:6px 0 0"><span class="b pending">Not checked in</span>${withButton ? ' ' + btn('bk-checkin', b.booking_ref, 'Check in') : ''}</p>`;
 }
+
+/* The same information as arrivalLine, as bare tags for the Sessions card's status row (no <p>, no button):
+   "Not checked in", or "Checked in" with the arrival time. Empty until the migration is installed. */
+export function arrivalTag(b) {
+    if (!CHK_OK)
+        return '';
+    const c = checkInOf(b.booking_ref);
+    if (c)
+        return `<span class="b verified" title="${c.by_name ? 'Checked in by ' + esc(c.by_name) : ''}">Checked in</span><span class="mut">${esc(arrivalText(b))}</span>`;
+    return '<span class="b">Not checked in</span>';
+}

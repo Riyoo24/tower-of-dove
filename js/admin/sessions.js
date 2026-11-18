@@ -4,9 +4,10 @@
    ===================================================================== */
 
 import { BK, STU } from './data.js';
-import { balanceOf, doneLabel, pendingExt, startLabel } from './bookings.js';
-import { arrivalLine, checkInOf, checkInReady } from './checkInInfo.js';
-import { releaseBlock } from './noShow.js';
+import { balanceOf, doneLabel, findBk, pendingExt, startLabel } from './bookings.js';
+import { arrivalLine, arrivalTag, checkInOf, checkInReady } from './checkInInfo.js';
+import { releaseLine, releaseMenuItems } from './noShow.js';
+import { openActionMenu } from '../shared/actionMenu.js';
 import { repFlag } from './reputation.js';
 import { btn, dOf, money, num, tOf } from './helpers.js';
 import { shortDate } from '../shared/utils.js';
@@ -17,11 +18,24 @@ import { $, TODAY, badge, esc } from '../shared/utils.js';
 /* Every studio gets a card: "On Session" (with the live session and its buttons), "Available",
    or its own status (Maintenance / Unavailable) when it is not taking bookings. */
 
-/* a booking with a down payment: the balance is collected at the studio */
-const balNote = b => balanceOf(b) > 0.005 ? `<p style="margin:6px 0 0"><span class="b balancedue">Balance due</span> <b>${money(balanceOf(b))}</b> <span class="mut">to collect before the session starts</span></p>` : '';
+/* a booking with a down payment: the balance is collected at the studio ("Balance ₱150") */
+const balTag = b => balanceOf(b) > 0.005 ? `<span class="b balancedue">Balance ${money(balanceOf(b))}</span>` : '';
 
 /* a running session that still owes a balance (extra hours added by an extension): it will not complete by itself */
 const doneNote = b => balanceOf(b) > 0.005 ? `<p style="margin:6px 0 0"><span class="b balancedue">Balance due</span> <b>${money(balanceOf(b))}</b> <span class="mut">collect it to complete. The session stays open until it is paid.</span></p>` : '';
+
+/* The Actions menu of a due card: the main step first, then Hold / Release now (see noShow.js) */
+function dueMenuItems(b) {
+    const id = b.booking_ref, waiting = checkInReady() && !checkInOf(id);   // true: waiting for the customer to arrive
+    return [waiting ? { act: 'bk-checkin', id, label: 'Check in' } : { act: 'bk-go', id, label: startLabel(b) }, ...releaseMenuItems(b)];
+}
+
+document.addEventListener('click', e => {
+    const menuButton = e.target.closest('[data-sessmenu]');
+    const b = menuButton && findBk(menuButton.dataset.sessmenu);
+    if (b)
+        openActionMenu(menuButton, dueMenuItems(b));
+});
 
 /* how long before the end time staff are told that a session is about to end */
 export const ENDING_SOON = 5 * 60 * 1000;
@@ -40,6 +54,9 @@ export function renderSessions() {
         badgeEl.textContent = needs;
         badgeEl.hidden = !needs;
     }
+    // the cards redraw every 15 seconds: keep them as they are while an Actions menu is open, so it does not vanish
+    if (document.querySelector('.actmenu:not([hidden])'))
+        return;
     const liveCard = b => {
         const s = new Date(b.start_at).getTime(), e = new Date(b.end_at).getTime(), left = e - now;
         const pct = Math.min(100, Math.max(0, Math.round((now - s) / (e - s) * 100)));
@@ -49,15 +66,13 @@ export function renderSessions() {
       <p style="margin:8px 0">${esc(b.customer_name)}</p><p class="mut">${tOf(b.start_at)} to ${tOf(b.end_at)}</p>${arrivalLine(b, true)}${doneNote(b)}
       <div class="hb"><b>${lt}${soon}</b><div><i style="width:${pct}%"></i></div></div><div class="row" style="justify-content:flex-start;gap:8px;margin-top:10px">${btn('bk-done', b.booking_ref, doneLabel(b), 1)}${pendingExt(b.booking_ref) ? btn('ext-verify', pendingExt(b.booking_ref).extension_id, 'Verify extension') : btn('bk-ext', b.booking_ref, 'Extend', 1)}</div></div>`;
     };
-    /* A confirmed booking whose time has come (and has not started yet, e.g. a balance is still due) */
-    /* Before the customer has checked in: "Check in" first (with Hold / Release while a balance is due).
-       After check-in the countdown and those two buttons are gone and "Collect balance & start" is offered. */
-    const dueCard = b => {
-        const gate = checkInReady() && !checkInOf(b.booking_ref);   // true: waiting for the customer to arrive
-        const action = gate ? btn('bk-checkin', b.booking_ref, 'Check in') : btn('bk-go', b.booking_ref, startLabel(b));
-        return `<div class="card"><div class="row"><h3>${esc(b.studio_name)}</h3>${badge('Confirmed')}</div>
-      <p style="margin:8px 0">${esc(b.customer_name)}${repFlag(b.customer_id, 'booking')}</p><p class="mut">${tOf(b.start_at)} to ${tOf(b.end_at)}, today</p>${arrivalLine(b, false)}${balNote(b)}${releaseBlock(b, now)}<div style="margin-top:8px">${action}</div></div>`;
-    };
+    /* A confirmed booking whose time has come (and has not started yet, e.g. a balance is still due).
+       One Actions menu holds every choice: Check in first (or Start session / Collect balance once the customer has arrived),
+       then Hold and Release now while a balance is due. After check-in the countdown, Hold and Release are gone. */
+    const dueCard = b => `<div class="card due-card"><div class="row"><h3>${esc(b.studio_name)}</h3>${badge('Confirmed')}</div>
+      <p class="due-name">${esc(b.customer_name)}${repFlag(b.customer_id, 'booking')}</p><p class="mut">${tOf(b.start_at)} to ${tOf(b.end_at)}, today</p>
+      <div class="due-foot"><div class="due-tags">${arrivalTag(b)}${balTag(b)}${releaseLine(b, now)}</div>
+      <button type="button" class="btn sm line menu-btn" data-sessmenu="${esc(b.booking_ref)}" aria-haspopup="menu" aria-expanded="false">Actions <span aria-hidden="true">&#9662;</span></button></div></div>`;
     const dueFor = st => BK.filter(b => b.studio_id === st.studio_id && b.status === 'Approved'
         && new Date(b.start_at) <= now && new Date(b.end_at) > now)
         .sort((a, b) => new Date(a.start_at) - new Date(b.start_at))[0];

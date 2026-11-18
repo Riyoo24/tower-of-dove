@@ -4,8 +4,8 @@
    (78_no_show_release.sql: grace period, default 15 minutes; its add-on equipment is released with it).
    This file adds, to the card of the Sessions tab:
      - the live countdown ("Releases in 12 min"),
-     - "Customer called, hold 15 more min" (rpc staff_hold_booking: staff once, owner up to 3 times, a note is required),
-     - "Release now (no-show)" (rpc staff_release_booking).
+     - "Hold 15 more min" in the card's Actions menu (rpc staff_hold_booking: staff once, owner up to 3 times, a note is required),
+     - "Release now (no-show)" in the card's Actions menu (rpc staff_release_booking).
    Both actions are written to the booking's History (booking_event) and a release counts as a no-show of the customer.
    If 78_no_show_release.sql has not been run yet, REL is empty and nothing here is shown.
    ===================================================================== */
@@ -26,9 +26,10 @@ export const releaseOf = ref => REL.find(r => r.booking_ref === ref) || null;
 
 const who = b => `${b.booking_ref} (${b.customer_name}, ${b.studio_name}, ${shortDate(dOf(b.start_at))} ${tOf(b.start_at)})`;
 
-/* The block shown on a Confirmed card whose time has come: countdown, then the hold / release buttons.
-   Empty when the booking has no balance due (the database starts it by itself) or the migration is not installed. */
-export function releaseBlock(b, now = Date.now()) {
+/* The countdown shown on a Confirmed card whose time has come: "Releases in 12 min · 9:30 PM" (red in the last 5 minutes),
+   plus the hold note when the booking was held. Empty when the booking has no balance due (the database starts it by itself)
+   or the migration is not installed. */
+export function releaseLine(b, now = Date.now()) {
     const r = releaseOf(b.booking_ref);
     if (!r)
         return '';
@@ -37,14 +38,23 @@ export function releaseBlock(b, now = Date.now()) {
     const when = ms <= 0 ? 'Releasing now'
         : mins <= 1 ? 'Releases in less than a minute'
             : `Releases in ${mins} min`;
-    const held = r.hold_count > 0 ? ` <span class="mut">Held${r.hold_note ? ': ' + esc(r.hold_note) : ''}</span>` : '';
-    const canHold = r.hold_count < MAX_HOLDS() && ms > 0;
-    const holdBtn = canHold
-        ? btn('bk-hold', b.booking_ref, r.hold_count > 0 ? `Hold ${HOLD_MIN} more min (owner)` : `Customer called, hold ${HOLD_MIN} more min`, 1)
-        : (r.hold_count >= MAX_HOLDS() ? '<span class="mut">Already held. Only the owner can hold it again.</span>' : '');
-    return `<p style="margin:6px 0 0"><span class="b ${ms <= 5 * 6e4 ? 'rejected' : 'pending'}" title="Release time ${esc(clock(r.release_at))}">${when}</span>`
-        + ` <span class="mut">at ${esc(clock(r.release_at))}, unless the balance is paid</span>${held}</p>`
-        + `<div class="row" style="justify-content:flex-start;gap:8px;margin-top:8px;flex-wrap:wrap">${holdBtn}${dbtn('bk-release', b.booking_ref, 'Release now (no-show)')}</div>`;
+    const held = r.hold_count > 0 ? `<span class="mut">Held${r.hold_note ? ': ' + esc(r.hold_note) : ''}</span>` : '';
+    return `<span class="due-rel${ms <= 5 * 6e4 ? ' soon' : ''}" title="Release time ${esc(clock(r.release_at))}, unless the balance is paid">${when} \u00b7 ${esc(clock(r.release_at))}</span>${held}`;
+}
+
+/* The Hold and Release choices of the card's Actions menu (empty when there is nothing to release). */
+export function releaseMenuItems(b, now = Date.now()) {
+    const r = releaseOf(b.booking_ref);
+    if (!r)
+        return [];
+    const id = b.booking_ref, left = new Date(r.release_at).getTime() - now;
+    const items = [];
+    if (r.hold_count < MAX_HOLDS() && left > 0)
+        items.push({ act: 'bk-hold', id, label: r.hold_count > 0 ? `Hold ${HOLD_MIN} more min (owner)` : `Hold ${HOLD_MIN} more min` });
+    else if (r.hold_count >= MAX_HOLDS())
+        items.push({ label: 'Already held (only the owner can hold again)', disabled: true });
+    items.push({ act: 'bk-release', id, label: 'Release now (no-show)', danger: true });
+    return items;
 }
 
 /* ---- Release now ---- */
