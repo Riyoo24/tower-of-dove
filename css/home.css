@@ -1863,7 +1863,9 @@ body.hastop[data-active="home"] .hero {
 .fl-back {
     -webkit-backface-visibility: hidden;
     backface-visibility: hidden;
-    background: linear-gradient(180deg, #1B1B20 0%, var(--surface) 100%);
+    /* transparent on purpose: the card itself paints the background and the cursor glow (motion.css),
+       and an opaque face here would sit on top of that glow and hide it */
+    background: none;
     border-radius: calc(var(--r-raised, 12px) - 1px);
 }
 
