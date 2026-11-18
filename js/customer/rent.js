@@ -31,7 +31,6 @@ import {
     SLOTS,
     TODAY,
     badge,
-    dayOffset,
     esc,
     longDate,
     manilaParts,
@@ -40,6 +39,7 @@ import {
     shortDate,
     sum,
     toast,
+    dismissToasts,
     everyVisible
 } from '../shared/utils.js';
 
@@ -62,11 +62,14 @@ export const fmtDT = ts => {
 /* Guests may add equipment to a studio booking, but outside rentals need an account. */
 const outBlocked = () => state.rentMode === 'out' && !isMember();
 
+/* The four outside-rental fields start blank: true once the customer has chosen all of them. */
+const outsideFilled = () => !!($('#pd').value && $('#pt').value && $('#rd').value && $('#rt').value);
+
 /* Outside rentals: the price covers the first 8 hours; every extra hour adds price / 8. */
 function outsideHours() {
-    const pd = $('#pd').value, rd = $('#rd').value;
-    if (!pd || !rd)
+    if (!outsideFilled())
         return null;
+    const pd = $('#pd').value, rd = $('#rd').value;
     const h = (new Date(manilaTS(rd, +$('#rt').value)) - new Date(manilaTS(pd, +$('#pt').value))) / 3600e3;
     return h > 0 ? h : null;
 }
@@ -168,7 +171,8 @@ function renderSummary() {
 
 function renderDuration() {
     const el = $('#rdur'), h = outsideHours(), w = windowFor('out'), when = $('#co-when');
-    const msg = h === null ? 'The return must be after the pick-up.'
+    const msg = !outsideFilled() ? 'Choose your pick-up and return date and time.'
+        : h === null ? 'The return must be after the pick-up.'
         : h > MAX_OUTSIDE_HOURS ? `Rental length: ${h} hours. Outside rentals can be kept for 2 days (${MAX_OUTSIDE_HOURS} hours) at most. Choose an earlier return.`
         : h < 8 ? `Rental length: ${h} hour${h === 1 ? '' : 's'}. The price covers up to 8 hours, so returning early does not lower it.`
             : h === 8 ? 'Rental length: 8 hours (the full base duration, included in the price).'
@@ -506,9 +510,9 @@ function windowFor(ctx) {
         }
         return attachBooking && attachBooking.startAt ? [attachBooking.startAt, attachBooking.endAt] : null;
     }
-    const pd = $('#pd').value, rd = $('#rd').value;
-    if (!pd || !rd)
+    if (!outsideFilled())
         return null;
+    const pd = $('#pd').value, rd = $('#rd').value;
     const a = manilaTS(pd, +$('#pt').value), z = manilaTS(rd, +$('#rt').value);
     return new Date(z) > new Date(a) ? [a, z] : null;
 }
@@ -528,7 +532,7 @@ function renderStockNote() {
     }
     else if (!known) {
         el.className = 'mut';
-        if (ctx === 'out' && $('#pd').value && $('#rd').value && !windowFor('out'))
+        if (ctx === 'out' && outsideFilled() && !windowFor('out'))
             el.textContent = "The return must be after the pick-up, so we can't check availability yet. The numbers below are today's stock.";
         else
             el.textContent = ctx === 'addon'
@@ -667,21 +671,23 @@ function limitOutsidePickers() {
             rd.value = rd.max;
     }
     // ... and on that last day, not later than the pick-up hour (48 hours exactly)
-    const pickupMs = pd.value ? new Date(manilaTS(pd.value, +$('#pt').value)).getTime() : null;
+    const pickupMs = pd.value && $('#pt').value ? new Date(manilaTS(pd.value, +$('#pt').value)).getTime() : null;
     const overLimit = (date, hour) => pickupMs !== null && !!date
         && new Date(manilaTS(date, hour)).getTime() - pickupMs > MAX_OUTSIDE_HOURS * 3600e3;
-    if (rd.value && overLimit(rd.value, +$('#rt').value))
+    if (rd.value && $('#rt').value && overLimit(rd.value, +$('#rt').value))
         $('#rt').value = String(+$('#pt').value);   // the latest allowed return time
 
     refreshWindowStock();   // the hours may have moved (a past hour was skipped)
     [['#pd', '#pt'], ['#rd', '#rt']].forEach(([dateSel, timeSel]) => {
         const date = $(dateSel).value, list = $(timeSel);
         [...list.options].forEach(o => {
+            if (o.value === '')
+                return;   // the blank "Select time" choice stays as it is
             o.disabled = !!date && (isPastSlot(date, +o.value - 10)
                 || (timeSel === '#rt' && overLimit(date, +o.value)));
         });
         const chosen = list.selectedOptions[0];
-        if (chosen && chosen.disabled) {
+        if (chosen && chosen.value !== '' && chosen.disabled) {
             // move to the first hour still open
             const open = [...list.options].find(o => !o.disabled);
             if (open)
@@ -707,6 +713,7 @@ function showAddedPopup(name, qty, kind, stock, added = qty) {
         };
         document.body.appendChild(pop);
     }
+    dismissToasts(pop);   // one message at a time
     const warn = kind === 'max' || kind === 'capped';
     const text = {
         added: 'Added to your rental',
@@ -731,11 +738,12 @@ function showAddedPopup(name, qty, kind, stock, added = qty) {
 
 export function initRentTab() {
     // pick-up times: studio hours; return times also allow 10:00 PM closing
-    $('#pt').innerHTML = SLOTS.map((t, i) => `<option value="${10 + i}">${t}</option>`).join('');
-    $('#rt').innerHTML = SLOTS.map((t, i) => `<option value="${10 + i}">${t}</option>`).join('') + '<option value="22">10:00 PM</option>';
-    $('#pd').value = $('#rd').value = dayOffset(1);
-    $('#pt').value = '10';
-    $('#rt').value = '18';
+    // all four fields start blank: the customer has to choose the dates and times themselves
+    const blankTime = '<option value="" selected disabled>Select time</option>';
+    $('#pt').innerHTML = blankTime + SLOTS.map((t, i) => `<option value="${10 + i}">${t}</option>`).join('');
+    $('#rt').innerHTML = blankTime + SLOTS.map((t, i) => `<option value="${10 + i}">${t}</option>`).join('') + '<option value="22">10:00 PM</option>';
+    $('#pd').value = $('#rd').value = '';
+    $('#pt').value = $('#rt').value = '';
     limitOutsidePickers();
     everyVisible(limitOutsidePickers, 60 * 1000);   // keeps the list right when the hour changes or 9:00 PM passes
     $('#opay-opt').innerHTML = payOptionHtml('rt', 'at pick-up');
@@ -912,7 +920,7 @@ export function initRentTab() {
 
     $('#pd').addEventListener('change', () => {
         $('#rd').min = $('#pd').value || firstBookableDate();
-        if ($('#rd').value < $('#pd').value)
+        if ($('#rd').value && $('#rd').value < $('#pd').value)
             $('#rd').value = $('#pd').value;
         limitOutsidePickers();
         renderCart();
@@ -991,6 +999,47 @@ function holdRequest() {
     return w && items.length ? { items, from: w[0], to: w[1] } : null;
 }
 
+/* Checkout pressed before the pick-up / return date and time were chosen: scroll up to the "When do you need it?"
+   section (smoothly, also on phones where it sits far above the Checkout bar) and shake the empty fields. */
+function nudgeMissingOutsideFields() {
+    const section = $('#rs-when');
+    if (!section || section.hidden)
+        return;
+    const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // On a PC the Rental summary stays in view beside the list, so the page must not move; only scroll
+    // when the section is not fully on screen (phones, where it sits far above the Checkout bar).
+    const r = section.getBoundingClientRect();
+    // (the tab bar and the price bar float over the bottom of the screen on phones, so they do not count as free space)
+    let freeBottom = window.innerHeight || document.documentElement.clientHeight;
+    ['.mtabs', '#rent-sticky'].forEach(sel => {
+        const bar = $(sel);
+        if (!bar || bar.hidden)
+            return;
+        const cs = getComputedStyle(bar);
+        if (cs.position === 'fixed' && cs.display !== 'none')
+            freeBottom = Math.min(freeBottom, bar.getBoundingClientRect().top);
+    });
+    const onScreen = r.top >= 0 && r.bottom <= freeBottom;
+    if (!onScreen) {
+        section.style.scrollMarginTop = '96px';   // keeps the section clear of the floating top bar on phones
+        section.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+    }
+    // the date fields are shown as a button next to the hidden date input (datepicker.js)
+    const fieldFor = id => {
+        const el = $(id), btn = el.nextElementSibling;
+        return btn && btn.classList.contains('dp-trigger') ? btn : el;
+    };
+    const empty = ['#pd', '#pt', '#rd', '#rt'].filter(id => !$(id).value).map(fieldFor);
+    setTimeout(() => {   // let the scroll arrive first so the shake is seen
+        empty.forEach(el => {
+            el.classList.remove('field-shake');
+            void el.offsetWidth;   // restart the animation when pressed again
+            el.classList.add('field-shake');
+            el.addEventListener('animationend', () => el.classList.remove('field-shake'), { once: true });
+        });
+    }, reduce || onScreen ? 0 : 350);
+}
+
 async function openCheckout() {
     if (isBlocked())
         return toast(blockMessage());
@@ -1005,6 +1054,10 @@ async function openCheckout() {
     }
     // Hold the items for 10 minutes (same as the studio booking form) so nobody else can take the last unit meanwhile
     const req = holdRequest();
+    if (!req && state.rentMode === 'out' && !outsideFilled()) {
+        toast('Choose a pick-up and return time first.');
+        return nudgeMissingOutsideFields();
+    }
     if (!req)
         return toast(state.rentMode === 'addon' ? 'Choose the booking this equipment is for first.' : 'Choose a pick-up and return time first.');
     const btns = [$('#rco'), $('#rco-m')];
@@ -1200,6 +1253,7 @@ async function requestRental() {
         if (!isMember())
             return say('Please log in to rent equipment outside the studio.');
         const pd = $('#pd').value, rd = $('#rd').value, ph = +$('#pt').value, rh = +$('#rt').value;
+        const hasTimes = !!($('#pt').value && $('#rt').value);
         const first = $('#on-fn').value.trim(), last = $('#on-ln').value.trim();
         const contact = $('#oc').value.trim(), backup = $('#sm-link').value.trim();
         const payOpt = readPayOption('rt');
@@ -1210,6 +1264,8 @@ async function requestRental() {
             return;
         if (!pd || !rd)
             return say('Choose the pick-up and return dates.');
+        if (!hasTimes)
+            return say('Choose the pick-up and return times.');
         if (pd < firstBookableDate())
             return say('Same-day rentals are closed after 9:00 PM. Choose tomorrow or a later date.');
         if (pd > lastBookableDate() || rd > lastBookableDate())

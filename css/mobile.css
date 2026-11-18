@@ -609,10 +609,6 @@ select,
         width: auto;
     }
 
-    /* "Added to cart" and other floating messages sit above the bottom bars */
-    body.hastop .eq-toast {
-        bottom: calc(var(--mtab-h) + env(safe-area-inset-bottom, 0px) + 16px);
-    }
 }
 
 /* ---------- phones: tables become cards ----------
@@ -1048,5 +1044,59 @@ select,
     #myrent table {
         width: 100%;
         min-width: max-content;
+    }
+}
+/* ---------- phones: toast messages sit above the bottom bars ----------
+   Covers toast() (#toast), the "added" pop-up (.add-pop) and the browse-window message (.eq-toast).
+   --toast-bottom = tab bar + home-bar inset + a gap, and 74px more when a price bar (Book / Rent) sits on the tabs.
+   The boxes are as wide as their text but never wider than the screen, so long messages wrap and never overflow. */
+@media (max-width: 820px) {
+    body {
+        --toast-bottom: calc(var(--mtab-h, 0px) + env(safe-area-inset-bottom, 0px) + 18px);
+    }
+
+    body:has(.pg.on > .stickybar:not([hidden])) {
+        --toast-bottom: calc(var(--mtab-h, 0px) + env(safe-area-inset-bottom, 0px) + 92px);
+    }
+
+    body.kb-open {
+        --toast-bottom: 16px;
+    }
+
+    body .toast,
+    body .toast[popover],
+    body .add-pop,
+    body .eq-toast {
+        bottom: var(--toast-bottom);
+        box-sizing: border-box;
+        width: max-content;
+        max-width: min(420px, calc(100vw - 24px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)));
+        padding: 10px 14px;
+        font-size: 14px;
+        line-height: 1.4;
+        text-align: left;
+        overflow-wrap: anywhere;
+        word-break: normal;
+    }
+
+    body .add-pop {
+        padding: 10px 14px;
+        gap: 10px;
+    }
+
+    body .add-pop > span,
+    body .eq-toast > span {
+        min-width: 0;
+    }
+}
+
+@media (max-width: 380px) {
+    body .toast,
+    body .toast[popover],
+    body .add-pop,
+    body .eq-toast {
+        max-width: calc(100vw - 16px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
+        padding: 9px 12px;
+        font-size: 13px;
     }
 }

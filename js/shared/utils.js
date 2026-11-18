@@ -183,10 +183,36 @@ function hideToast(t) {
     t.hidden = true;
 }
 
+/* Only one floating message is on screen at a time (the page toast, the "added" pop-up and the browse-window
+   message share the same spot), so showing a new one closes the others instead of stacking on top of them. */
+export function dismissToasts(keep) {
+    const t = $('#toast');
+    if (t && t !== keep && !t.hidden)
+        hideToast(t);
+    const pop = $('#add-pop');
+    if (pop && pop !== keep)
+        pop.hidden = true;
+    document.querySelectorAll('.eq-toast').forEach(el => {
+        if (el === keep)
+            return;
+        if (typeof el.hidePopover === 'function') {
+            try {
+                if (el.matches(':popover-open'))
+                    el.hidePopover();
+            } catch (e) {
+                /* already closed */
+            }
+        }
+        else
+            el.hidden = true;
+    });
+}
+
 export function toast(message) {
     const t = $('#toast');
     if (!t)
         return;
+    dismissToasts(t);
     t.textContent = message;
     t.hidden = false;
     if (typeof t.showPopover === 'function') {

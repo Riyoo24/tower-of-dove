@@ -880,6 +880,11 @@ tbody tr:not(.expand-row):not(.grp-row):not(.why-row):hover td {
         animation: shake .45s var(--ease) 1, riseIn .35s var(--ease) backwards;
     }
 
+    /* Outside rental: Checkout pressed before the pick-up / return date and time were chosen */
+    .field-shake {
+        animation: shake .45s var(--ease) 1;
+    }
+
     /* details (equipment specs): content eases in when opened */
     .dset[open]>*:not(summary) {
         animation: riseIn .3s var(--ease) backwards;

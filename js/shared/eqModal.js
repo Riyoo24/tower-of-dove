@@ -6,7 +6,7 @@
    No database changes.
    ===================================================================== */
 
-import { esc } from './utils.js';
+import { dismissToasts, esc } from './utils.js';
 
 const ICON = {
     add: '<path d="M20 6L9 17l-5-5"/>',
@@ -31,6 +31,7 @@ export function modalToast(text, kind = 'add') {
             el.hidden = true;
         document.body.appendChild(el);
     }
+    dismissToasts(el);   // one message at a time
     el.dataset.kind = kind;
     el.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${ICON[kind] || ICON.add}</svg><span>${esc(text)}</span>`;
     if (typeof el.showPopover === 'function') {
