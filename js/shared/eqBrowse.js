@@ -29,7 +29,7 @@ export function noteHtml(state, { forWhat = 'these hours', hidden = 0, tail = ''
 export function cardHtml(c) {
     return `<div class="eqcard${c.qty > 0 ? ' sel' : ''}">
       ${equipmentImage({ img: c.img, name: c.name })}
-      ${c.qty > 0 ? `<span class="eq-in">${esc(c.inLabel)} x${c.qty}</span>` : ''}
+      <span class="eq-in${c.qty > 0 ? '' : ' eq-in-off'}"${c.qty > 0 ? '' : ' aria-hidden="true"'}>${esc(c.inLabel)} x${c.qty > 0 ? c.qty : 1}</span>
       <p class="cat">${esc(c.category || '')}</p>
       <h3>${esc(c.name)}</h3>
       ${c.desc ? `<p>${esc(c.desc)}</p>` : '<p class="mut">No description yet.</p>'}
@@ -78,16 +78,76 @@ export function browseHtml(o) {
   </div>`;
 }
 
+/* ---- keeping the window steady when it is redrawn ----
+   The <dialog> itself is the scrolling box, and a redraw replaces everything inside it, so without help the
+   window snaps back to the top (and the page behind seems to jump) every time + / - / Add / Remove is tapped.
+   Before a redraw we remember the scroll position, which card sits at the top of the view and where exactly,
+   and which button had the focus; after it we put all three back. Changing the category tab or the search
+   text is a different list, so that one starts from the top as before. */
+const FOCUS_ATTRS = ['data-qstep', 'data-sadd', 'data-sel-rm', 'data-cat'];
+
+const viewKey = dlg => `${(dlg.querySelector('.tabs .on') || {}).textContent || ''}|${(dlg.querySelector('#eqd-q') || {}).value || ''}`;
+
+const cardById = (dlg, id) => [...dlg.querySelectorAll('.eqcard')].find(c => {
+    const mark = c.querySelector('[data-id]');
+    return mark && mark.dataset.id === id;
+});
+
+function snapshotView(dlg) {
+    const box = dlg.getBoundingClientRect();
+    const card = [...dlg.querySelectorAll('.eqcard')].find(c => c.getBoundingClientRect().bottom > box.top + 8);
+    const mark = card && card.querySelector('[data-id]');
+    const ae = document.activeElement;
+    let focus = null;
+    if (ae && dlg.contains(ae)) {
+        const attr = FOCUS_ATTRS.find(a => ae.hasAttribute(a));
+        if (attr)
+            focus = { attr, value: ae.getAttribute(attr), id: ae.getAttribute('data-id') };
+    }
+    return {
+        top: dlg.scrollTop,
+        key: viewKey(dlg),
+        anchorId: mark ? mark.dataset.id : null,
+        anchorY: card ? card.getBoundingClientRect().top - box.top : 0,
+        focus
+    };
+}
+
+function restoreView(dlg, v) {
+    if (v.key !== viewKey(dlg))
+        return;
+    const sb = dlg.style.scrollBehavior;
+    dlg.style.scrollBehavior = 'auto';   // jump straight back, never glide
+    dlg.scrollTop = v.top;
+    if (v.top > 4 && v.anchorId) {
+        // the suggestions and the Added list can change height: keep the card that was at the top exactly where it was
+        const card = cardById(dlg, v.anchorId);
+        if (card)
+            dlg.scrollTop += (card.getBoundingClientRect().top - dlg.getBoundingClientRect().top) - v.anchorY;
+    }
+    dlg.style.scrollBehavior = sb;
+    if (v.focus) {
+        const again = [...dlg.querySelectorAll(`[${v.focus.attr}]`)].find(b => b.getAttribute(v.focus.attr) === v.focus.value
+            && (v.focus.attr !== 'data-qstep' || b.getAttribute('data-id') === v.focus.id));
+        if (again && !again.disabled)
+            again.focus({ preventScroll: true });
+    }
+}
+
 /* Puts the window's HTML in the <dialog> and connects the search box. The cursor stays in the search box
    when the window is redrawn (a quantity change, the 30-second refresh). onSearch(text) redraws with the new text. */
 export function paintBrowse(dlg, html, onSearch) {
+    dlg.classList.add('eq-browse');   // css/modals.css: fixed window height, so the window never resizes or re-centres
     const ae = document.activeElement, typing = ae && ae.id === 'eqd-q' && dlg.contains(ae);
     const caret = typing ? [ae.selectionStart, ae.selectionEnd] : null;
+    const view = dlg.open ? snapshotView(dlg) : null;
     dlg.innerHTML = html;
     bindToolbar(dlg, 'eqd', ({ q }) => onSearch(q));
+    if (view)
+        restoreView(dlg, view);
     if (caret) {
         const box = dlg.querySelector('#eqd-q');
-        box.focus();
+        box.focus({ preventScroll: true });
         box.setSelectionRange(caret[0], caret[1]);
     }
 }

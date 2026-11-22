@@ -1549,3 +1549,45 @@ dialog.qr-zoom p {
     line-height: 1.4;
     text-align: left;
 }
+
+/* ===== Browse equipment windows: no jumping when an item is added or removed (shared/eqBrowse.js adds .eq-browse) =====
+   The window has one fixed height (it used to grow and shrink with its content and was re-centred every time),
+   the list inside scrolls, the Added / Done bar stays pinned at the bottom, and a redraw keeps the scroll position. */
+.dlg.eq-browse {
+    height: min(860px, calc(100vh - 32px));
+    height: min(860px, calc(100dvh - 32px));
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+    scroll-behavior: auto;
+    overflow-anchor: none;
+    overscroll-behavior: contain;
+}
+
+.dlg.eq-browse .in {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+    box-sizing: border-box;
+}
+
+.dlg.eq-browse .in > * {
+    flex: none;
+}
+
+.dlg.eq-browse .eq-bar {
+    margin-top: auto;   /* pinned to the bottom even when only a few cards are listed */
+}
+
+/* the "In your booking x1" tag keeps its line on every card, so a card does not grow when its first item is added */
+.eqcard .eq-in.eq-in-off {
+    visibility: hidden;
+}
+
+@media (max-width: 820px) {
+    .dlg.eq-browse {
+        height: calc(100vh - 16px);
+        height: calc(100dvh - 16px);
+        max-height: calc(100vh - 16px);
+        max-height: calc(100dvh - 16px);
+    }
+}
