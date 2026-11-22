@@ -1,0 +1,487 @@
+/* =====================================================================
+   audit.css - Audit Log tab (owner only), js/admin/audit.js
+   Loaded after motion.css. It reuses the site's tokens, the .sk-* skeleton, .empty and .sk-fail blocks, and the page / row
+   entrance animations already defined in motion.css. Everything that moves is inside prefers-reduced-motion: no-preference.
+   Nothing here changes any other tab.
+   ===================================================================== */
+
+#a-audit {
+    --al-row: 60px;                    /* every collapsed row has this height, so a page is always the same size */
+    --al-box: clamp(380px, calc(100svh - 380px), 760px);   /* fits the screen below the filters, so the pager is always in view */
+}
+
+/* ---------- filter bar ---------- */
+#a-audit .al-bar {
+    margin-bottom: 16px;
+}
+
+#a-audit .al-filters {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr));
+    gap: 12px;
+    align-items: end;
+}
+
+#a-audit .al-fq {
+    grid-column: span 2;
+}
+
+#a-audit .al-f {
+    min-width: 0;
+}
+
+#a-audit .al-f label {
+    display: block;
+    margin: 0 0 4px;
+    font-size: 12px;
+    color: var(--mut);
+}
+
+#a-audit .al-f select,
+#a-audit .al-f input {
+    width: 100%;
+    max-width: none;
+}
+
+/* the date buttons made by shared/datepicker.js fill their column like the other fields */
+#a-audit .al-f .dp-trigger {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    height: 40px;
+    min-width: 0;
+    padding: 0 10px;
+    text-align: left;
+}
+
+#a-audit .al-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 12px;
+}
+
+/* ---------- table card ---------- */
+#a-audit .al-meta {
+    min-height: 20px;           /* reserved, so the line appearing does not push the table */
+    margin: 0 0 10px;
+    font-size: 13px;
+}
+
+/* the box never changes size: loading, rows, empty and error all live inside it */
+#a-audit .al-box {
+    position: relative;
+    height: var(--al-box);
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: var(--r, 10px);
+    background: var(--surface);
+}
+
+#a-audit .al-scroll {
+    height: 100%;
+    overflow: auto;
+    overscroll-behavior: auto;   /* like the other admin tables: at the end of the rows the wheel moves the page */
+    -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: stable;
+}
+
+#a-audit .al-tbl {
+    width: 100%;
+    min-width: 900px;
+    table-layout: fixed;
+    border-collapse: collapse;
+}
+
+#a-audit .al-tbl thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    height: 38px;
+    padding: 0 12px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--mut);
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+}
+
+#a-audit .al-tbl td {
+    padding: 0 12px;
+    vertical-align: middle;
+    white-space: normal;
+    border-bottom: 1px solid var(--dove);
+}
+
+#a-audit .al-r > td {
+    height: var(--al-row);
+    overflow: hidden;
+}
+
+#a-audit .al-r:hover > td {
+    background: color-mix(in srgb, var(--dove) 55%, transparent);
+}
+
+#a-audit .c-time { width: 124px; }
+#a-audit .c-who  { width: 176px; }
+#a-audit .c-act  { width: 188px; }
+#a-audit .c-ref  { width: 168px; }
+#a-audit .c-det  { width: 96px; text-align: right; }
+
+#a-audit .c-time time {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.25;
+    font-size: 13px;
+}
+
+#a-audit .c-time b {
+    font-weight: 600;
+    color: var(--ink);
+}
+
+#a-audit .c-who {
+    line-height: 1.25;
+}
+
+#a-audit .al-name {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+}
+
+#a-audit .al-role {
+    display: inline-block;
+    margin-top: 2px;
+    padding: 0 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    line-height: 18px;
+    color: var(--mut);
+    background: var(--dove);
+}
+
+#a-audit .al-role.own {
+    color: var(--info);
+    background: var(--info-bg);
+}
+
+#a-audit .al-chip {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--mut);
+    background: var(--dove);
+    vertical-align: middle;
+}
+
+/* the chip takes the colour of its category */
+#a-audit tr[data-cat="Payments"] .al-chip        { color: var(--ok);   background: var(--ok-bg); }
+#a-audit tr[data-cat="Bookings"] .al-chip,
+#a-audit tr[data-cat="Rentals"] .al-chip         { color: var(--info); background: var(--info-bg); }
+#a-audit tr[data-cat="Money overrides"] .al-chip,
+#a-audit tr[data-cat="Customers"] .al-chip       { color: var(--warn); background: var(--warn-bg); }
+#a-audit tr[data-cat="Settings"] .al-chip,
+#a-audit tr[data-cat="Staff accounts"] .al-chip  { color: var(--ink);  background: var(--btn); }
+
+#a-audit .al-clamp {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    font-size: 14px;
+    line-height: 1.35;
+}
+
+#a-audit .c-ref b,
+#a-audit .al-sub {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#a-audit .al-sub {
+    font-size: 12px;
+}
+
+/* ---------- Details row ---------- */
+#a-audit .al-d > td {
+    padding: 0;
+    background: var(--field);
+}
+
+#a-audit .al-det-in {
+    padding: 14px 16px 16px;
+}
+
+#a-audit .al-full {
+    margin: 0 0 10px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+#a-audit .al-facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 8px 16px;
+    margin: 0 0 12px;
+}
+
+#a-audit .al-facts dt {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--mut);
+}
+
+#a-audit .al-facts dd {
+    margin: 0;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+}
+
+#a-audit .al-dtw {
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: visible;
+}
+
+#a-audit .al-dt {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+#a-audit .al-dt th,
+#a-audit .al-dt td {
+    padding: 6px 10px;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--line);
+    overflow-wrap: anywhere;
+}
+
+#a-audit .al-dt thead th {
+    position: static;
+    height: auto;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--mut);
+    background: none;
+}
+
+#a-audit .al-dt tbody th {
+    width: 28%;
+    font-weight: 500;
+    color: var(--mut);
+    background: none;
+}
+
+#a-audit .al-dt tr.chg td:last-child {
+    color: var(--ok);
+    font-weight: 600;
+}
+
+#a-audit .al-dt code {
+    font-size: 12px;
+    white-space: pre-wrap;
+}
+
+#a-audit .al-none {
+    margin: 0;
+}
+
+/* ---------- loading, empty and error states live inside the same box ---------- */
+#a-audit .al-sk {
+    position: absolute;
+    inset: 0;
+    padding: 0 8px;
+}
+
+#a-audit .al-sk .sk-tr {
+    height: var(--al-row);
+}
+
+#a-audit .al-sk .sk-th {
+    height: 38px;
+}
+
+#a-audit .al-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 16px;
+    text-align: center;
+}
+
+#a-audit .al-state .empty {
+    margin: 0;
+}
+
+#a-audit .al-state .sk-fail {
+    max-width: 460px;
+    justify-content: center;
+}
+
+/* ---------- pager: always present, so nothing moves when there is one page or many ---------- */
+#a-audit .al-pager {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 44px;
+    margin-top: 12px;
+}
+
+#a-audit .al-sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+/* ---------- phones: every row becomes a card ---------- */
+@media (max-width: 760px) {
+    #a-audit {
+        --al-box: auto;
+    }
+
+    #a-audit .al-fq {
+        grid-column: auto;
+    }
+
+    #a-audit .al-tools {
+        justify-content: stretch;
+    }
+
+    #a-audit .al-tools .btn {
+        flex: 1 1 auto;
+    }
+
+    /* the box keeps a minimum height so a short last page or a filter does not make the page jump */
+    #a-audit .al-box {
+        height: auto;
+        min-height: 62svh;
+        overflow: visible;
+        border: 0;
+        background: none;
+    }
+
+    #a-audit .al-scroll {
+        height: auto;
+        overflow: visible;
+    }
+
+    #a-audit .al-sk {
+        position: relative;
+        min-height: 62svh;
+    }
+
+    #a-audit .al-sk .sk-tr {
+        height: 92px;
+    }
+
+    #a-audit .al-state {
+        min-height: 62svh;
+    }
+
+    #a-audit .al-tbl,
+    #a-audit .al-tbl tbody {
+        display: block;
+        min-width: 0;
+        width: 100%;
+    }
+
+    #a-audit .al-tbl thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+    }
+
+    #a-audit .al-r {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 6px 12px;
+        margin-bottom: 10px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: var(--r, 10px);
+        background: var(--surface);
+    }
+
+    #a-audit .al-r > td {
+        display: block;
+        height: auto;
+        padding: 0;
+        border: 0;
+        overflow: visible;
+    }
+
+    #a-audit .al-r:hover > td {
+        background: none;
+    }
+
+    #a-audit .c-time { grid-column: 1; grid-row: 1; width: auto; }
+    #a-audit .c-time time { flex-direction: row; gap: 8px; align-items: baseline; }
+    #a-audit .c-act  { grid-column: 2; grid-row: 1; width: auto; text-align: right; }
+    #a-audit .c-who  { grid-column: 1 / -1; grid-row: 2; width: auto; display: flex; gap: 8px; align-items: center; }
+    #a-audit .c-who .al-role { margin: 0; }
+    #a-audit .c-desc { grid-column: 1 / -1; grid-row: 3; }
+    #a-audit .c-ref  { grid-column: 1; grid-row: 4; width: auto; align-self: center; }
+    #a-audit .c-det  { grid-column: 2; grid-row: 4; width: auto; }
+
+    #a-audit .al-d {
+        display: block;
+        margin: -4px 0 10px;
+        border: 1px solid var(--line);
+        border-radius: var(--r, 10px);
+        background: var(--field);
+    }
+
+    #a-audit .al-d[hidden] {
+        display: none;
+    }
+
+    #a-audit .al-d > td {
+        display: block;
+    }
+
+    #a-audit .al-pager .btn {
+        min-width: 96px;
+    }
+}
+
+/* ---------- motion (consistent with the other tabs; off when the visitor asks for reduced motion) ---------- */
+@media (prefers-reduced-motion: no-preference) {
+    #a-audit.on .al-bar {
+        animation: riseIn .4s var(--ease) backwards;
+    }
+
+    #a-audit.on .al-card {
+        animation: riseIn .4s .06s var(--ease) backwards;
+    }
+
+    #a-audit .al-d:not([hidden]) .al-det-in {
+        animation: riseIn .25s var(--ease) backwards;
+    }
+}

@@ -4,6 +4,7 @@
    ===================================================================== */
 
 import { checkTimeAlerts } from './alerts.js';
+import { renderAudit } from './audit.js';   // Audit Log tab, owner only (needs 98_audit_log.sql)
 import { renderBookings } from './bookings.js';
 import { renderCalendar } from './calendar.js';
 import './noShow.js';   // Sessions tab: no-show countdown, Hold and Release now (needs 78_no_show_release.sql)
@@ -83,6 +84,8 @@ function showTab(id) {
         renderReports();
     if (key === 'a-cal')
         renderCalendar();
+    if (key === 'a-audit')
+        renderAudit();
     scrollTo(0, 0);
 }
 

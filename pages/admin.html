@@ -43,6 +43,7 @@
         <link rel="stylesheet" href="../css/admin.css">
         <link rel="stylesheet" href="../css/holdtimer.css">
         <link rel="stylesheet" href="../css/motion.css">
+        <link rel="stylesheet" href="../css/audit.css">
         <link rel="stylesheet" href="../css/signal.css">
         <link rel="stylesheet" href="../css/mobile.css">
         <link rel="stylesheet" href="../css/theme.css">
@@ -389,6 +390,48 @@
                         <div class="tabs" id="rp-p"></div>
                         <div class="tabs" id="rp-t"></div>
                         <div id="rp"></div>
+                    </section>
+                    <section id="a-audit" class="pg">
+                        <h1>Audit Log</h1>
+                        <p class="sub">What every staff member did in the dashboard. Only the owner can see this. Times are Manila time.</p>
+                        <div class="card al-bar no-print">
+                            <div class="al-filters">
+                                <div class="al-f">
+                                    <label for="al-staff">Staff member</label>
+                                    <select id="al-staff"><option value="">All staff</option></select>
+                                </div>
+                                <div class="al-f">
+                                    <label for="al-from">From</label>
+                                    <input id="al-from" type="date">
+                                </div>
+                                <div class="al-f">
+                                    <label for="al-to">To</label>
+                                    <input id="al-to" type="date">
+                                </div>
+                                <div class="al-f">
+                                    <label for="al-act">Action type</label>
+                                    <select id="al-act"></select>
+                                </div>
+                                <div class="al-f al-fq">
+                                    <label for="al-q">Booking or rental reference</label>
+                                    <input id="al-q" type="search" placeholder="e.g. TOD-9F3A or OUT-5B07" maxlength="40" autocomplete="off" spellcheck="false">
+                                </div>
+                            </div>
+                            <div class="al-tools">
+                                <button class="btn sm line" id="al-clear" type="button">Clear filters</button>
+                                <button class="btn sm line" id="al-refresh" type="button">Refresh</button>
+                                <button class="btn sm line" id="al-csv" type="button" title="Download everything that matches the filters as a spreadsheet file">Download CSV</button>
+                            </div>
+                        </div>
+                        <div class="card al-card">
+                            <p class="mut al-meta" id="al-meta" aria-live="polite">&nbsp;</p>
+                            <div class="al-box" id="aud" aria-live="polite"></div>
+                            <div class="al-pager no-print" id="al-pager">
+                                <button class="btn sm line" id="al-prev" type="button" disabled>Previous</button>
+                                <span class="mut" id="al-page">Page 1</span>
+                                <button class="btn sm line" id="al-next" type="button" disabled>Next</button>
+                            </div>
+                        </div>
                     </section>
                     <section id="a-prof" class="pg">
                         <h1>Owner profile</h1>

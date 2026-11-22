@@ -27,6 +27,7 @@ export const ICONS = {
     card: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>',
     grid: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',
     week: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M9 9v12M15 9v12M3 15h18"/>',
+    shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
     chart: '<path d="M3 3v18h18"/><path d="M8 16v-5M13 16V7M18 16v-8"/>',
     gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>',
     door: '<path d="M5 21V3h14v18M3 21h18"/><circle cx="15" cy="12" r="1"/>',
@@ -68,6 +69,7 @@ export const ADMIN_NAV = [
     ['a-eqp', 'Equipments', 'music'],
     ['a-stud', 'Studio Management', 'door', true],
     ['a-rep', 'Reports', 'chart', true],
+    ['a-audit', 'Audit Log', 'shield', true],
     ['a-set', 'Settings', 'gear', true]
 ];
 

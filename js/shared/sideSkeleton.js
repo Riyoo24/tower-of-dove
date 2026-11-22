@@ -6,7 +6,7 @@
    js/shared/layout.js -> injectChrome() calls  window.todSideSkeleton.remove()  right before it draws the real
    sidebar, so nothing has to be cleaned up by hand and the two never show together.
    How many rows it shows depends on who is logged in (the cached user in localStorage):
-   the owner sees 13 menu rows, staff see 10. If nobody is cached it shows the owner's 13.
+   the owner sees 14 menu rows, staff see 10. If nobody is cached it shows the owner's 14.
    If the real sidebar never arrives (the page script failed) the skeleton is removed after 25 seconds,
    so it never shimmers forever.
    ===================================================================== */
@@ -23,7 +23,7 @@
         role = (u && u.role) || '';
     } catch (e) { /* storage blocked: show the full list */ }
 
-    var ROWS = role && role !== 'owner' ? 10 : 13;       // the owner has 3 extra tabs (studios, reports, settings)
+    var ROWS = role && role !== 'owner' ? 10 : 14;       // the owner has 4 extra tabs (studios, reports, audit log, settings)
     var W = ['58%', '72%', '64%', '80%', '52%', '68%', '60%', '76%'];   // label widths, varied so rows do not look stamped
 
     function row(i) {
