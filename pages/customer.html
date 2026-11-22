@@ -353,12 +353,18 @@
                 <select id="lb"></select>
               </div>
               <div id="fa-guest" hidden>
-                <label for="lb-ref">Booking reference code</label>
-                <div style="display:flex;gap:8px">
-                  <input id="lb-ref" placeholder="e.g. TOD-9F3A21C7" autocomplete="off">
-                  <button type="button" class="btn line sm" id="lb-find" style="flex:none">Find booking</button>
+                <div class="lb-grid">
+                  <div>
+                    <label for="lb-ref">Booking reference code</label>
+                    <input id="lb-ref" placeholder="e.g. TOD-9F3A21C7" autocomplete="off">
+                  </div>
+                  <div>
+                    <label for="lb-ph">Phone on the booking</label>
+                    <input id="lb-ph" type="tel" data-phone inputmode="tel" placeholder="e.g. 0917 123 4567" autocomplete="tel">
+                  </div>
+                  <button type="button" class="btn line lb-find" id="lb-find">Find booking</button>
                 </div>
-                <p class="mut" id="lb-info" style="margin-top:6px">Enter the reference code from your booking confirmation. The equipment is added to that booking and its total is updated.</p>
+                <p class="mut" id="lb-info" style="margin-top:6px">Enter the reference code from your booking confirmation and the phone number you booked with. The equipment is added to that booking and its total is updated.</p>
               </div>
             </div>
             <div id="rs-when" hidden>

@@ -362,16 +362,21 @@ export function renderCart() {
     renderDuration();
 }
 
-/* A guest has no account, so they type the booking reference code. The booking must exist, belong to
-   a guest booking (the database hides registered accounts' bookings) and still be open. */
-let attachBooking = null;   // { ref, text } once the guest's code has been found
+/* A guest has no account, so they type the booking reference code AND the phone number used for the booking (the
+   reference alone is guessable: supabase/94 B-01, supabase/99). The booking must exist, belong to a guest booking
+   (the database hides registered accounts' bookings), match that phone number and still be open. */
+let attachBooking = null;   // { ref, phone, ... } once the guest's code and phone number have been found
+
+const GUEST_LOOKUP_HINT = 'Enter the reference code from your booking confirmation and the phone number you booked with. The equipment is added to that booking and its total is updated.';
 
 async function findGuestBooking() {
-    const info = $('#lb-info'), ref = normRef($('#lb-ref').value);
+    const info = $('#lb-info'), ref = normRef($('#lb-ref').value), phone = $('#lb-ph').value.replace(/\D/g, '');
     attachBooking = null;
-    if (!ref) {
+    if (!ref || !/^09\d{9}$/.test(phone)) {
         info.className = 'mut';
-        info.textContent = 'Enter the booking reference code first.';
+        info.textContent = !ref
+            ? 'Enter the booking reference code first.'
+            : 'Enter the phone number on the booking: 11 digits starting with 09 (e.g. 0917 123 4567).';
         syncAddonPayOption();
         refreshWindowStock();
         updateRequestButton();
@@ -379,16 +384,16 @@ async function findGuestBooking() {
     }
     info.className = 'mut';
     info.textContent = 'Looking for that booking...';
-    const { data, error } = await sb.rpc('lookup_booking', { p_ref: ref });
+    const { data, error } = await sb.rpc('lookup_booking', { p_ref: ref, p_phone: phone });
     if (error || !data) {
         info.className = 'bad-text';
-        info.textContent = `No booking found for ${ref}. Check the code and try again. If you booked with an account, log in instead.`;
+        info.textContent = `No booking found for ${ref} with that phone number. Check the code and the number you booked with, then try again. If you booked with an account, log in instead.`;
     } else if (!['Pending', 'Approved', 'In Progress'].includes(data.status)) {
         info.className = 'bad-text';
         info.textContent = `${data.booking_ref} is ${data.status.toLowerCase()}, so equipment can't be added to it.`;
     } else {
         const a = manilaParts(data.start_at), z = manilaParts(data.end_at);
-        attachBooking = { ref: data.booking_ref, studio: data.studio, startAt: data.start_at, endAt: data.end_at, started: data.status === 'In Progress' || new Date(data.start_at) <= new Date(), running: data.status === 'In Progress' };
+        attachBooking = { ref: data.booking_ref, phone, studio: data.studio, startAt: data.start_at, endAt: data.end_at, started: data.status === 'In Progress' || new Date(data.start_at) <= new Date(), running: data.status === 'In Progress' };
         info.className = 'ok-text';
         info.textContent = `Found ${data.booking_ref}: ${data.studio}, ${longDate(a.date)}, ${hourLabel(a.hour)} to ${hourLabel(z.hour)}. Current total ${peso(+(data.grand_total ?? data.total))}.`;
     }
@@ -968,17 +973,21 @@ export function initRentTab() {
             $('#rcdlg').close();
     });
     $('#lb-find').addEventListener('click', findGuestBooking);
-    $('#lb-ref').addEventListener('keydown', e => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            findGuestBooking();
-        }
-    });
-    $('#lb-ref').addEventListener('input', () => {
-        attachBooking = null;
-        syncAddonPayOption();
-        refreshWindowStock();
-        updateRequestButton();
+    // the reference and the phone number work together: pressing Enter in either looks the booking up, and
+    // changing either one forgets the booking that was found
+    ['#lb-ref', '#lb-ph'].forEach(sel => {
+        $(sel).addEventListener('keydown', e => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                findGuestBooking();
+            }
+        });
+        $(sel).addEventListener('input', () => {
+            attachBooking = null;
+            syncAddonPayOption();
+            refreshWindowStock();
+            updateRequestButton();
+        });
     });
 }
 
@@ -1049,8 +1058,8 @@ async function openCheckout() {
         return toast('Add at least one item first.');
     // the booking is picked in the Rental summary on the page, so ask for it there rather than inside the pop-up
     if (state.rentMode === 'addon' && !(isMember() ? $('#lb').value : (attachBooking && attachBooking.ref))) {
-        toast(isMember() ? 'Attach the rental to a studio booking first.' : 'Find your booking with its reference code first.');
-        return $(isMember() ? '#lb' : '#lb-ref').focus();
+        toast(isMember() ? 'Attach the rental to a studio booking first.' : 'Find your booking with its reference code and phone number first.');
+        return $(isMember() ? '#lb' : ($('#lb-ref').value.trim() ? '#lb-ph' : '#lb-ref')).focus();
     }
     // Hold the items for 10 minutes (same as the studio booking form) so nobody else can take the last unit meanwhile
     const req = holdRequest();
@@ -1137,7 +1146,10 @@ async function requestRental() {
         if (state.rentMode === 'addon') {
             const ref = isMember() ? $('#lb').value : (attachBooking && attachBooking.ref);
             if (!ref)
-                return say(isMember() ? 'Attach the rental to a studio booking first.' : 'Find your booking with its reference code first.');
+                return say(isMember() ? 'Attach the rental to a studio booking first.' : 'Find your booking with its reference code and phone number first.');
+            // a guest proves the booking is theirs with the phone number on it (checked again by the database, supabase/99)
+            const guestPhone = isMember() ? null : ((attachBooking && attachBooking.phone) || null);
+            const guestArg = guestPhone ? { p_guest_phone: guestPhone } : {};
             const list = items.map(x => {
                 const e = EQUIPMENT.find(y => y.id === x.equipment_id);
                 return `${e.name} x${x.quantity}`;
@@ -1166,7 +1178,8 @@ async function requestRental() {
                 ({ data: ares, error } = await sb.rpc('request_addon_rental_later', {
                     p_booking_ref: ref,
                     p_items: items,
-                    p_hold_token: HOLD_TOKEN
+                    p_hold_token: HOLD_TOKEN,
+                    ...guestArg
                 }));
                 if (error && /request_addon_rental_later|schema cache|does not exist|could not find/i.test(error.message || ''))
                     error = { message: 'Paying after the session is not set up yet. Please choose Full Payment, or ask staff to record the equipment.' };
@@ -1180,7 +1193,8 @@ async function requestRental() {
                     p_items: items,
                     p_pay_option: payOpt,
                     p_gcash_reference: agref,
-                    p_hold_token: HOLD_TOKEN
+                    p_hold_token: HOLD_TOKEN,
+                    ...guestArg
                 }));
             }
             if (error)
@@ -1203,12 +1217,13 @@ async function requestRental() {
             await loadMyBookings();
             await loadMyRentals();
             // the booking's total now includes the new equipment
-            const { data: bk } = await sb.rpc('lookup_booking', { p_ref: ref });
+            const { data: bk } = await sb.rpc('lookup_booking', { p_ref: ref, p_phone: guestPhone });
             if (!isMember()) {
                 $('#lb-ref').value = '';
+                $('#lb-ph').value = '';
                 attachBooking = null;
                 $('#lb-info').className = 'mut';
-                $('#lb-info').textContent = 'Enter the reference code from your booking confirmation. The equipment is added to that booking and its total is updated.';
+                $('#lb-info').textContent = GUEST_LOOKUP_HINT;
             }
             $('#rcdlg').close();
             if (payLater) {

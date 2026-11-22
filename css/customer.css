@@ -1766,3 +1766,40 @@ body[data-active="contact"] #home > :not(#contact):not(.foot) {
         max-width: min(210px, calc(100vw - 56px));
     }
 }
+
+/* Guest lookup in the Rental summary: booking reference + phone number side by side, "Find booking" full width under them.
+   Two equal columns, inputs share one baseline even if a label wraps; below 360px of card width they stack. */
+#fa-guest {
+    container-type: inline-size;
+}
+
+#fa-guest .lb-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 10px;
+    align-items: end;
+}
+
+#fa-guest .lb-grid > div {
+    min-width: 0;
+}
+
+#fa-guest .lb-grid label {
+    margin-top: 0;
+}
+
+#fa-guest .lb-find {
+    grid-column: 1 / -1;
+    width: 100%;
+    margin: 10px 0 0;
+}
+
+@container (max-width: 360px) {
+    #fa-guest .lb-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #fa-guest .lb-grid > div + div label {
+        margin-top: 10px;
+    }
+}
