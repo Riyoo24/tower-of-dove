@@ -1,0 +1,268 @@
+/* =====================================================================
+   account.css - the profile panel (name, email, password)
+   ---------------------------------------------------------------------
+   Drawn by js/account/profilePanel.js. Used on pages/account.html (customers)
+   and in the Owner / Staff profile view of pages/admin.html.
+   Loaded after depth.css. The two-column layout switches on by the width of
+   the panel itself (a container query), so it also fits next to the admin sidebar.
+   ===================================================================== */
+
+#account-profile,
+#owner-profile-panel {
+    container: acct / inline-size;
+}
+
+.acct {
+    display: grid;
+    gap: 16px;
+    align-items: start;
+    padding-bottom: 56px;
+}
+
+.acct-main {
+    display: grid;
+    gap: 16px;
+    min-width: 0;
+}
+
+/* ---------- cards ---------- */
+.acct-card {
+    background: linear-gradient(180deg, #1c1c21 0%, #151519 100%);
+    border: 1px solid #ffffff12;
+    border-radius: var(--r-raised, 12px);
+    box-shadow: 0 1px 0 #ffffff08 inset, 0 12px 32px #00000040;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.acct-body {
+    padding: 22px 24px;
+    scroll-margin-top: 24px;
+}
+
+.acct-card h2 {
+    font-size: 20px;
+    margin-bottom: 4px;
+}
+
+.acct-lead {
+    max-width: 62ch;
+    font-size: 14px;
+}
+
+.acct-help {
+    margin-top: 6px;
+    font-size: 12.5px;
+}
+
+.acct-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin-top: 20px;
+}
+
+.acct-fields .wide {
+    grid-column: 1 / -1;
+}
+
+.acct-fields label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13.5px;
+    font-weight: 600;
+}
+
+.acct-fields input {
+    padding: 10px 12px;
+}
+
+.acct-fields input:focus {
+    outline: 0;
+    border-color: var(--focus);
+    box-shadow: 0 0 0 3px #FF6B7826;
+}
+
+.acct-fields input[readonly] {
+    color: var(--mut);
+}
+
+/* ---------- save bar at the bottom of a card ---------- */
+.acct-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 24px;
+    border-top: 1px solid #ffffff12;
+    background: #0000002e;
+    font-size: 13px;
+}
+
+.acct-foot .btn,
+.acct-pw .btn {
+    min-width: 150px;
+}
+
+.acct-pw {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.acct-pw > div {
+    min-width: 0;
+}
+
+.acct .alert {
+    margin: 16px 0 0;
+    line-height: 1.45;
+}
+
+/* ---------- summary card ---------- */
+.acct-summary {
+    padding: 22px 24px;
+}
+
+.acct-avatar {
+    width: 72px;
+    height: 72px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    font: 700 32px 'Bricolage Grotesque', Georgia, serif;
+    color: #fff;
+    background: radial-gradient(circle at 30% 25%, var(--brand-hi), var(--brand) 60%, #5a0f18);
+    box-shadow: 0 0 0 4px #17171B, 0 0 0 5px #CF3E4D99, 0 14px 36px #B3202F55;
+}
+
+.acct-summary h2 {
+    margin-top: 16px;
+    font-size: 24px;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+}
+
+.acct-summary dl {
+    margin: 20px 0 0;
+    border-top: 1px solid #ffffff12;
+}
+
+.acct-summary dl > div {
+    padding: 12px 0;
+    border-bottom: 1px solid #ffffff12;
+}
+
+.acct-summary dt {
+    margin-bottom: 2px;
+    font-size: 12px;
+    color: var(--mut);
+}
+
+.acct-summary dd {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+}
+
+.acct-dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ok);
+    box-shadow: 0 0 0 3px #4ED3A02e;
+}
+
+.acct-dot.wait {
+    background: var(--warn);
+    box-shadow: 0 0 0 3px #F2A93B2e;
+}
+
+/* ---------- header chips on account.html are links now ---------- */
+.pg-chips a {
+    padding: 7px 13px;
+    border-radius: 999px;
+    background: #ffffff0a;
+    border: 1px solid #ffffff17;
+    color: #cfcdd6;
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    text-decoration: none;
+    transition: background .15s, border-color .15s;
+}
+
+.pg-chips a:hover {
+    background: #ffffff14;
+}
+
+.pg-chips a[aria-current="true"] {
+    background: #B3202F33;
+    border-color: #CF3E4D88;
+    color: #fff;
+}
+
+/* ---------- wide panel: summary on the left, cards on the right ---------- */
+@container acct (min-width: 760px) {
+    .acct {
+        grid-template-columns: 300px minmax(0, 1fr);
+    }
+
+    .acct-summary {
+        position: sticky;
+        top: 20px;
+    }
+}
+
+/* ---------- narrow panel / phones ---------- */
+@container acct (max-width: 759px) {
+    .acct-summary {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        column-gap: 16px;
+        align-items: center;
+        padding: 18px;
+    }
+
+    .acct-summary .acct-avatar {
+        grid-row: span 2;
+        width: 60px;
+        height: 60px;
+        font-size: 26px;
+    }
+
+    .acct-summary h2 {
+        margin-top: 0;
+        font-size: 20px;
+    }
+
+    .acct-summary dl {
+        grid-column: 1 / -1;
+    }
+}
+
+@container acct (max-width: 560px) {
+    .acct-fields {
+        grid-template-columns: 1fr;
+    }
+
+    .acct-foot {
+        flex-direction: column-reverse;
+        align-items: stretch;
+    }
+
+    .acct-pw {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .acct-foot .btn,
+    .acct-pw .btn {
+        width: 100%;
+    }
+}
