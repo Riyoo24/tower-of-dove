@@ -2127,3 +2127,59 @@ tbody tr:not(.expand-row):not(.grp-row):not(.why-row):hover td {
     .dp-day:nth-child(n+29) { transition-delay: 0s, 120ms, 120ms; }
     .dp-day:nth-child(n+36) { transition-delay: 0s, 150ms, 150ms; }
 }
+
+/* =====================================================================
+   My account (pages/account.html and the Owner/Staff profile view)
+   The page header rises in, then the summary card and the Name / Email / Password cards arrive one after
+   another once the real forms replace the loading skeleton (.acct.sk). Only the real panel animates, so the
+   placeholders never flash. riseIn ends with no transform left behind.
+   ===================================================================== */
+@media (prefers-reduced-motion: no-preference) {
+    #c-account .pghead > div {
+        animation: riseIn .5s var(--ease) backwards;
+    }
+
+    #c-account .pg-chips a {
+        animation: chipIn .4s var(--ease) backwards;
+    }
+
+    #c-account .pg-chips a:nth-child(1) { animation-delay: .15s; }
+    #c-account .pg-chips a:nth-child(2) { animation-delay: .22s; }
+    #c-account .pg-chips a:nth-child(3) { animation-delay: .29s; }
+
+    .acct:not(.sk) > .acct-summary {
+        animation: riseIn .55s var(--ease) backwards;
+    }
+
+    .acct:not(.sk) .acct-main > .acct-card {
+        animation: riseIn .55s var(--ease) backwards;
+    }
+
+    .acct:not(.sk) .acct-main > .acct-card:nth-child(1) { animation-delay: .08s; }
+    .acct:not(.sk) .acct-main > .acct-card:nth-child(2) { animation-delay: .16s; }
+    .acct:not(.sk) .acct-main > .acct-card:nth-child(3) { animation-delay: .24s; }
+
+    /* the avatar pops in, the summary rows follow one by one */
+    .acct:not(.sk) .acct-avatar {
+        animation: popIn .5s .12s var(--ease-spring) backwards;
+    }
+
+    .acct:not(.sk) .acct-summary dl > div {
+        animation: riseIn .45s var(--ease) backwards;
+    }
+
+    .acct:not(.sk) .acct-summary dl > div:nth-child(1) { animation-delay: .22s; }
+    .acct:not(.sk) .acct-summary dl > div:nth-child(2) { animation-delay: .29s; }
+    .acct:not(.sk) .acct-summary dl > div:nth-child(3) { animation-delay: .36s; }
+
+    /* soft hover on the cards, like the cards on the other pages */
+    .acct:not(.sk) .acct-card {
+        transition: border-color .25s var(--ease), box-shadow .25s var(--ease);
+    }
+
+    .acct:not(.sk) .acct-card:hover,
+    .acct:not(.sk) .acct-card:focus-within {
+        border-color: #CF3E4D55;
+        box-shadow: 0 1px 0 #ffffff08 inset, 0 14px 36px #00000052, 0 0 0 1px #B3202F22;
+    }
+}

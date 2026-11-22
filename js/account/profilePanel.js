@@ -185,6 +185,9 @@ function wireSectionChips() {
    options.emailRedirectUrl   page the confirmation link brings the person back to
    options.onNameSaved(label) called with the username when the sidebar name should change (after saving, and when a stale label is fixed) */
 export async function mountProfilePanel({ container, emailRedirectUrl, onNameSaved }) {
+    // placeholder while the profile loads (pages/account.html already has it from shared/skeleton.js; the admin view gets it here)
+    if (!container.firstElementChild && window.todSkeleton && window.todSkeleton.account)
+        container.innerHTML = window.todSkeleton.account();
     const profile = await loadAccountProfile();
     if (!profile) {
         container.innerHTML = '<div class="card"><p class="mut">Could not load your profile. Please log in again.</p></div>';

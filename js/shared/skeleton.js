@@ -72,6 +72,29 @@
             }) + '</div>';
     }
 
+    /* the My account panel: summary card on the left, then the Name / Email / Password cards (same boxes as account/profilePanel.js) */
+    function accountPanel() {
+        var field = function (lbl, wide) {
+            return '<div' + (wide ? ' class="wide"' : '') + '>' + bar(lbl, 'sk-acct-lbl') + bar('100%', 'sk-acct-input') + '</div>';
+        };
+        var dl = many(3, function (i) {
+            return '<div>' + bar('34%', 'sk-acct-dt') + bar(['72%', '40%', '56%'][i], 'sk-acct-dd') + '</div>';
+        });
+        return '<div class="acct sk" role="status" aria-label="Loading your account" aria-busy="true">' + SR
+            + '<aside class="acct-card acct-summary" aria-hidden="true">'
+            + '<i class="sk-b sk-acct-avatar"></i>' + bar('58%', 'sk-acct-name') + bar('30%', 'sk-acct-user') + '<dl>' + dl + '</dl></aside>'
+            + '<div class="acct-main" aria-hidden="true">'
+            + '<div class="acct-card"><div class="acct-body">' + bar('30%', 'sk-acct-h') + bar('78%')
+            + '<div class="acct-fields">' + field('22%', true) + field('34%') + field('34%') + '</div></div>'
+            + '<div class="acct-foot">' + bar('22%') + bar('150px', 'sk-btn') + '</div></div>'
+            + '<div class="acct-card"><div class="acct-body">' + bar('34%', 'sk-acct-h') + bar('84%')
+            + '<div class="acct-fields">' + field('30%') + field('52%') + '</div></div>'
+            + '<div class="acct-foot">' + bar('30%') + bar('150px', 'sk-btn') + '</div></div>'
+            + '<div class="acct-card"><div class="acct-body acct-pw"><div class="sk-acct-pwtxt">' + bar('26%', 'sk-acct-h') + bar('88%') + '</div>'
+            + bar('190px', 'sk-btn') + '</div></div>'
+            + '</div></div>';
+    }
+
     /* ---- Rent tab ---- */
     /* the search box and the "In stock only" switch (same box as shared/eqFilter.js toolbarHtml) */
     function rentTools() {
@@ -119,6 +142,8 @@
         ['#myrent', function () { return many(3, panel); }],
         ['#c-rent #eq-toolbar', rentTools, true],            // the search box + "In stock only" switch (third item: quiet)
         ['#c-rent #eq-cats', rentCats, true],                // the category chips
+        // My account page (the profile forms are drawn by js/account/profilePanel.js)
+        ['#account-profile', accountPanel],
         // home page
         ['#studio-grid', function () { return many(4, card); }],
         ['#equipment-grid', function () { return many(4, card); }],
@@ -243,7 +268,7 @@
             location.reload();
     });
 
-    window.todSkeleton = { fail: fail, avail: avail };
+    window.todSkeleton = { fail: fail, avail: avail, account: accountPanel };
     if (found.length)
         setTimeout(fail, 25000);
 })();

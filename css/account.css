@@ -266,3 +266,99 @@
         width: 100%;
     }
 }
+
+/* ---------- loading skeleton (drawn by shared/skeleton.js, replaced by the real forms) ---------- */
+.acct.sk {
+    position: relative;
+    pointer-events: none;
+}
+
+.acct.sk .acct-summary > .sk-b {
+    margin-bottom: 0;
+}
+
+.sk-acct-avatar {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+}
+
+.sk-acct-name {
+    height: 24px;
+    margin-top: 16px;
+}
+
+.sk-acct-user {
+    height: 13px;
+    margin-top: 10px;
+}
+
+.acct.sk .acct-summary dl > div {
+    display: grid;
+    gap: 8px;
+}
+
+.sk-acct-dt {
+    height: 10px;
+}
+
+.sk-acct-dd {
+    height: 14px;
+}
+
+.acct.sk .acct-body > .sk-b + .sk-b {
+    margin-top: 10px;
+}
+
+.sk-acct-h {
+    height: 20px;
+}
+
+.sk-acct-lbl {
+    height: 12px;
+    margin-bottom: 8px;
+}
+
+.sk-acct-input {
+    height: 43px;
+    border-radius: 8px;
+}
+
+.acct.sk .acct-fields {
+    margin-top: 22px;
+}
+
+.acct.sk .acct-foot > .sk-b:first-child {
+    height: 12px;
+}
+
+.sk-acct-pwtxt {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.sk-acct-pwtxt > .sk-b + .sk-b {
+    margin-top: 10px;
+}
+
+@container acct (max-width: 759px) {
+    .acct.sk .acct-summary .sk-acct-avatar {
+        grid-row: span 2;
+        width: 60px;
+        height: 60px;
+    }
+
+    .acct.sk .acct-summary .sk-acct-name {
+        margin-top: 0;
+    }
+}
+
+@container acct (max-width: 560px) {
+    .acct.sk .acct-foot > .sk-b {
+        width: 100% !important;
+    }
+
+    .acct.sk .acct-pw > .sk-b {
+        width: 100% !important;
+    }
+}
