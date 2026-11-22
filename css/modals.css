@@ -980,6 +980,14 @@ dialog.qr-zoom p {
 .dlg.bookwide {
     width: min(1120px, calc(100vw - 48px));
     max-width: none;
+    /* the booking form only ever scrolls up and down, never sideways (the sticky footer keeps working) */
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+}
+
+.dlg.bookwide .in {
+    max-width: 100%;
+    min-width: 0;
 }
 
 .dlg.bookwide .in {

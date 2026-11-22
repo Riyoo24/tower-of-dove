@@ -1723,3 +1723,46 @@ body[data-active="contact"] #home:not(.on-contact) #contact {
 body[data-active="contact"] #home > :not(#contact):not(.foot) {
     display: none;
 }
+
+/* Phones show 3 times per row, but the label rules above keep labels inside the window for 4 per row only.
+   The hidden label of a right-hand time then stuck out past the window's edge and the booking form scrolled sideways.
+   Re-align them for 3 columns: right column lines up with its right edge, left column with its left edge, middle is centred. */
+@media (max-width: 480px) {
+    .slots button[data-tip]:nth-child(4n)::after,
+    .slots button[data-tip]:nth-child(4n+1)::after {
+        left: 50%;
+        right: auto;
+        transform: translate(-50%, 4px);
+    }
+
+    .slots button[data-tip]:nth-child(4n):hover::after,
+    .slots button[data-tip]:nth-child(4n):focus-visible::after,
+    .slots button[data-tip]:nth-child(4n+1):hover::after,
+    .slots button[data-tip]:nth-child(4n+1):focus-visible::after {
+        transform: translate(-50%, 0);
+    }
+
+    .slots button[data-tip]:nth-child(3n)::after {
+        left: auto;
+        right: -2px;
+        transform: translate(0, 4px);
+    }
+
+    .slots button[data-tip]:nth-child(3n+1)::after {
+        left: -2px;
+        right: auto;
+        transform: translate(0, 4px);
+    }
+
+    .slots button[data-tip]:nth-child(3n):hover::after,
+    .slots button[data-tip]:nth-child(3n):focus-visible::after,
+    .slots button[data-tip]:nth-child(3n+1):hover::after,
+    .slots button[data-tip]:nth-child(3n+1):focus-visible::after {
+        transform: translate(0, 0);
+    }
+
+    /* a label never gets wider than the time grid it sits in */
+    .slots button[data-tip]::after {
+        max-width: min(210px, calc(100vw - 56px));
+    }
+}
