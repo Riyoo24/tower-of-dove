@@ -116,13 +116,13 @@
        inside it follow one after another (--i = position, --step = gap). A section never starts before the
        one above it, so the eye is led down the page:
          1 number cards -> 2 bookings chart -> 3 equipment returns -> 4 studios -> 5 needs attention
-       Change the five --g-* values to retime a whole section. The last item lands at about 1.3 s. */
+       Change the five --g-* values to retime a whole section. The last item lands at about 1.5 s. */
     #a-over.ov-play {
         --g-kpi: 0ms;
-        --g-bars: 150ms;
-        --g-ret: 330ms;
-        --g-stu: 470ms;
-        --g-att: 610ms;
+        --g-bars: 230ms;
+        --g-ret: 400ms;
+        --g-stu: 540ms;
+        --g-att: 680ms;
     }
 
     #a-over.ov-play #ovk  { --g: var(--g-kpi);  --step: 55ms; }
@@ -186,6 +186,11 @@
         animation: growY .6s var(--ease) var(--d) backwards;
     }
 
+    /* the count and the date under each bar wait for their bar (they used to show at once, before the cards above) */
+    #a-over.ov-play .bars > div {
+        animation: ovFade .3s ease var(--d) backwards;
+    }
+
     /* every number rolls up into place just after its own card arrives (zeros cannot count up, so they roll too) */
     #a-over.ov-play .kpi .num {
         animation: ovNum .5s var(--ease) calc(var(--d) + 80ms) backwards;
@@ -220,6 +225,10 @@
 
     @keyframes ovHold {
         to { opacity: 0; visibility: hidden; }
+    }
+
+    @keyframes ovFade {
+        from { opacity: 0; }
     }
 
     @keyframes ovIn {
