@@ -27,6 +27,36 @@
     function kpi(i) {
         return '<div class="card sk sk-kpi" aria-hidden="true">' + (i ? '' : SR) + bar('52%') + bar('34%', 'sk-num') + '</div>';
     }
+    /* Admin overview placeholders. They are built from the SAME elements and classes as the real cards (a
+       one-line text strip stands in for each line of text), so every placeholder is exactly as tall as the card
+       that replaces it and nothing moves when the data arrives. css/overview-motion.css has the .sk-ln styles. */
+    function ln(w, cls, h) {
+        return '<span class="' + cls + ' sk-ln">&#8203;<i class="sk-b" style="width:' + w + (h ? ';height:' + h + 'px' : '') + '"></i></span>';
+    }
+    /* small text that sits in the card's own line (like the real <span class="mut">): same line height as the real one */
+    function lni(w) {
+        return '<span class="mut sk-lni">&#8203;<i class="sk-b" style="width:' + w + '"></i></span>';
+    }
+    /* the top number cards: label + big number */
+    function ovKpi(i) {
+        return '<div class="card kpi sk" aria-hidden="true">' + (i ? '' : SR) + lni('52%')
+            + '<div class="num sk-ln">&#8203;<i class="sk-b" style="width:34%;height:26px"></i></div></div>';
+    }
+    /* the Equipment returns cards: label + big number + a line of small text */
+    function ovRet(i) {
+        return '<div class="card kpi sk" aria-hidden="true">' + (i ? '' : SR) + lni('52%')
+            + '<div class="num sk-ln">&#8203;<i class="sk-b" style="width:34%;height:26px"></i></div>' + lni('70%') + '</div>';
+    }
+    /* a studio tile: name + status badge, and one line of small text */
+    function ovStudio(i) {
+        return '<div class="card sk" aria-hidden="true">' + (i ? '' : SR)
+            + '<div class="row"><h3 class="sk-ln" style="width:44%">&#8203;<i class="sk-b" style="width:100%;height:16px"></i></h3><span class="b sk-ghost">Available</span></div>'
+            + '<p class="mut sk-ln" style="margin-top:6px">&#8203;<i class="sk-b" style="width:72%"></i></p></div>';
+    }
+    /* a Needs attention row */
+    function ovRow(i) {
+        return '<li class="sk" aria-hidden="true">' + (i ? '' : SR) + '<span class="sk-ln" style="width:' + W[(i * 3) % W.length] + '">&#8203;<i class="sk-b" style="width:100%"></i></span></li>';
+    }
     /* a short tile with a title + badge and one line (admin overview studios) */
     function tile(i) {
         return '<div class="card sk sk-tile" aria-hidden="true">' + (i ? '' : SR) + '<div class="sk-row">' + bar('40%', 'sk-h') + bar('24%', 'sk-pill') + '</div>' + bar('72%') + '</div>';
@@ -129,11 +159,11 @@
 
     var PLAN = [
         // admin
-        ['#ovk', function () { return many(4, kpi); }],
+        ['#ovk', function () { return many(4, ovKpi); }],
         ['#bars', function () { return many(7, barCols); }],
-        ['#rkpi', function () { return many(3, kpi); }],
-        ['#ost', function () { return many(2, tile); }],
-        ['#ovl', function () { return many(4, li); }],
+        ['#rkpi', function () { return many(3, ovRet); }],
+        ['#ost', function () { return many(4, ovStudio); }],      // four studio tiles (the real list is drawn from the studios table)
+        ['#ovl', function () { return many(8, ovRow); }],         // Needs attention always has 8 rows
         ['#abk', function () { return table(7, 7, 5); }],
         ['#asess', function () { return many(2, panel); }],
         ['#ast', function () { return many(3, card); }],

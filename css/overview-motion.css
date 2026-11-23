@@ -5,16 +5,73 @@
    used by the JavaScript are changed.
 
    Design rules
-   - One short intro (under a second) when the real data arrives and the
-     grey loading shapes are swapped for the real content. Each group fades
-     in with a small lift, all of it starting almost together, so no section
-     is ever blank for long.
+   - One short intro (about 1.3 s) when the real data arrives and the
+     grey loading shapes are swapped for the real content. It runs as a
+     cascade from the top of the page to the bottom: number cards, then the
+     bookings chart, equipment returns, studios and Needs attention. Each
+     section starts a beat after the one above it.
    - After that, motion only shows that something changed: a studio with a
      live session, or a number that changed on refresh. No looping effects
      on numbers or text.
    - Silent refreshes never replay the entrance.
    - Everything that moves is inside prefers-reduced-motion: no-preference.
    ===================================================================== */
+
+/* ---- loading placeholders for the Overview (markup built in js/shared/skeleton.js) ----
+   Each placeholder reuses the real card's elements; a one-line strip (.sk-ln) takes the height of one line of
+   text and carries a slim grey bar, so a placeholder is exactly as tall as the card it stands in for. */
+.sk-ln {
+    position: relative;
+    display: block;
+    margin: 0;
+    overflow: hidden;
+    color: transparent;
+    pointer-events: none;
+}
+
+.sk-ln > .sk-b {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+/* the same, for text that sits inline in the card (labels and small notes) */
+.sk-lni > .sk-b {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+#a-over .card.sk,
+#a-over li.sk {
+    pointer-events: none;
+}
+
+#ovl li.sk {
+    list-style: none;
+    margin: 0 -8px;   /* same box as a real row (#ovl li.na in admin.css) */
+    padding-left: 8px;
+    padding-right: 8px;
+}
+
+/* a status badge drawn as a grey pill (same size as the real badge) */
+.b.sk-ghost {
+    color: transparent;
+    background: linear-gradient(100deg, var(--dove) 30%, #2f2f37 50%, var(--dove) 70%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+}
+
+/* the grey layers that cover the cards during the intro use the same strips */
+.ov-hold {
+    display: block;
+}
+
+.ov-hold .sk-numln {
+    font-size: 34px;
+    font-weight: 700;
+    line-height: 1.1;
+}
 
 /* ---- studio status lamp (the markup was already there, it had no style) ---- */
 .lamp {
@@ -54,53 +111,85 @@
         animation: none;
     }
 
-    /* ---- intro: everything arrives within about 0.9 s ---- */
+    /* ---- intro: a top-to-bottom cascade ----
+       The page reads in order, so it loads in order. Each section has a start time (--g-*), and the items
+       inside it follow one after another (--i = position, --step = gap). A section never starts before the
+       one above it, so the eye is led down the page:
+         1 number cards -> 2 bookings chart -> 3 equipment returns -> 4 studios -> 5 needs attention
+       Change the five --g-* values to retime a whole section. The last item lands at about 1.3 s. */
+    #a-over.ov-play {
+        --g-kpi: 0ms;
+        --g-bars: 150ms;
+        --g-ret: 330ms;
+        --g-stu: 470ms;
+        --g-att: 610ms;
+    }
+
+    #a-over.ov-play #ovk  { --g: var(--g-kpi);  --step: 55ms; }
+    #a-over.ov-play #bars { --g: var(--g-bars); --step: 45ms; }
+    #a-over.ov-play #rkpi { --g: var(--g-ret);  --step: 55ms; }
+    #a-over.ov-play #ost  { --g: var(--g-stu);  --step: 55ms; }
+    #a-over.ov-play #ovl  { --g: var(--g-att);  --step: 45ms; }
+
+    /* position inside the section (0 = first) */
+    #a-over.ov-play :is(#ovk, #bars, #rkpi, #ost, #ovl) > :nth-child(1) { --i: 0; }
+    #a-over.ov-play :is(#ovk, #bars, #rkpi, #ost, #ovl) > :nth-child(2) { --i: 1; }
+    #a-over.ov-play :is(#ovk, #bars, #rkpi, #ost, #ovl) > :nth-child(3) { --i: 2; }
+    #a-over.ov-play :is(#ovk, #bars, #rkpi, #ost, #ovl) > :nth-child(4) { --i: 3; }
+    #a-over.ov-play :is(#ovk, #bars, #rkpi, #ost, #ovl) > :nth-child(5) { --i: 4; }
+    #a-over.ov-play :is(#ovk, #bars, #rkpi, #ost, #ovl) > :nth-child(6) { --i: 5; }
+    #a-over.ov-play :is(#ovk, #bars, #rkpi, #ost, #ovl) > :nth-child(7) { --i: 6; }
+    #a-over.ov-play :is(#ovk, #bars, #rkpi, #ost, #ovl) > :nth-child(n+8) { --i: 7; }
+
+    /* the moment each item starts (read by the rules below and by overviewMotion.js for the count-up) */
+    #a-over.ov-play :is(#ovk, #bars, #rkpi, #ost, #ovl) > * {
+        --d: calc(var(--g) + var(--i) * var(--step));
+    }
+
+    /* number cards: fade in with a small lift */
+    #a-over.ov-play #ovk > * {
+        animation: ovIn .45s var(--ease) var(--d) backwards;
+    }
+
+    /* ---- no blank gaps while a section waits for its turn ----
+       The page keeps showing the same grey loading shapes as everywhere else: one per card, tile and
+       row (the .ov-hold layers that overviewMotion.js adds). Each one fades out exactly when the
+       real item under it fades in, so the sections resolve one after another from top to bottom.
+       The card itself stays put; only what is inside it fades in with a small lift. */
+    #a-over.ov-play :is(#rkpi, #ost, #ovl) > * {
+        position: relative;
+    }
+
+    #a-over.ov-play :is(#rkpi, #ost, #ovl) > * > :not(.ov-hold, .num) {
+        animation: ovIn .45s var(--ease) var(--d) backwards;
+    }
+
+    #a-over.ov-play .ov-hold {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        display: block;
+        padding: 18px;
+        border-radius: inherit;
+        pointer-events: none;
+        animation: ovHold .3s var(--ease) var(--d) forwards;
+    }
+
+    #a-over.ov-play .ov-hold-li {
+        display: flex;
+        align-items: center;
+        padding: 8px 8px;
+    }
+
+    /* the chart: the bars grow up from the baseline one after another, left to right (as in the original) */
     #a-over.ov-play .bars i {
-        animation: growY .6s var(--ease) backwards;
+        animation: growY .6s var(--ease) var(--d) backwards;
     }
 
-    #a-over.ov-play .bars > div:nth-child(1) i { animation-delay: .05s; }
-    #a-over.ov-play .bars > div:nth-child(2) i { animation-delay: .09s; }
-    #a-over.ov-play .bars > div:nth-child(3) i { animation-delay: .13s; }
-    #a-over.ov-play .bars > div:nth-child(4) i { animation-delay: .17s; }
-    #a-over.ov-play .bars > div:nth-child(5) i { animation-delay: .21s; }
-    #a-over.ov-play .bars > div:nth-child(6) i { animation-delay: .25s; }
-    #a-over.ov-play .bars > div:nth-child(7) i { animation-delay: .29s; }
-
-    #a-over.ov-play #rkpi > *,
-    #a-over.ov-play #ost > *,
-    #a-over.ov-play #ovl > li {
-        animation: ovIn .4s var(--ease) backwards;
-    }
-
-    #a-over.ov-play #rkpi > :nth-child(1) { animation-delay: .10s; }
-    #a-over.ov-play #rkpi > :nth-child(2) { animation-delay: .14s; }
-    #a-over.ov-play #rkpi > :nth-child(3) { animation-delay: .18s; }
-    #a-over.ov-play #ost > :nth-child(1) { animation-delay: .20s; }
-    #a-over.ov-play #ost > :nth-child(2) { animation-delay: .24s; }
-    #a-over.ov-play #ost > :nth-child(3) { animation-delay: .28s; }
-    #a-over.ov-play #ost > :nth-child(4) { animation-delay: .32s; }
-    #a-over.ov-play #ovl > :nth-child(1) { animation-delay: .30s; }
-    #a-over.ov-play #ovl > :nth-child(2) { animation-delay: .33s; }
-    #a-over.ov-play #ovl > :nth-child(3) { animation-delay: .36s; }
-    #a-over.ov-play #ovl > :nth-child(4) { animation-delay: .39s; }
-    #a-over.ov-play #ovl > :nth-child(5) { animation-delay: .42s; }
-    #a-over.ov-play #ovl > :nth-child(6) { animation-delay: .45s; }
-    #a-over.ov-play #ovl > :nth-child(7) { animation-delay: .48s; }
-    #a-over.ov-play #ovl > :nth-child(8) { animation-delay: .51s; }
-
-    /* every number rolls up into place after its card arrives (zeros cannot count up, so they roll too) */
+    /* every number rolls up into place just after its own card arrives (zeros cannot count up, so they roll too) */
     #a-over.ov-play .kpi .num {
-        animation: ovNum .5s var(--ease) backwards;
+        animation: ovNum .5s var(--ease) calc(var(--d) + 80ms) backwards;
     }
-
-    #a-over.ov-play #ovk > :nth-child(1) .num { animation-delay: .20s; }
-    #a-over.ov-play #ovk > :nth-child(2) .num { animation-delay: .27s; }
-    #a-over.ov-play #ovk > :nth-child(3) .num { animation-delay: .34s; }
-    #a-over.ov-play #ovk > :nth-child(4) .num { animation-delay: .41s; }
-    #a-over.ov-play #rkpi > :nth-child(1) .num { animation-delay: .24s; }
-    #a-over.ov-play #rkpi > :nth-child(2) .num { animation-delay: .30s; }
-    #a-over.ov-play #rkpi > :nth-child(3) .num { animation-delay: .36s; }
 
     /* ---- motion that carries meaning ---- */
 
@@ -127,6 +216,10 @@
 
     @keyframes ovNum {
         from { opacity: 0; transform: translateY(18px) scale(.85); }
+    }
+
+    @keyframes ovHold {
+        to { opacity: 0; visibility: hidden; }
     }
 
     @keyframes ovIn {
