@@ -52,6 +52,13 @@
             + '<div class="sk-row">' + bar('50%', 'sk-h') + bar('14%', 'sk-pill') + '</div>' + bar('62%')
             + '<div class="sk-row sk-chips">' + many(4, function () { return bar('', 'sk-chip'); }) + '</div></div>';
     }
+    /* the 7-day bar chart on the admin overview: seven shimmer columns with a small label under each */
+    function barCols(i) {
+        var H = [44, 70, 30, 86, 52, 64, 96];
+        return '<div class="sk" aria-hidden="true">' + (i ? '' : SR)
+            + '<span class="sk-b" style="height:' + H[i] + 'px;border-radius:5px 5px 0 0;margin-bottom:4px"></span>'
+            + '<span class="sk-b" style="height:10px;width:56%;margin:6px auto 0"></span></div>';
+    }
     /* an overview list row */
     function li(i) {
         return '<li class="sk sk-li" aria-hidden="true">' + (i ? '' : SR) + bar(W[(i * 3) % W.length]) + '</li>';
@@ -123,6 +130,7 @@
     var PLAN = [
         // admin
         ['#ovk', function () { return many(4, kpi); }],
+        ['#bars', function () { return many(7, barCols); }],
         ['#rkpi', function () { return many(3, kpi); }],
         ['#ost', function () { return many(2, tile); }],
         ['#ovl', function () { return many(4, li); }],
@@ -154,6 +162,11 @@
         ['#ct-follow', function () { return many(2, ctRow); }],
         ['#ct-visit', function () { return many(3, ctRow); }]
     ];
+
+    /* the Overview shows today's date at once (admin/overview.js writes the same text later) */
+    var ovSub = document.querySelector('#a-over .sub');
+    if (ovSub)
+        ovSub.textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) + '. Here is what is happening right now.';
 
     var found = [], quiet = [];
     PLAN.forEach(function (p) {

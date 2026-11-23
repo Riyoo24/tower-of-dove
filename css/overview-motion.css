@@ -1,0 +1,144 @@
+/* =====================================================================
+   overview-motion.css - animations for the admin Overview tab
+   ---------------------------------------------------------------------
+   Loaded right after motion.css. Purely visual: no markup, ids or data
+   used by the JavaScript are changed.
+
+   Design rules
+   - One short intro (under a second) when the real data arrives and the
+     grey loading shapes are swapped for the real content. Each group fades
+     in with a small lift, all of it starting almost together, so no section
+     is ever blank for long.
+   - After that, motion only shows that something changed: a studio with a
+     live session, or a number that changed on refresh. No looping effects
+     on numbers or text.
+   - Silent refreshes never replay the entrance.
+   - Everything that moves is inside prefers-reduced-motion: no-preference.
+   ===================================================================== */
+
+/* ---- studio status lamp (the markup was already there, it had no style) ---- */
+.lamp {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    margin-right: 8px;
+    border-radius: 50%;
+    vertical-align: middle;
+    background: var(--ok);
+    box-shadow: 0 0 0 3px #4ED3A01f;
+}
+
+.lamp.live {
+    background: var(--accent);
+    box-shadow: 0 0 0 3px #E23B4E2e;
+}
+
+/* overdue equipment: a steady red edge (no flashing) */
+#a-over #rkpi .kpi.ov-alert {
+    border-color: #FF7A8566;
+}
+
+.na-ch {
+    display: inline-block;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+
+    /* the old entrances (motion.css) replayed on every refresh; now they play only during the intro */
+    #a-over:not(.ov-play) :is(.bars i, .kpi .num) {
+        animation: none;
+    }
+
+    /* the number itself counts up, so it does not also slide */
+    #a-over .kpi .num {
+        animation: none;
+    }
+
+    /* ---- intro: everything arrives within about 0.9 s ---- */
+    #a-over.ov-play .bars i {
+        animation: growY .6s var(--ease) backwards;
+    }
+
+    #a-over.ov-play .bars > div:nth-child(1) i { animation-delay: .05s; }
+    #a-over.ov-play .bars > div:nth-child(2) i { animation-delay: .09s; }
+    #a-over.ov-play .bars > div:nth-child(3) i { animation-delay: .13s; }
+    #a-over.ov-play .bars > div:nth-child(4) i { animation-delay: .17s; }
+    #a-over.ov-play .bars > div:nth-child(5) i { animation-delay: .21s; }
+    #a-over.ov-play .bars > div:nth-child(6) i { animation-delay: .25s; }
+    #a-over.ov-play .bars > div:nth-child(7) i { animation-delay: .29s; }
+
+    #a-over.ov-play #rkpi > *,
+    #a-over.ov-play #ost > *,
+    #a-over.ov-play #ovl > li {
+        animation: ovIn .4s var(--ease) backwards;
+    }
+
+    #a-over.ov-play #rkpi > :nth-child(1) { animation-delay: .10s; }
+    #a-over.ov-play #rkpi > :nth-child(2) { animation-delay: .14s; }
+    #a-over.ov-play #rkpi > :nth-child(3) { animation-delay: .18s; }
+    #a-over.ov-play #ost > :nth-child(1) { animation-delay: .20s; }
+    #a-over.ov-play #ost > :nth-child(2) { animation-delay: .24s; }
+    #a-over.ov-play #ost > :nth-child(3) { animation-delay: .28s; }
+    #a-over.ov-play #ost > :nth-child(4) { animation-delay: .32s; }
+    #a-over.ov-play #ovl > :nth-child(1) { animation-delay: .30s; }
+    #a-over.ov-play #ovl > :nth-child(2) { animation-delay: .33s; }
+    #a-over.ov-play #ovl > :nth-child(3) { animation-delay: .36s; }
+    #a-over.ov-play #ovl > :nth-child(4) { animation-delay: .39s; }
+    #a-over.ov-play #ovl > :nth-child(5) { animation-delay: .42s; }
+    #a-over.ov-play #ovl > :nth-child(6) { animation-delay: .45s; }
+    #a-over.ov-play #ovl > :nth-child(7) { animation-delay: .48s; }
+    #a-over.ov-play #ovl > :nth-child(8) { animation-delay: .51s; }
+
+    /* every number rolls up into place after its card arrives (zeros cannot count up, so they roll too) */
+    #a-over.ov-play .kpi .num {
+        animation: ovNum .5s var(--ease) backwards;
+    }
+
+    #a-over.ov-play #ovk > :nth-child(1) .num { animation-delay: .20s; }
+    #a-over.ov-play #ovk > :nth-child(2) .num { animation-delay: .27s; }
+    #a-over.ov-play #ovk > :nth-child(3) .num { animation-delay: .34s; }
+    #a-over.ov-play #ovk > :nth-child(4) .num { animation-delay: .41s; }
+    #a-over.ov-play #rkpi > :nth-child(1) .num { animation-delay: .24s; }
+    #a-over.ov-play #rkpi > :nth-child(2) .num { animation-delay: .30s; }
+    #a-over.ov-play #rkpi > :nth-child(3) .num { animation-delay: .36s; }
+
+    /* ---- motion that carries meaning ---- */
+
+    /* a studio with a session in progress: a slow ring */
+    .lamp.live {
+        animation: ovLamp 2s ease-out infinite;
+    }
+
+    /* a number changed on refresh: the card's edge lights up once */
+    #a-over .card.ov-flash {
+        animation: ovFlash 1.1s var(--ease);
+    }
+
+    /* the chevron on a Needs attention row leans toward where you will go */
+    .na-ch {
+        transition: transform .2s var(--ease), opacity .2s var(--ease);
+    }
+
+    #ovl li.na:hover .na-ch,
+    #ovl li.na:focus-visible .na-ch {
+        transform: translateX(4px);
+        opacity: 1;
+    }
+
+    @keyframes ovNum {
+        from { opacity: 0; transform: translateY(18px) scale(.85); }
+    }
+
+    @keyframes ovIn {
+        from { opacity: 0; transform: translateY(8px); }
+    }
+
+    @keyframes ovLamp {
+        0% { box-shadow: 0 0 0 0 #E23B4E99; }
+        100% { box-shadow: 0 0 0 9px #E23B4E00; }
+    }
+
+    @keyframes ovFlash {
+        from { border-color: var(--accent); box-shadow: 0 0 0 3px #E23B4E40; }
+    }
+}

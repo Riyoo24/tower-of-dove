@@ -506,6 +506,7 @@ async function openExtend(b) {
         return p;
     };   // hold calls run one after another
 
+    let held = false;   // the database accepted and holds the chosen extra hours (the GCash steps wait for this)
     const hold = () => queue(async () => {
         if (done)
             return;
@@ -517,6 +518,8 @@ async function openExtend(b) {
         });
         if (done)
             return;
+        held = !e;
+        preview();
         $('#ex-go').disabled = !!e || $('#ex-go').classList.contains('is-busy');
         if (e) {
             err(e.message);
@@ -537,8 +540,10 @@ async function openExtend(b) {
     const preview = () => {
         addonNote();
         const h = +sel.value, cost = rate * h, opt = readPayOption('ex') || defaultOpt, dp = dueNow(cost, opt), full = opt === 'full', later = opt === PAY_LATER;
-        $('#ex-s2').hidden = later;   // paying after the session: no GCash QR, screenshot or reference now
-        $('#ex-s3').hidden = later;
+        // paying after the session: no GCash QR, screenshot or reference now. Otherwise they appear only once the database has
+        // accepted and held these hours, so nobody sends money for hours it would refuse (QA H-2)
+        $('#ex-s2').hidden = later || !held;
+        $('#ex-s3').hidden = later || !held;
         $('#ex-end').textContent = endTime(b.start, b.hours + h);
         $('#ex-cost').textContent = peso(cost);
         $('#ex-tot').textContent = peso(rate * (b.hours + h));
@@ -615,6 +620,7 @@ async function openExtend(b) {
     liveCheck(fieldRules());   // each field is checked when it is left, and again while a mistake is being fixed
     onPayOption('ex', preview);
     sel.addEventListener('change', () => {
+        held = false;
         preview();
         $('#ex-go').disabled = true;
         hold();

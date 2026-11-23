@@ -9,6 +9,7 @@ import { setRentalFilter } from './rentals.js';
 import { setReportDay } from './reports.js';
 import { BK, CNT, DMG, RL, STK, STU } from './data.js';
 import { dmgOwed, dmgStatus } from './damage.js';
+import { playOverview } from './overviewMotion.js';
 
 /* late fees that were left unpaid at the return: refs still owed (unpaid), refs whose GCash payment staff must check (pending), and the total */
 export function openLateFees() {
@@ -89,6 +90,7 @@ export function renderOverview() {
         na('Overdue rentals', overdueOrders, overdueOrders, 'rn:Overdue', 'bad') +
         na('Low-stock equipment', low.join(', ') || 'None', low.length, 'tab:a-eqp', 'warn');
     updateNavBadges();
+    playOverview();   // animations (admin/overviewMotion.js)
 }
 
 /* Sidebar badges.
