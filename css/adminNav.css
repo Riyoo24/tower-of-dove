@@ -69,10 +69,10 @@ body[data-role="admin"].sc {
 
 /* ---------- top block ---------- */
 .snav-top {
-    padding: 18px 14px 6px;
+    padding: 26px 14px 0;   /* breathing room above the logo, so the brand and New walk-in sit lower */
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 18px;
 }
 
 .snav-brand {
@@ -237,7 +237,7 @@ body[data-role="admin"].sc {
     min-height: 0;
     overflow-x: hidden;
     overflow-y: auto;
-    padding: 24px 0 18px;   /* the selected tab's curves need room above the first row and below the last */
+    padding: 10px 0 18px;   /* the curves above the first row are drawn in the list's own padding, so this stays small */
     scrollbar-width: none;
 }
 
@@ -676,6 +676,50 @@ body[data-role="admin"].sc {
     display: none;
 }
 
+/* New walk-in is not pinned: the brand block, button and menu scroll together; only the account bar stays at the bottom.
+   (Not in the icon rail: its pop-up menus sit outside the sidebar and must not be clipped.) */
+.snav-side:not(.rail) {
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+}
+
+.snav-side:not(.rail)::-webkit-scrollbar {
+    display: none;
+}
+
+.snav-side:not(.rail) .snav-top {
+    flex: none;
+}
+
+.snav-side:not(.rail) .snav-nav {
+    flex: 1 0 auto;
+    overflow: visible;
+}
+
+.snav-side:not(.rail) .snav-foot {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    background: var(--snav-bg);
+}
+
+/* Opening the menu: the sidebar grows from the icon rail to full width over .3s. The content is laid out at the
+   full width straight away and the growing sidebar reveals it, so titles never wrap or get cut to "Studio Se..."
+   half-way through. (Not in the rail: its pop-up menus sit outside the sidebar and must not be clipped.) */
+@media (min-width: 821px) {
+    .snav-side:not(.rail) {
+        overflow-x: hidden;
+    }
+
+    .snav-side:not(.rail) > .snav-top,
+    .snav-side:not(.rail) > .snav-nav,
+    .snav-side:not(.rail) > .snav-foot {
+        width: 270px;   /* the sidebar's 272px minus its 2px edge line */
+        flex-shrink: 0;
+    }
+}
+
 /* ---------- phones: drawer ---------- */
 @media (max-width: 820px) {
     .snav-side,
@@ -708,7 +752,7 @@ body[data-role="admin"].sc {
     }
 
     .snav-top {
-        padding-top: 14px;
+        padding-top: 24px;
     }
 
     .snav-nav {

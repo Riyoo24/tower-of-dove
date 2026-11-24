@@ -62,7 +62,7 @@ export const NAV_ITEMS = [
    admin/index.js, so they never leave pages/admin.html. A group with owner:true is drawn for the owner only.
    Onsite Booking (a-onb) and Onsite Rental (a-onr) are not menu rows: they open from the "New walk-in" button. */
 export const ADMIN_GROUPS = [
-    { id: 'daily', label: '', items: [
+    { id: 'daily', label: 'Front desk', items: [
         ['a-over', 'Overview', 'grid'],
         ['a-cal', 'Calendar', 'week'],
         ['a-sess', 'Studio Sessions', 'clock']] },
