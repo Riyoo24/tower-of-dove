@@ -6,10 +6,11 @@
 import { notifyBadgeCounts } from './alerts.js';
 import { setBookingFilter } from './bookings.js';
 import { setRentalFilter } from './rentals.js';
-import { setReportDay } from './reports.js';
+import { setReportCompare, setReportDay } from './reports.js';
 import { BK, CNT, DMG, RL, STK, STU } from './data.js';
 import { dmgOwed, dmgStatus } from './damage.js';
 import { playOverview } from './overviewMotion.js';
+import { renderTrend } from './trendChart.js';
 
 /* late fees that were left unpaid at the return: refs still owed (unpaid), refs whose GCash payment staff must check (pending), and the total */
 export function openLateFees() {
@@ -22,7 +23,7 @@ export function openLateFees() {
     };
 }
 import { KPI, OWNER, dOf, money, num, tOf } from './helpers.js';
-import { $, TODAY, badge, dayOffset, esc, pl, shortDate, sum } from '../shared/utils.js';
+import { $, TODAY, badge, esc, pl, shortDate, sum } from '../shared/utils.js';
 
 /* ============================ 3. OVERVIEW, BOOKINGS, PAYMENTS ============================ */
 
@@ -44,15 +45,7 @@ export function renderOverview() {
         KPI('Confirmed', num(CNT.confirmed_bookings), '', '', 'bk:Confirmed')
         + KPI('Pending', num(CNT.pending_bookings), '', '', 'bk:Pending');
 
-    const days = Array.from({ length: 7 }, (_, i) => dayOffset(i - 6));
-    const counts = days.map(d => BK.filter(b => dOf(b.start_at) === d && !['Cancelled', 'Rejected'].includes(b.status)).length);
-    const max = Math.max(...counts, 1);
-    /* Same markup as before. Extras for phones only (admin.css): --r (bar share of the max), .bn (count) and .bm (month). */
-    const dateHtml = d => {
-        const sd = shortDate(d), i = sd.lastIndexOf(' ');
-        return i > 0 ? `<span class="bm">${sd.slice(0, i + 1)}</span>${sd.slice(i + 1)}` : sd;
-    };
-    $('#bars').innerHTML = counts.map((v, i) => `<div${OWNER ? ` class="go" data-go="rp:${days[i]}" role="link" tabindex="0" aria-label="${shortDate(days[i])}: ${pl(v, 'booking')}. Open report"` : ''}><i class="${i === 6 ? 'hi' : ''}" style="height:${Math.max(4, Math.round(v / max * 100))}px;--r:${(v / max).toFixed(3)}"></i><span class="bn">${v}</span><br>${dateHtml(days[i])}</div>`).join('');
+    renderTrend();   // the stock-style bookings chart (admin/trendChart.js)
 
     const open = openLines();
     const overdue = open.filter(l => l.days_overdue > 0), due = open.filter(dueToday);
@@ -140,6 +133,10 @@ function goFromCard(code) {
         location.hash = 'a-rent';
     } else if (kind === 'rp') {
         setReportDay(arg);   // Reports is owner-only; the bars are only clickable for the owner
+        location.hash = 'a-rep';
+    } else if (kind === 'rc') {
+        const [from, to] = arg.split(',');   // the chart's "Open report": two days side by side (owner only)
+        setReportCompare(from, to);
         location.hash = 'a-rep';
     } else if (kind === 'tab') {
         location.hash = arg;   // "Needs attention" rows

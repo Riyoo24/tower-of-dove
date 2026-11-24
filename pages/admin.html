@@ -85,9 +85,27 @@
                         <h1>Overview</h1>
                         <p class="sub">Here is what is happening right now.</p>
                         <div class="grid g4" id="ovk"></div>
-                        <div class="card" style="margin-top:16px">
-                            <h3>Bookings over the last 7 days</h3>
-                            <div class="bars" id="bars"></div>
+                        <div class="card tc" id="tc" style="margin-top:16px">
+                            <div class="tc-hd">
+                                <div>
+                                    <h3 id="tc-t">Bookings over the last 7 days</h3>
+                                    <div class="tc-row">
+                                        <div class="tc-val" id="tc-v" aria-live="polite">0</div>
+                                        <div class="tc-d" id="tc-d"></div>
+                                    </div>
+                                </div>
+                                <div class="tc-tabs" role="group" aria-label="Date range">
+                                    <button type="button" data-r="7" aria-pressed="true">7D</button>
+                                    <button type="button" data-r="30" aria-pressed="false">30D</button>
+                                    <button type="button" data-r="90" aria-pressed="false">3M</button>
+                                </div>
+                            </div>
+                            <div class="tc-plot" id="bars" tabindex="0" role="group" aria-label="Bookings per day chart. Use the left and right arrow keys to move between days."></div>
+                            <div class="tc-stats">
+                                <div>Total<b id="tc-s1"></b></div>
+                                <div>Busiest day<b id="tc-s2"></b></div>
+                                <div title="The second half of the range compared with the first half">Trend<b id="tc-s3"></b></div>
+                            </div>
                         </div>
                         <h2 style="margin-top:24px">Equipment returns</h2>
                         <div class="grid g4" id="rkpi"></div>

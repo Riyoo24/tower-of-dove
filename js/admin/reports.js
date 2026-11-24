@@ -13,7 +13,7 @@ import { $, TODAY, badge, dayOffset, esc, pad, pl, shortDate, sum } from '../sha
 
 /* ============================ 11. REPORTS ============================ */
 
-let rp = 'Month', rt = 'Booking', cFrom = dayOffset(-30), cTo = TODAY, hc = null, cur = null;
+let rp = 'Month', rt = 'Booking', cFrom = dayOffset(-30), cTo = TODAY, hc = null, cur = null, cmp = null;
 
 const RT = {
     Booking: 'Total bookings, how many are confirmed, pending, completed or cancelled, and bookings per studio.',
@@ -46,12 +46,26 @@ export function setReportDay(day) {
     renderReports();
 }
 
+/* Used by the Overview chart: the Booking report for two days side by side (day before, chosen day) */
+export function setReportCompare(from, to) {
+    rp = 'Custom';
+    rt = 'Booking';
+    cFrom = from;
+    cTo = to;
+    cmp = [from, to];
+    hc = null;
+    renderReports();
+}
+
 export function renderReports() {
+    /* the comparison lasts only while the report still shows exactly those two days (changing the period, dates or report ends it) */
+    if (cmp && !(rp === 'Custom' && rt === 'Booking' && cFrom === cmp[0] && cTo === cmp[1]))
+        cmp = null;
     const [lo, hi] = rangeOf(), inR = d => d >= lo && d <= hi, inv = rt === 'Inventory';
     const bks = BK.filter(b => inR(dOf(b.start_at)));
     const lines = RL.filter(l => !['Rejected', 'Cancelled'].includes(l.status) && inR(dOf(l.created_at)));
     const revs = REV.filter(r => inR(r.day));
-    const label = lo === hi ? shortDate(lo) : shortDate(lo) + ' to ' + shortDate(hi);
+    const label = cmp ? shortDate(cmp[0]) + ' compared with ' + shortDate(cmp[1]) : lo === hi ? shortDate(lo) : shortDate(lo) + ' to ' + shortDate(hi);
     const card = (x, y) => `<div class="grid ge" style="margin-top:16px"><div class="card"><h3>${x}</h3><div id="h1"></div></div><div class="card"><h3>${y}</h3><div id="h2"></div></div></div>`;
     const wide = h => `<div class="card" style="margin-top:16px"><h3 style="margin-bottom:8px">${h}</h3><div id="h1"></div></div>`;
     let k = [], body = '', sec = [], post = () => {
@@ -89,6 +103,38 @@ export function renderReports() {
                 return [s.name, n, n];
             }));
         };
+        if (cmp) {
+            /* opened from the Overview chart: the two days side by side, with the change */
+            const [da, db] = cmp, list = sec[2];
+            const A = bks.filter(b => dOf(b.start_at) === da), Z = bks.filter(b => dOf(b.start_at) === db);
+            const cnt = (a, s) => a.filter(b => bkStatus(b.status) === s).length;
+            const live = a => a.filter(b => !['Cancelled', 'Rejected'].includes(b.status));
+            const hrs = a => Math.round(sum(live(a).map(b => num(b.hours))) * 10) / 10;
+            const val = a => sum(live(a).map(b => num(b.total_amount)));
+            const chg = (a, b, f = String) => a === b ? 'No change' : (b > a ? '\u25B2 +' : '\u25BC \u2212') + f(Math.abs(b - a)) + (a > 0 ? ` (${Math.round(Math.abs(b - a) / a * 100)}%)` : '');
+            const m = [
+                ['Total bookings', A.length, Z.length],
+                ['Confirmed', cnt(A, 'Confirmed') + cnt(A, 'Active'), cnt(Z, 'Confirmed') + cnt(Z, 'Active')],
+                ['Pending', cnt(A, 'Pending'), cnt(Z, 'Pending')],
+                ['Completed', cnt(A, 'Completed'), cnt(Z, 'Completed')],
+                ['Cancelled', cnt(A, 'Cancelled') + cnt(A, 'Rejected'), cnt(Z, 'Cancelled') + cnt(Z, 'Rejected')]
+            ];
+            const hA = hrs(A), hZ = hrs(Z), vA = val(A), vZ = val(Z);
+            const head = n => [n, shortDate(da), shortDate(db), 'Change'];
+            const studios = STU.map(s => [s.name, A.filter(b => b.studio_id === s.studio_id).length, Z.filter(b => b.studio_id === s.studio_id).length]);
+            k = m.map(x => [x[0], x[2], `vs ${x[1]} on ${shortDate(da)}`]);
+            sec = [
+                { title: 'Comparison', head: head('Metric'), rows: [...m.map(x => [x[0], x[1], x[2], x[2] - x[1]]), ['Hours booked', hA, hZ, Math.round((hZ - hA) * 10) / 10], ['Booked value (PHP)', vA, vZ, vZ - vA]] },
+                { title: 'Bookings by studio', head: head('Studio'), rows: studios.map(x => [x[0], x[1], x[2], x[2] - x[1]]) },
+                list
+            ];
+            body = wide(shortDate(da) + ' compared with ' + shortDate(db))
+                + '<div class="card" style="margin-top:16px"><h3 style="margin-bottom:8px">Bookings by studio</h3><div id="h2"></div></div>';
+            post = () => {
+                tb('h1', head('Metric'), [...m.map(x => [x[0], x[1], x[2], chg(x[1], x[2])]), ['Hours booked', hA, hZ, chg(hA, hZ)], ['Booked value', money(vA), money(vZ), chg(vA, vZ, money)]]);
+                tb('h2', head('Studio'), studios.map(x => [esc(x[0]), x[1], x[2], chg(x[1], x[2])]));
+            };
+        }
     } else if (rt === 'Sales') {
         const sv = sum(revs.filter(r => r.kind === 'Studio').map(r => num(r.amount))),
             ev = sum(revs.filter(r => r.kind === 'Equipment').map(r => num(r.amount)));
