@@ -39,6 +39,10 @@ export const ICONS = {
     pin: '<path d="M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
     facebook: '<path d="M14 8h3V4h-3a4 4 0 00-4 4v3H7v4h3v6h4v-6h3l1-4h-4V8z"/>',
     youtube: '<rect x="2" y="5" width="20" height="14" rx="4"/><path d="M10 9l5 3-5 3z"/>',
+    chev: '<path d="M6 9l6 6 6-6"/>',
+    fold: '<path d="M11 7l-5 5 5 5M18 7l-5 5 5 5"/>',
+    lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/>',
+    add: '<path d="M12 5v14M5 12h14"/>',
 };
 
 
@@ -54,24 +58,42 @@ export const NAV_ITEMS = [
     ['contact', 'Contact Us', 'mail']
 ];
 
-/* Owner and staff sidebar. [tab id, label, icon, ownerOnly]. Links are
-   #hashes handled by admin.js, so they never leave pages/admin.html. */
-export const ADMIN_NAV = [
-    ['a-over', 'Overview', 'grid'],
-    ['a-cal', 'Calendar', 'week'],
-    ['a-sess', 'Studio Sessions', 'clock'],
-    ['a-onb', 'Onsite Booking', 'plus'],
-    ['a-onr', 'Onsite Rental', 'tag'],
-    ['a-book', 'Bookings', 'cal'],
-    ['a-rent', 'Rentals', 'box'],
-    ['a-pay', 'Payment', 'card'],
-    ['a-cust', 'Customers', 'users'],
-    ['a-eqp', 'Equipments', 'music'],
-    ['a-stud', 'Studio Management', 'door', true],
-    ['a-rep', 'Reports', 'chart', true],
-    ['a-audit', 'Audit Log', 'shield', true],
-    ['a-set', 'Settings', 'gear', true]
+/* Owner and staff sidebar, grouped by job. [tab id, label, icon]. Links are #hashes handled by
+   admin/index.js, so they never leave pages/admin.html. A group with owner:true is drawn for the owner only.
+   Onsite Booking (a-onb) and Onsite Rental (a-onr) are not menu rows: they open from the "New walk-in" button. */
+export const ADMIN_GROUPS = [
+    { id: 'daily', label: '', items: [
+        ['a-over', 'Overview', 'grid'],
+        ['a-cal', 'Calendar', 'week'],
+        ['a-sess', 'Studio Sessions', 'clock']] },
+    { id: 'orders', label: 'Bookings and payments', items: [
+        ['a-book', 'Bookings', 'cal'],
+        ['a-rent', 'Rentals', 'box'],
+        ['a-pay', 'Payments', 'card']] },
+    { id: 'people', label: 'People and gear', items: [
+        ['a-cust', 'Customers', 'users'],
+        ['a-eqp', 'Equipment', 'music']] },
+    { id: 'owner', label: 'Owner tools', owner: true, closed: true, items: [
+        ['a-stud', 'Studio Management', 'door'],
+        ['a-rep', 'Reports', 'chart'],
+        ['a-audit', 'Audit Log', 'shield'],
+        ['a-set', 'Settings', 'gear']] }
 ];
+
+/* The collapsed menu and folded groups are remembered on this device. */
+const NAV_PREF_KEY = 'tod_admin_nav';
+const readNavPref = () => {
+    try {
+        return JSON.parse(localStorage.getItem(NAV_PREF_KEY) || '{}') || {};
+    } catch (e) {
+        return {};
+    }
+};
+const saveNavPref = pref => {
+    try {
+        localStorage.setItem(NAV_PREF_KEY, JSON.stringify(pref));
+    } catch (e) { /* storage blocked: the menu simply starts open next time */ }
+};
 
 /* "Log out?" alert. Resolves true only when the user presses "Yes, log out"
    (Cancel, Esc, or a click outside the box all resolve false). Cancel has the focus,
@@ -107,11 +129,11 @@ function confirmLogout() {
 
 /* Replaces the name shown on the sidebar profile link (the only place the name appears). */
 export function updateSidebarName(displayName) {
-    const sidebarNameElement = $('#ps-profile .lbl');
+    const sidebarNameElement = $('#ps-profile .lbl, #adm-me .lbl');
     if (sidebarNameElement)
         sidebarNameElement.textContent = displayName;
     const letter = ((displayName || '').trim()[0] || 'U').toUpperCase();
-    $$('#ps-profile .tn-av, #mb-user .tn-av').forEach(avatar => {   // sidebar / top bar avatar and the phone top bar avatar: first letter of the name
+    $$('#ps-profile .tn-av, #adm-me .adm-av, #mb-user .tn-av').forEach(avatar => {   // sidebar / top bar avatar and the phone top bar avatar: first letter of the name
         avatar.textContent = letter;
     });
 }
@@ -296,9 +318,12 @@ export function injectChrome() {
     const user = getUser();
     if (!isAdmin)
         return injectTopNav(user);   // customer pages: top bar. Admin below is unchanged.
-    const navList = isAdmin
-        ? ADMIN_NAV.filter(n => !n[3] || (user && user.role === 'owner'))
-        : NAV_ITEMS;
+    const owner = !!(user && user.role === 'owner');
+    const pref = readNavPref();
+    const folded = pref.closed || { owner: true };   // the Owner tools group starts folded
+    const name = user ? (user.username || user.label || 'Account') : '';
+    const initial = (name.trim()[0] || 'U').toUpperCase();
+    const desktop = () => innerWidth > 820;
     document.body.classList.add('hasside');
     if (window.todSideSkeleton)
         window.todSideSkeleton.remove();   // the grey placeholder sidebar from js/shared/sideSkeleton.js (admin page only)
@@ -306,47 +331,109 @@ export function injectChrome() {
     <div class="mbar">
       <button id="mb-open" aria-label="Open menu">${icon('menu')}</button>
       <span class="mb-brand"><img src="${ASSETS}img/logo.png" alt="" width="30" height="30"> Tower of Dove</span>
-      <button id="mb-user" aria-label="${getUser() ? 'Account' : 'Log in'}" ${getUser() ? '' : 'data-route="login"'}>${getUser() ? `<span class="tn-av" aria-hidden="true">${esc(((getUser().username || getUser().label || '').trim()[0] || 'U').toUpperCase())}</span>` : icon('user')}</button>
+      <button id="mb-user" aria-label="${user ? 'Account' : 'Log in'}" ${user ? '' : 'data-route="login"'}>${user ? `<span class="tn-av" aria-hidden="true">${esc(initial)}</span>` : icon('user')}</button>
     </div>
     <div class="scrim" id="scrim"></div>
-    <aside class="pubside" id="pubside" aria-label="Main navigation">
-      <button class="ps-x" id="ps-x" aria-label="Close menu">${icon('x')}</button>
-      <div class="ps-menu" id="ps-toggle" role="button" tabindex="0" aria-label="Expand or collapse menu" aria-expanded="true">${icon('menu')}</div>
-      <ul class="ps-links" id="ps-main">
-        ${navList.map(([key, label, ic]) => `
-        <li data-side="${key}">
-          <div class="curve-top"></div>
-          <a href="${isAdmin ? '#' + key : '#'}" ${isAdmin ? '' : `data-route="${key}"`}><span class="ico">${icon(ic)}</span><span class="lbl">${label}</span></a>
-          <div class="curve-bottom"></div>
-        </li>`).join('')}
-      </ul>
-      <ul class="ps-links ps-auth" id="ps-auth">
-        ${getUser() ? `
-        <li data-side="${isAdmin ? 'a-prof' : 'account'}"><a href="${isAdmin ? '#a-prof' : '#'}" id="ps-profile" ${isAdmin ? '' : 'data-route="account"'}><span class="ico ps-av"><span class="tn-av" aria-hidden="true">${esc(((getUser().username || getUser().label || '').trim()[0] || 'U').toUpperCase())}</span></span><span class="lbl"></span></a></li>
-        <li><a href="#" id="logout"><span class="ico">${icon('logout')}</span><span class="lbl">Log out</span></a></li>` : `
-        <li><a href="#" data-route="login"><span class="ico">${icon('login')}</span><span class="lbl">Log in</span></a></li>
-        <li><a href="#" data-route="register"><span class="ico">${icon('edit')}</span><span class="lbl">Register</span></a></li>`}
-      </ul>
-      <div class="ps-logo">
-        <img src="${ASSETS}img/logo.png" alt="Tower of Dove logo" width="64" height="64">
-        <div class="ps-title">Tower of Dove</div>
+    <aside class="snav-side" id="snav" aria-label="Main navigation">
+      <div class="snav-top">
+        <div class="snav-brand">
+          <img src="${ASSETS}img/logo.png" alt="" width="36" height="36">
+          <div class="snav-t"><b>Tower of Dove</b><small>${owner ? 'Owner' : 'Staff'} dashboard</small></div>
+          <button type="button" class="snav-fold" id="ps-toggle" aria-label="Collapse menu" aria-expanded="true" data-tip="Collapse menu">${icon('fold')}</button>
+          <button type="button" class="snav-x" id="ps-x" aria-label="Close menu">${icon('x')}</button>
+        </div>
+        <div class="snav-walk">
+          <button type="button" class="snav-cta" id="snav-cta" aria-haspopup="menu" aria-expanded="false" aria-controls="snav-wpop" data-tip="New walk-in">${icon('add')}<span class="lbl">New walk-in</span><span class="snav-chev">${icon('chev')}</span></button>
+          <div class="snav-pop" id="snav-wpop" role="menu" hidden>
+            <a role="menuitem" href="#a-onb">${icon('cal')}<span><strong>Walk-in booking</strong><small>Book a room for someone at the desk</small></span></a>
+            <a role="menuitem" href="#a-onr">${icon('box')}<span><strong>Walk-in rental</strong><small>Rent gear to take away</small></span></a>
+          </div>
+        </div>
+      </div>
+      <nav class="snav-nav" id="snav-nav" aria-label="Dashboard pages">
+        ${ADMIN_GROUPS.filter(g => !g.owner || owner).map(g => {
+            const isFolded = !!g.label && !!folded[g.id];
+            return `
+        <section class="snav-grp${isFolded ? ' closed' : ''}" data-grp="${g.id}">
+          ${g.label ? `<button type="button" class="snav-gh" data-fold="${g.id}" aria-expanded="${!isFolded}">${g.owner ? icon('lock') : ''}<span>${g.label}</span><span class="snav-dot" title="Something here needs attention"></span><span class="snav-chev">${icon('chev')}</span></button>` : ''}
+          <div class="snav-gb"><ul${isFolded ? ' inert' : ''}>
+            ${g.items.map(([key, label, ic]) => `
+            <li data-side="${key}"><a href="#${key}" data-tip="${label}"><span class="snav-i">${icon(ic)}</span><span class="lbl">${label}</span></a></li>`).join('')}
+          </ul></div>
+        </section>`;
+        }).join('')}
+      </nav>
+      <div class="snav-foot">
+        ${user ? `
+        <button type="button" class="snav-me" id="adm-me" aria-haspopup="menu" aria-expanded="false" aria-controls="snav-mpop" data-tip="${esc(name)}">
+          <span class="snav-av adm-av" aria-hidden="true">${esc(initial)}</span>
+          <span class="snav-n"><b class="lbl">${esc(name)}</b><small>${owner ? 'Owner' : 'Staff'}</small></span>
+          <span class="snav-chev">${icon('chev')}</span>
+        </button>
+        <div class="snav-pop" id="snav-mpop" role="menu" hidden>
+          <a role="menuitem" href="#a-prof">${icon('user')}<span><strong>${owner ? 'Owner profile' : 'My profile'}</strong></span></a>
+          <button type="button" role="menuitem" id="logout">${icon('logout')}<span><strong>Log out</strong></span></button>
+        </div>` : `
+        <a class="snav-me" href="#" data-route="login">${icon('login')}<span class="snav-n"><b>Log in</b></span></a>`}
       </div>
     </aside>`);
+    document.body.insertAdjacentHTML('beforeend', '<div class="snav-tip" id="snav-tip" hidden></div>');
 
+    const side = $('#snav');
+    const tip = $('#snav-tip');
 
     const setDrawer = open => {
-        $('#pubside').classList.toggle('open', open);
+        side.classList.toggle('open', open);
         $('#scrim').classList.toggle('on', open);
+    };
+    const closePops = () => {
+        $$('.snav-pop').forEach(p => { p.hidden = true; });
+        ['#snav-cta', '#adm-me'].forEach(sel => {
+            const b = $(sel);
+            if (b)
+                b.setAttribute('aria-expanded', 'false');
+        });
+    };
+    const togglePop = (btn, pop) => {
+        const wasOpen = !pop.hidden;
+        closePops();
+        if (!wasOpen) {
+            pop.hidden = false;
+            btn.setAttribute('aria-expanded', 'true');
+        }
+    };
+
+    // folded groups cannot be tabbed into; in the icon rail every group is shown
+    const syncFolds = () => {
+        const rail = side.classList.contains('rail');
+        $$('.snav-grp', side).forEach(g => {
+            const ul = g.querySelector('ul');
+            if (ul)
+                ul.inert = g.classList.contains('closed') && !rail;
+        });
+    };
+    // the icon rail is a desktop-only state; phones always get the full drawer
+    const applyRail = () => {
+        const rail = !!pref.rail && desktop();
+        side.classList.toggle('rail', rail);
+        document.body.classList.toggle('sc', rail);
+        const fold = $('#ps-toggle');
+        fold.setAttribute('aria-expanded', String(!rail));
+        fold.setAttribute('aria-label', rail ? 'Expand menu' : 'Collapse menu');
+        fold.dataset.tip = rail ? 'Expand menu' : 'Collapse menu';
+        syncFolds();
     };
     const toggleSidebar = () => {
         // The page's left margin changes once (instant, one layout). The slide you see is a transform
         // (graphics card only) from where the page was to where it is now, so no per-frame re-layout.
         const page = document.querySelector('.page');
-        const animate = page && page.animate && innerWidth > 820 && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const animate = page && page.animate && desktop() && !matchMedia('(prefers-reduced-motion: reduce)').matches;
         const before = animate ? page.getBoundingClientRect().left : 0;
-        const collapsed = $('#pubside').classList.toggle('collapsed');
-        document.body.classList.toggle('sc', collapsed);
-        $('#ps-toggle').setAttribute('aria-expanded', String(!collapsed));
+        closePops();
+        tip.hidden = true;
+        pref.rail = !pref.rail;
+        saveNavPref(pref);
+        applyRail();
         if (!animate)
             return;
         const shift = before - page.getBoundingClientRect().left;
@@ -360,31 +447,75 @@ export function injectChrome() {
         a.onfinish = done;
         a.oncancel = done;
     };
+    applyRail();
+    matchMedia('(min-width: 821px)').addEventListener('change', applyRail);
+
+    // hover labels in the icon rail
+    const showTip = el => {
+        if (!side.classList.contains('rail') || !el.dataset.tip)
+            return;
+        const r = el.getBoundingClientRect();
+        tip.textContent = el.dataset.tip;
+        tip.hidden = false;
+        tip.style.left = r.right + 12 + 'px';
+        tip.style.top = r.top + r.height / 2 - tip.offsetHeight / 2 + 'px';
+    };
+    side.addEventListener('mouseover', e => {
+        const el = e.target.closest('[data-tip]');
+        el ? showTip(el) : (tip.hidden = true);
+    });
+    side.addEventListener('focusin', e => {
+        const el = e.target.closest('[data-tip]');
+        el ? showTip(el) : (tip.hidden = true);
+    });
+    side.addEventListener('mouseleave', () => { tip.hidden = true; });
+    side.addEventListener('focusout', () => { tip.hidden = true; });
 
     $('#ps-toggle').addEventListener('click', toggleSidebar);
-    $('#ps-toggle').addEventListener('keydown', e => {
-        if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            toggleSidebar();
-        }
+    $('#snav-cta').addEventListener('click', () => togglePop($('#snav-cta'), $('#snav-wpop')));
+    const me = $('#adm-me');
+    if (me)
+        me.addEventListener('click', () => togglePop(me, $('#snav-mpop')));
+
+    // fold or open a group, and remember it
+    $('#snav-nav').addEventListener('click', e => {
+        const head = e.target.closest('[data-fold]');
+        if (!head)
+            return;
+        const grp = head.closest('.snav-grp');
+        const nowFolded = !grp.classList.contains('closed');
+        grp.classList.toggle('closed', nowFolded);
+        head.setAttribute('aria-expanded', String(!nowFolded));
+        pref.closed = { ...(pref.closed || { owner: true }), [head.dataset.fold]: nowFolded };
+        saveNavPref(pref);
+        syncFolds();
     });
+
     $('#mb-open').addEventListener('click', () => setDrawer(true));
     // phone top bar: the avatar opens the account (Profile) page of the dashboard
     const mbUser = $('#mb-user');
-    if (mbUser && getUser())
+    if (mbUser && user)
         mbUser.addEventListener('click', () => {
             setDrawer(false);
             location.hash = 'a-prof';
         });
     $('#ps-x').addEventListener('click', () => setDrawer(false));
     $('#scrim').addEventListener('click', () => setDrawer(false));
-    $('#pubside').addEventListener('click', e => {
-        if (e.target.closest('a'))
+    side.addEventListener('click', e => {
+        if (e.target.closest('a[href^="#"]')) {
+            closePops();
             setDrawer(false);
+        }
+    });
+    document.addEventListener('click', e => {
+        if (!e.target.closest('.snav-walk, .snav-foot'))
+            closePops();
     });
     document.addEventListener('keydown', e => {
-        if (e.key === 'Escape')
+        if (e.key === 'Escape') {
             setDrawer(false);
+            closePops();
+        }
     });
 
     // every [data-route] link or button in the page
@@ -400,6 +531,7 @@ export function injectChrome() {
     if (lo)
         lo.addEventListener('click', async e => {
             e.preventDefault();
+            closePops();
             setDrawer(false);
             if (await confirmLogout())
                 logout();
@@ -425,11 +557,29 @@ export function setActiveNav(key) {
     const mobileAvatar = $('#mb-user');   // phone top bar avatar: lit while the Profile page is open
     if (mobileAvatar)
         mobileAvatar.classList.toggle('active', key === 'a-prof');
-    $$('#ps-main li, #ps-auth li[data-side], #mtabs li').forEach(li => {
+    $$('#ps-main li, #ps-auth li[data-side], #snav li[data-side], #mtabs li').forEach(li => {
         const on = li.dataset.side === key;
         li.classList.toggle('active', on);
-        const a = li.closest('#mtabs') && li.querySelector('a');
+        const a = li.closest('#mtabs, #snav') && li.querySelector('a');
         if (a)
             on ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current');
     });
+    // admin sidebar: the account button, the New walk-in button, and a folded group that holds the open page
+    const account = $('#adm-me');
+    if (account)
+        account.classList.toggle('active', key === 'a-prof');
+    const walkIn = $('#snav-cta');
+    if (walkIn)
+        walkIn.classList.toggle('here', key === 'a-onb' || key === 'a-onr');
+    const here = $('#snav li.active');
+    const folded = here && here.closest('.snav-grp.closed');
+    if (folded) {
+        folded.classList.remove('closed');
+        const head = folded.querySelector('[data-fold]');
+        if (head)
+            head.setAttribute('aria-expanded', 'true');
+        const ul = folded.querySelector('ul');
+        if (ul)
+            ul.inert = false;
+    }
 }

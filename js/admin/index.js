@@ -42,7 +42,7 @@ if (!allowed)
 // pending-request badges next to "Rentals", "Payment", "Studio Sessions" and "Bookings" in the sidebar
 (() => {
     [['a-rent', 'rcnt'], ['a-pay', 'pcnt'], ['a-sess', 'scnt'], ['a-book', 'bcnt']].forEach(([side, id]) => {
-        const l = document.querySelector(`[data-side="${side}"] .lbl`);
+        const l = document.querySelector(`[data-side="${side}"] a`);
         if (l)
             l.insertAdjacentHTML('beforeend', `<span class="cnt" id="${id}" hidden></span>`);
     });

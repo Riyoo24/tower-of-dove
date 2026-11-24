@@ -1,0 +1,774 @@
+/* =====================================================================
+   adminNav.css - owner and staff sidebar (pages/admin.html only)
+   ---------------------------------------------------------------------
+   Markup is drawn by js/shared/layout.js (injectChrome). Every class starts
+   with "snav-" so nothing here touches the customer pages or the old .pubside rules.
+   Layout: fixed top block (brand, New walk-in), scrolling grouped menu, fixed account footer.
+   Hover and selected looks are the original sidebar's: the row slides right with a glowing accent
+   bar and a tilting icon; the selected row is the red gradient tab with curved connectors.
+   Desktop: 272px wide, or a 76px icon rail (body.sc). Phones (up to 820px): slide-in drawer.
+   ===================================================================== */
+
+body[data-role="admin"] {
+    --sw: 272px;   /* page margin comes from layout.css: body[data-role="admin"] .page */
+}
+
+body[data-role="admin"].sc {
+    --sw: 76px;
+}
+
+.snav-side {
+    --snav-bg: #0B0B0D;
+    --snav-curve: 16px;   /* size of the curved connectors above and below the selected tab */
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 272px;
+    z-index: 150;
+    display: flex;
+    flex-direction: column;
+    background: var(--snav-bg);
+    border-right: 2px solid var(--brand);
+    transition: width .3s ease;
+}
+
+.snav-side.rail {
+    width: 76px;
+}
+
+/* :where() keeps this reset from out-ranking the component rules below */
+:where(.snav-side) :where(button, a) {
+    font: inherit;
+    color: inherit;
+    text-decoration: none;
+}
+
+:where(.snav-side) button {
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+}
+
+:where(.snav-side) ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.snav-side :focus-visible {
+    outline: 2px solid var(--glow);
+    outline-offset: 2px;
+    border-radius: 8px;
+}
+
+.snav-side .icon {
+    width: 20px;
+    height: 20px;
+    flex: none;
+}
+
+/* ---------- top block ---------- */
+.snav-top {
+    padding: 18px 14px 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.snav-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.snav-brand img {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    border: 2px solid var(--brand);
+    flex: none;
+}
+
+.snav-t {
+    min-width: 0;
+    line-height: 1.2;
+}
+
+.snav-t b {
+    display: block;
+    font: 700 16px 'Bricolage Grotesque', Georgia, serif;
+    color: #fff;
+    white-space: nowrap;
+}
+
+.snav-t small {
+    color: var(--mut);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.snav-fold {
+    margin-left: auto;
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    color: var(--brand-hi);
+    transition: transform .2s var(--ease, ease), color .2s;
+}
+
+.snav-fold:hover {
+    color: #fff;
+    transform: scale(1.12);
+}
+
+.snav-x {
+    display: none;
+}
+
+/* ---------- New walk-in ---------- */
+.snav-walk {
+    position: relative;
+}
+
+.snav-cta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 42px;
+    width: 100%;
+    padding: 0 12px;
+    border-radius: 12px;
+    background: linear-gradient(90deg, #8E161F 0%, var(--brand) 85%);
+    color: #fff;
+    font-weight: 600;
+    font-size: 14.5px;
+    text-align: left;
+    box-shadow: 0 6px 20px #B3202F55;
+    transition: filter .2s, transform .18s var(--ease, ease), box-shadow .25s;
+}
+
+.snav-cta:hover {
+    filter: brightness(1.12);
+}
+
+.snav-cta:active {
+    transform: scale(.98);
+}
+
+.snav-cta.here,
+.snav-cta[aria-expanded="true"] {
+    box-shadow: 0 6px 20px #B3202F55, 0 0 0 2px #FF6B7866;
+}
+
+.snav-cta .snav-chev {
+    margin-left: auto;
+    display: grid;
+    transition: transform .2s;
+}
+
+.snav-cta .snav-chev .icon {
+    width: 16px;
+    height: 16px;
+}
+
+.snav-cta[aria-expanded="true"] .snav-chev {
+    transform: rotate(180deg);
+}
+
+/* small menus: walk-in and account */
+.snav-pop {
+    position: absolute;
+    z-index: 5;
+    background: var(--glass, #17171B);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 6px;
+    box-shadow: 0 18px 40px -10px #000c;
+}
+
+.snav-pop a,
+.snav-pop button {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+    text-align: left;
+    color: var(--ink);
+}
+
+.snav-pop a:hover,
+.snav-pop button:hover,
+.snav-pop a:focus-visible,
+.snav-pop button:focus-visible {
+    background: #B3202F2E;
+}
+
+.snav-pop .icon {
+    margin-top: 1px;
+    color: var(--brand-hi);
+}
+
+.snav-pop strong {
+    display: block;
+    font-weight: 600;
+}
+
+.snav-pop small {
+    display: block;
+    color: var(--mut);
+    font-size: 12.5px;
+    line-height: 1.35;
+}
+
+.snav-walk .snav-pop {
+    top: calc(100% + 8px);
+    left: 0;
+    right: 0;
+}
+
+/* ---------- grouped menu ---------- */
+.snav-nav {
+    flex: 1;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 24px 0 18px;   /* the selected tab's curves need room above the first row and below the last */
+    scrollbar-width: none;
+}
+
+.snav-nav::-webkit-scrollbar {
+    display: none;
+}
+
+.snav-grp + .snav-grp {
+    margin-top: 10px;
+}
+
+.snav-gh {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    height: 30px;
+    padding: 0 18px 0 30px;
+    color: #8A8894;
+    font: 600 12.5px 'Instrument Sans', system-ui, sans-serif;
+    text-align: left;
+    transition: color .2s;
+}
+
+.snav-gh:hover {
+    color: #fff;
+}
+
+.snav-gh .icon {
+    width: 13px;
+    height: 13px;
+}
+
+.snav-gh .snav-chev {
+    margin-left: auto;
+    display: grid;
+    transition: transform .2s;
+}
+
+.snav-grp.closed .snav-gh .snav-chev {
+    transform: rotate(-90deg);
+}
+
+/* amber dot on a folded group when something inside needs attention */
+.snav-dot {
+    display: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--warn);
+}
+
+.snav-grp.closed:has(.cnt:not([hidden])) .snav-dot {
+    display: block;
+}
+
+/* folding: the list is padded and pulled back by the same amount so the curves are not clipped when open */
+.snav-gb {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows .22s ease;
+}
+
+.snav-grp.closed .snav-gb {
+    grid-template-rows: 0fr;
+}
+
+.snav-gb > ul {
+    min-height: 0;
+    overflow: hidden;
+    padding-block: 20px;
+    margin-block: -20px;
+    pointer-events: none;   /* the padding overlaps the group header, so only the rows take clicks */
+}
+
+.snav-gb > ul > li {
+    pointer-events: auto;
+}
+
+/* folded: drop the curve padding so no sliver of the first row shows */
+.snav-grp.closed .snav-gb > ul {
+    padding-block: 0;
+    margin-block: 0;
+}
+
+.snav-nav li {
+    position: relative;
+    margin: 5px 0 5px 12px;
+}
+
+.snav-nav a {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 18px;
+    border-radius: 30px 0 0 30px;
+    color: #A3A1AD;
+    font-weight: 600;
+    font-size: 14.5px;
+    line-height: 20px;
+    white-space: nowrap;
+    transition: color .2s, background-color .2s, box-shadow .25s, padding-left .2s var(--ease, ease);
+}
+
+.snav-i {
+    width: 22px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+    flex: none;
+    transition: transform .25s var(--ease-spring, ease);
+}
+
+.snav-nav .lbl {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* accent bar: grows on hover, full height and white when selected */
+.snav-nav a::before {
+    content: "";
+    position: absolute;
+    left: 7px;
+    top: 50%;
+    width: 3px;
+    height: 18px;
+    margin-top: -9px;
+    border-radius: 3px;
+    background: var(--brand-hi);
+    box-shadow: 0 0 10px #FF2D3699;
+    transform: scaleY(0);
+    transition: transform .25s var(--ease, ease);
+}
+
+/* hover: soft red wash, row slides right, icon tilts */
+.snav-nav li:not(.active):hover > a {
+    color: #fff;
+    padding-left: 22px;
+    background: linear-gradient(90deg, #B3202F26 0%, #B3202F59 100%);
+}
+
+.snav-nav li:hover > a::before {
+    transform: scaleY(.6);
+}
+
+.snav-nav li:hover .snav-i {
+    transform: scale(1.18) rotate(-6deg);
+}
+
+/* selected: red gradient tab that reaches the sidebar edge, joined by curved connectors */
+.snav-nav li.active > a {
+    color: #fff;
+    background: linear-gradient(90deg, #8E161F 0%, var(--brand) 85%);
+    box-shadow: 0 6px 20px #B3202F55;
+}
+
+.snav-nav li.active > a::before {
+    transform: scaleY(1);
+    background: #fff;
+    box-shadow: 0 0 10px #ffffffaa;
+}
+
+.snav-nav li.active .snav-i {
+    animation: popIn .45s var(--ease-spring, ease);
+}
+
+.snav-nav li.active::before,
+.snav-nav li.active::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    width: var(--snav-curve);
+    height: var(--snav-curve);
+    pointer-events: none;
+}
+
+.snav-nav li.active::before {
+    top: calc(-1 * var(--snav-curve));
+    border-bottom-right-radius: var(--snav-curve);
+    box-shadow: 5px 5px 0 5px var(--brand);
+}
+
+.snav-nav li.active::after {
+    bottom: calc(-1 * var(--snav-curve));
+    border-top-right-radius: var(--snav-curve);
+    box-shadow: 5px -5px 0 5px var(--brand);
+}
+
+/* the count badges are created by js/admin/index.js and filled by overview.js (updateNavBadges) */
+.snav-nav .cnt {
+    margin: 0;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    display: grid;
+    place-items: center;
+    background: var(--warn-bg);
+    color: var(--warn);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.snav-nav li.active .cnt {
+    background: #00000047;
+    color: #fff;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .snav-nav li {
+        animation: slideInLeft .5s var(--ease, ease) backwards;
+    }
+
+    .snav-nav li:nth-child(2) {
+        animation-delay: .06s;
+    }
+
+    .snav-nav li:nth-child(3) {
+        animation-delay: .12s;
+    }
+
+    .snav-nav li:nth-child(4) {
+        animation-delay: .18s;
+    }
+}
+
+/* ---------- account footer ---------- */
+.snav-foot {
+    position: relative;
+    padding: 10px 12px;
+    border-top: 1px solid var(--graph);
+}
+
+.snav-me {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 6px 8px;
+    border-radius: 12px;
+    text-align: left;
+    color: var(--ink);
+    transition: background-color .2s;
+}
+
+.snav-me:hover,
+.snav-me[aria-expanded="true"],
+.snav-me.active {
+    background: #B3202F33;
+}
+
+.snav-av {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--brand);
+    color: #fff;
+    display: grid;
+    place-items: center;
+    font: 700 14px 'Bricolage Grotesque', Georgia, serif;
+    flex: none;
+}
+
+.snav-n {
+    min-width: 0;
+    line-height: 1.2;
+}
+
+.snav-n b {
+    display: block;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.snav-n small {
+    color: var(--mut);
+    font-size: 12px;
+}
+
+.snav-me > .snav-chev {
+    margin-left: auto;
+    color: var(--mut);
+    display: grid;
+}
+
+.snav-me > .snav-chev .icon {
+    width: 16px;
+    height: 16px;
+}
+
+.snav-foot .snav-pop {
+    bottom: calc(100% + 6px);
+    left: 12px;
+    right: 12px;
+}
+
+/* ---------- icon rail (collapsed, desktop) ---------- */
+.snav-side.rail .snav-t,
+.snav-side.rail .snav-cta .lbl,
+.snav-side.rail .snav-cta .snav-chev,
+.snav-side.rail .snav-gh,
+.snav-side.rail .snav-nav .lbl,
+.snav-side.rail .snav-nav .cnt,
+.snav-side.rail .snav-n,
+.snav-side.rail .snav-me > .snav-chev {
+    display: none;
+}
+
+.snav-side.rail .snav-top {
+    align-items: center;
+    padding-inline: 0;
+}
+
+.snav-side.rail .snav-brand {
+    flex-direction: column;
+    gap: 8px;
+}
+
+.snav-side.rail .snav-fold {
+    margin: 0;
+}
+
+.snav-side.rail .snav-fold .icon {
+    transform: rotate(180deg);
+}
+
+.snav-side.rail .snav-cta {
+    width: 44px;
+    justify-content: center;
+    padding: 0;
+}
+
+.snav-side.rail .snav-grp + .snav-grp {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--graph);
+}
+
+.snav-side.rail .snav-gb {
+    grid-template-rows: 1fr !important;
+}
+
+.snav-side.rail .snav-nav a,
+.snav-side.rail .snav-nav li:not(.active):hover > a {
+    padding: 10px 20px;
+    gap: 0;
+}
+
+.snav-side.rail .snav-nav a:has(.cnt:not([hidden]))::after {
+    content: "";
+    position: absolute;
+    top: 6px;
+    right: 14px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--warn);
+    box-shadow: 0 0 0 2px var(--snav-bg);
+}
+
+.snav-side.rail .snav-foot {
+    display: flex;
+    justify-content: center;
+    padding-inline: 0;
+}
+
+.snav-side.rail .snav-me {
+    width: auto;
+    padding: 4px;
+}
+
+.snav-side.rail .snav-walk .snav-pop {
+    top: 0;
+    left: calc(100% + 16px);
+    right: auto;
+    width: 250px;
+}
+
+.snav-side.rail .snav-foot .snav-pop {
+    bottom: 6px;
+    left: calc(100% + 14px);
+    right: auto;
+    width: 230px;
+}
+
+/* hover label for the icon rail (one shared element, placed by layout.js) */
+.snav-tip {
+    position: fixed;
+    z-index: 260;
+    padding: 5px 10px;
+    border-radius: 8px;
+    background: var(--glass, #1E1E24);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: 0 8px 20px #000a;
+}
+
+/* ---------- start-up placeholder (js/shared/sideSkeleton.js) ---------- */
+#sk-side .snav-side {
+    pointer-events: none;
+    user-select: none;
+}
+
+#sk-side .snav-side .sk-blk {
+    display: block;
+    border-radius: 12px;
+}
+
+#sk-side .snav-side .sk-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 40px;
+    margin: 5px 0 5px 12px;
+    padding: 0 18px;
+}
+
+#sk-side .snav-side .sk-ic {
+    width: 22px;
+    height: 20px;
+    border-radius: 6px;
+    flex: none;
+}
+
+#sk-side .snav-side.rail .sk-lb {
+    display: none;
+}
+
+/* ---------- phones: drawer ---------- */
+@media (max-width: 820px) {
+    .snav-side,
+    .snav-side.rail {
+        width: min(86vw, 320px);
+        transform: translateX(-100%);
+        transition: transform .25s var(--ease, ease);
+        will-change: transform;
+        z-index: 200;
+        border-right: 0;
+    }
+
+    .snav-side.open {
+        transform: none;
+        box-shadow: 0 0 40px #000c;
+    }
+
+    .snav-fold {
+        display: none;
+    }
+
+    .snav-x {
+        display: grid;
+        place-items: center;
+        margin-left: auto;
+        width: 36px;
+        height: 36px;
+        color: #fff;
+        border-radius: 8px;
+    }
+
+    .snav-top {
+        padding-top: 14px;
+    }
+
+    .snav-nav {
+        padding-top: 14px;
+    }
+
+    .snav-nav li {
+        margin: 3px 10px 3px 10px;
+    }
+
+    .snav-nav a {
+        border-radius: 12px;
+        color: #dcd9e2;
+        font-size: 16px;
+        padding: 13px 16px 13px 22px;
+    }
+
+    .snav-nav li:not(.active):hover > a {
+        padding-left: 22px;
+        background: #ffffff0a;
+    }
+
+    /* same as the old drawer: a soft crimson tint with white text, no curves, no hover wobble */
+    .snav-nav li.active > a {
+        background: linear-gradient(90deg, #B3202F4d 0%, #B3202F14 100%);
+        box-shadow: none;
+        font-weight: 700;
+    }
+
+    .snav-nav li.active::before,
+    .snav-nav li.active::after {
+        display: none;
+    }
+
+    .snav-nav li:hover .snav-i {
+        transform: none;
+    }
+
+    .snav-nav a::before {
+        left: 8px;
+    }
+
+    .snav-gh {
+        padding-left: 26px;
+        font-size: 13px;
+    }
+
+    .snav-tip {
+        display: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .snav-side,
+    .snav-gb,
+    .snav-cta .snav-chev,
+    .snav-gh .snav-chev,
+    .snav-nav a,
+    .snav-nav a::before,
+    .snav-i {
+        transition: none;
+    }
+}

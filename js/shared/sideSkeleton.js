@@ -6,7 +6,7 @@
    js/shared/layout.js -> injectChrome() calls  window.todSideSkeleton.remove()  right before it draws the real
    sidebar, so nothing has to be cleaned up by hand and the two never show together.
    How many rows it shows depends on who is logged in (the cached user in localStorage):
-   the owner sees 14 menu rows, staff see 10. If nobody is cached it shows the owner's 14.
+   owner and staff both see 8 menu rows (the 4 owner tools start folded).
    If the real sidebar never arrives (the page script failed) the skeleton is removed after 25 seconds,
    so it never shimmers forever.
    ===================================================================== */
@@ -17,17 +17,18 @@
     if (!body || body.getAttribute('data-role') !== 'admin')
         return;
 
-    var role = '';
-    try {
-        var u = JSON.parse(localStorage.getItem('tod_user') || 'null');   // same key as shared/session.js
-        role = (u && u.role) || '';
-    } catch (e) { /* storage blocked: show the full list */ }
-
-    var ROWS = role && role !== 'owner' ? 10 : 14;       // the owner has 4 extra tabs (studios, reports, audit log, settings)
+    var ROWS = 8;   // owner tools start folded, so owner and staff see the same 8 rows
     var W = ['58%', '72%', '64%', '80%', '52%', '68%', '60%', '76%'];   // label widths, varied so rows do not look stamped
 
+    /* the menu may be saved as collapsed (icon rail); see NAV_PREF_KEY in shared/layout.js */
+    var rail = false;
+    try {
+        var pref = JSON.parse(localStorage.getItem('tod_admin_nav') || '{}') || {};
+        rail = !!pref.rail && innerWidth > 820;
+    } catch (e) { /* storage blocked: draw it open */ }
+
     function row(i) {
-        return '<li class="sk-sd-row"><span class="sk-b sk-sd-ico"></span><span class="sk-b sk-sd-lbl" style="width:' + W[i % W.length] + '"></span></li>';
+        return '<div class="sk-row"><span class="sk-b sk-ic"></span><span class="sk-b sk-lb" style="height:12px;width:' + W[i % W.length] + '"></span></div>';
     }
     function many(n, fn) {
         var s = '';
@@ -47,14 +48,18 @@
         + '<span class="sk-b sk-mb-btn"></span>'
         + '</div>'
         /* desktop: the sidebar itself (on phones this is the closed drawer, so it is off screen) */
-        + '<aside class="pubside sk-side">'
-        + '<div class="ps-menu sk-sd-menu"><span class="sk-b sk-sd-ico"></span></div>'
-        + '<ul class="ps-links sk-sd-list">' + many(ROWS, row) + '</ul>'
-        + '<ul class="ps-links ps-auth sk-sd-list">' + many(2, function (i) { return row(i + 3); }) + '</ul>'
-        + '<div class="ps-logo sk-sd-logo"><span class="sk-b sk-sd-pic"></span><span class="sk-b sk-sd-title"></span></div>'
+        + '<aside class="snav-side sk-side' + (rail ? ' rail' : '') + '">'
+        + '<div class="snav-top">'
+        + '<div class="sk-row" style="padding:0"><span class="sk-b" style="width:36px;height:36px;border-radius:50%;flex:none"></span><span class="sk-b sk-lb" style="width:110px;height:14px"></span></div>'
+        + '<span class="sk-b sk-blk" style="height:42px"></span>'
+        + '</div>'
+        + '<div class="snav-nav">' + many(ROWS, row) + '</div>'
+        + '<div class="snav-foot"><div class="sk-row" style="height:46px"><span class="sk-b" style="width:34px;height:34px;border-radius:50%;flex:none"></span><span class="sk-b sk-lb" style="width:70px;height:12px"></span></div></div>'
         + '</aside>';
 
     body.classList.add('hasside');
+    if (rail)
+        body.classList.add('sc');   // same page margin as the real icon rail
     body.insertBefore(wrap, body.firstChild);
 
     function remove() {
