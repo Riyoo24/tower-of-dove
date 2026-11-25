@@ -5,7 +5,7 @@
    with "snav-" so nothing here touches the customer pages or the old .pubside rules.
    Layout: fixed top block (brand, New walk-in), scrolling grouped menu, fixed account footer.
    Hover and selected looks are the original sidebar's: the row slides right with a glowing accent
-   bar and a tilting icon; the selected row is the red gradient tab with curved connectors.
+   bar and a tilting icon; the selected row is the soft crimson tint with a white bar (same on desktop and phones).
    Desktop: 272px wide, or a 76px icon rail (body.sc). Phones (up to 820px): slide-in drawer.
    ===================================================================== */
 
@@ -19,7 +19,6 @@ body[data-role="admin"].sc {
 
 .snav-side {
     --snav-bg: #0B0B0D;
-    --snav-curve: 16px;   /* size of the curved connectors above and below the selected tab */
     position: fixed;
     inset: 0 auto 0 0;
     width: 272px;
@@ -237,7 +236,7 @@ body[data-role="admin"].sc {
     min-height: 0;
     overflow-x: hidden;
     overflow-y: auto;
-    padding: 10px 0 18px;   /* the curves above the first row are drawn in the list's own padding, so this stays small */
+    padding: 10px 0 18px;
     scrollbar-width: none;
 }
 
@@ -294,7 +293,7 @@ body[data-role="admin"].sc {
     display: block;
 }
 
-/* folding: the list is padded and pulled back by the same amount so the curves are not clipped when open */
+/* folding */
 .snav-gb {
     display: grid;
     grid-template-rows: 1fr;
@@ -308,24 +307,11 @@ body[data-role="admin"].sc {
 .snav-gb > ul {
     min-height: 0;
     overflow: hidden;
-    padding-block: 20px;
-    margin-block: -20px;
-    pointer-events: none;   /* the padding overlaps the group header, so only the rows take clicks */
-}
-
-.snav-gb > ul > li {
-    pointer-events: auto;
-}
-
-/* folded: drop the curve padding so no sliver of the first row shows */
-.snav-grp.closed .snav-gb > ul {
-    padding-block: 0;
-    margin-block: 0;
 }
 
 .snav-nav li {
     position: relative;
-    margin: 5px 0 5px 12px;
+    margin: 4px 10px;
 }
 
 .snav-nav a {
@@ -334,7 +320,7 @@ body[data-role="admin"].sc {
     align-items: center;
     gap: 12px;
     padding: 10px 18px;
-    border-radius: 30px 0 0 30px;
+    border-radius: 12px;
     color: #A3A1AD;
     font-weight: 600;
     font-size: 14.5px;
@@ -390,11 +376,12 @@ body[data-role="admin"].sc {
     transform: scale(1.18) rotate(-6deg);
 }
 
-/* selected: red gradient tab that reaches the sidebar edge, joined by curved connectors */
+/* selected: soft crimson tint, white text, full-height white bar. Identical on desktop and phones */
 .snav-nav li.active > a {
     color: #fff;
-    background: linear-gradient(90deg, #8E161F 0%, var(--brand) 85%);
-    box-shadow: 0 6px 20px #B3202F55;
+    background: linear-gradient(90deg, #B3202F4d 0%, #B3202F14 100%);
+    box-shadow: none;
+    font-weight: 700;
 }
 
 .snav-nav li.active > a::before {
@@ -405,28 +392,6 @@ body[data-role="admin"].sc {
 
 .snav-nav li.active .snav-i {
     animation: popIn .45s var(--ease-spring, ease);
-}
-
-.snav-nav li.active::before,
-.snav-nav li.active::after {
-    content: "";
-    position: absolute;
-    right: 0;
-    width: var(--snav-curve);
-    height: var(--snav-curve);
-    pointer-events: none;
-}
-
-.snav-nav li.active::before {
-    top: calc(-1 * var(--snav-curve));
-    border-bottom-right-radius: var(--snav-curve);
-    box-shadow: 5px 5px 0 5px var(--brand);
-}
-
-.snav-nav li.active::after {
-    bottom: calc(-1 * var(--snav-curve));
-    border-top-right-radius: var(--snav-curve);
-    box-shadow: 5px -5px 0 5px var(--brand);
 }
 
 /* the count badges are created by js/admin/index.js and filled by overview.js (updateNavBadges) */
@@ -588,7 +553,7 @@ body[data-role="admin"].sc {
 
 .snav-side.rail .snav-nav a,
 .snav-side.rail .snav-nav li:not(.active):hover > a {
-    padding: 10px 20px;
+    padding: 10px 17px;
     gap: 0;
 }
 
@@ -661,7 +626,7 @@ body[data-role="admin"].sc {
     align-items: center;
     gap: 12px;
     height: 40px;
-    margin: 5px 0 5px 12px;
+    margin: 4px 10px;
     padding: 0 18px;
 }
 
@@ -759,12 +724,7 @@ body[data-role="admin"].sc {
         padding-top: 14px;
     }
 
-    .snav-nav li {
-        margin: 3px 10px 3px 10px;
-    }
-
     .snav-nav a {
-        border-radius: 12px;
         color: #dcd9e2;
         font-size: 16px;
         padding: 13px 16px 13px 22px;
@@ -773,18 +733,6 @@ body[data-role="admin"].sc {
     .snav-nav li:not(.active):hover > a {
         padding-left: 22px;
         background: #ffffff0a;
-    }
-
-    /* same as the old drawer: a soft crimson tint with white text, no curves, no hover wobble */
-    .snav-nav li.active > a {
-        background: linear-gradient(90deg, #B3202F4d 0%, #B3202F14 100%);
-        box-shadow: none;
-        font-weight: 700;
-    }
-
-    .snav-nav li.active::before,
-    .snav-nav li.active::after {
-        display: none;
     }
 
     .snav-nav li:hover .snav-i {

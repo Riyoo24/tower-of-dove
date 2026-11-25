@@ -83,7 +83,7 @@ function draw() {
         <defs><linearGradient id="tcg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--tc);stop-opacity:.3"/><stop offset="1" style="stop-color:var(--tc);stop-opacity:0"/></linearGradient></defs>
         ${grid}${xl}
         <line class="tc-avg" x1="${PAD.l}" x2="${W - PAD.r}" y1="${y(avg)}" y2="${y(avg)}"/>
-        <text class="tc-ax" x="${PAD.l + 2}" y="${y(avg) - 5}">avg ${avg.toFixed(1)}</text>
+        <text class="tc-ax tc-avgl" x="${PAD.l + 2}" y="${y(avg) - 5}">avg ${avg.toFixed(1)}</text>
         <path d="${line}L${xs[n - 1]},${y(0)}L${xs[0]},${y(0)}Z" fill="url(#tcg)"/>
         <path class="tc-line${play ? ' draw' : ''}" pathLength="1" d="${line}"/>
         ${pts}

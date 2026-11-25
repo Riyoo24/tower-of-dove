@@ -365,7 +365,7 @@ body[data-role="admin"] .pubside:not(.collapsed) .lbl {
 .tc-plot {
     position: relative;
     height: 150px;
-    margin-top: 6px;
+    margin-top: 34px;   /* room for the date chip, which floats above the plot instead of covering the axis labels */
     border-radius: 8px;
     cursor: crosshair;
     touch-action: pan-y;
@@ -403,6 +403,13 @@ body[data-role="admin"] .pubside:not(.collapsed) .lbl {
 .tc-ax {
     fill: var(--mut);
     font-size: 12px;
+}
+
+.tc-avgl {
+    stroke: var(--surface);
+    stroke-width: 4px;
+    stroke-linejoin: round;
+    paint-order: stroke;   /* a halo in the card colour keeps the label readable where the line crosses it */
 }
 
 .tc-avg {
@@ -456,9 +463,9 @@ body[data-role="admin"] .pubside:not(.collapsed) .lbl {
 
 .tc-chip {
     position: absolute;
-    bottom: 0;
+    top: -30px;
     transform: translateX(-50%);
-    padding: 2px 8px;
+    padding: 3px 9px;
     font-size: 12px;
     font-weight: 600;
     white-space: nowrap;
@@ -466,6 +473,7 @@ body[data-role="admin"] .pubside:not(.collapsed) .lbl {
     border: 1px solid var(--line);
     border-radius: 6px;
     pointer-events: none;
+    z-index: 1;
 }
 
 .tc-stats {
@@ -520,19 +528,48 @@ body[data-role="admin"] .pubside:not(.collapsed) .lbl {
 
 @media (max-width: 640px) {
     .tc-plot {
-        height: 130px;
+        height: 150px;
+    }
+
+    .tc-tabs button {
+        min-height: 34px;   /* a finger-sized target */
+        font-size: 13px;
+    }
+
+    .tc-open {
+        padding: 4px 12px;
+    }
+
+    .tc-hd > div:first-child {
+        min-width: 0;
+        flex: 1 1 100%;
     }
 
     .tc-val {
         font-size: 24px;
     }
 
+    /* the long "Total" label gets its own full-width row; the other two share the row below */
     .tc-stats {
-        gap: 8px;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px 12px;
+    }
+
+    .tc-stats > div {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .tc-stats > div:first-child {
+        grid-column: 1 / -1;
     }
 
     .tc-stats b {
-        font-size: 13px;
+        font-size: 14px;
+    }
+
+    .tc-hd {
+        gap: 10px;
     }
 }
 
