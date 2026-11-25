@@ -79,7 +79,7 @@ export function buildAnalytics(lo, hiWanted) {
         const from = days[i], to = days[Math.min(i + (weekly ? 6 : 0), days.length - 1)];
         const v = sum(revs.filter(r => r.day >= from && r.day <= to).map(r => num(r.amount)));
         const label = shortDate(from);
-        trend.push({ label, v, tip: `${weekly ? label + ' to ' + shortDate(to) : label}: ${money(v)}` });
+        trend.push({ label, v, tip: `${weekly ? label + ' to ' + shortDate(to) : label}: ${money(v)}`, name: weekly ? `${label} to ${shortDate(to)}` : label });
     }
 
     /* ---- repeat customers: booked 2 or more times (all history loaded) ---- */
@@ -117,9 +117,22 @@ export function buildAnalytics(lo, hiWanted) {
 
     /* ---- screen ---- */
     const card = (h, body, note) => `<div class="card"><h3>${h}</h3>${note ? `<p class="mut" style="margin:2px 0 8px">${note}</p>` : ''}${body}</div>`;
+    /* the line chart needs a few points and some money; otherwise the plain bars (or "Nothing in this period") stay */
+    const revNote = `Verified payments per ${weekly ? 'week' : 'day'}, studio and equipment together.`;
+    const lineChart = trend.length > 1 && trend.some(t => t.v > 0);
+    const per = weekly ? 'week' : 'day';
+    const revenueCard = `<div class="card tc" id="rv">
+        <div class="tc-hd"><div>
+          <h3>Revenue trend</h3>
+          <p class="mut" style="margin:2px 0 0">${revNote}</p>
+          <div class="tc-row"><div class="tc-val" aria-live="polite"></div><div class="tc-d"></div></div>
+        </div></div>
+        <div class="tc-plot" tabindex="0" role="group" aria-label="Revenue per ${per} chart. Use the left and right arrow keys to move between ${per}s."></div>
+        <div class="tc-stats"><div>Average per ${per}<b></b></div><div>Best ${per}<b></b></div><div>${weekly ? 'Weeks' : 'Days'} with revenue<b></b></div></div>
+      </div>`;
     const html = `
       ${days.length ? '' : '<p class="mut" style="margin-top:16px">This period has not started yet.</p>'}
-      <div style="margin-top:16px">${card('Revenue trend', vbars(trend, money), `Verified payments per ${weekly ? 'week' : 'day'}, studio and equipment together.`)}</div>
+      <div style="margin-top:16px">${lineChart ? revenueCard : card('Revenue trend', vbars(trend, money), revNote)}</div>
       <div style="margin-top:16px">${card('Busy times', heatmap(HOURS.map(h => (h % 12 || 12) + (h < 12 ? 'a' : 'p')), WEEK.map((d, i) => ({ label: d, cells: heat[i] }))), 'Booked room-hours by weekday and start hour. Darker means busier, so the pale cells are your gaps.')}</div>
       <div class="grid ge" style="margin-top:16px">
         ${card('Studio utilisation', hbars(util.map(u => [u.name, `${u.p}% (${u.booked} of ${u.avail} h)`, u.p])), 'Booked hours divided by open hours.')}
@@ -139,5 +152,5 @@ export function buildAnalytics(lo, hiWanted) {
         { title: 'Customers in this period', head: ['Customer', 'Bookings in period', 'Bookings all time', 'Hours booked', 'Repeat customer'], rows: people.map(c => [c.name, c.n, c.all, c.hrs, c.all >= 2 ? 'Yes' : 'No']) },
         { title: 'Equipment usage', head: ['Equipment', 'Category', 'Times rented', 'Estimated income (PHP)'], rows: eq.map(x => [x.n, x.cat, x.times, Math.round(x.income * 100) / 100]) }
     ];
-    return { k, html, sections, hi };
+    return { k, html, sections, hi, revenue: lineChart ? { items: trend, unit: per } : null };
 }

@@ -6,6 +6,7 @@
 import { BK, CUS, DMG, REV, RL, STK, STU } from './data.js';
 import { KPI, bkStatus, dOf, hbs, money, num, tOf, tb, tbl } from './helpers.js';
 import { buildAnalytics, lineIncome } from './analytics.js';
+import { mountRevenueChart } from './revenueChart.js';
 import { csvDownload, plain, printSection, slug } from './export.js';
 import { openLines } from './overview.js';
 import { dueB, dueLabel, lateDays } from './rentals.js';
@@ -277,6 +278,10 @@ export function renderReports() {
         k = an.k;
         sec = an.sections;
         body = an.html;
+        post = () => {
+            if (an.revenue)
+                mountRevenueChart(an.revenue);
+        };
     } else {
         k = [
             ['Items in stock', sum(STK.map(e => e.total_quantity))],

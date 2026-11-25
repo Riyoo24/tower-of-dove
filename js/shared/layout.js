@@ -343,7 +343,7 @@ export function injectChrome() {
           <button type="button" class="snav-x" id="ps-x" aria-label="Close menu">${icon('x')}</button>
         </div>
         <div class="snav-walk">
-          <button type="button" class="snav-cta" id="snav-cta" aria-haspopup="menu" aria-expanded="false" aria-controls="snav-wpop" data-tip="New walk-in">${icon('add')}<span class="lbl">New walk-in</span><span class="snav-chev">${icon('chev')}</span></button>
+          <button type="button" class="snav-cta" id="snav-cta" aria-haspopup="menu" aria-expanded="false" aria-controls="snav-wpop" data-tip="New walk-in"><span class="snav-plus">${icon('add')}</span><span class="snav-ct"><b>New walk-in</b><small>Booking or rental</small></span><span class="snav-chev">${icon('chev')}</span></button>
           <div class="snav-pop" id="snav-wpop" role="menu" hidden>
             <a role="menuitem" href="#a-onb">${icon('cal')}<span><strong>Walk-in booking</strong><small>Book a room for someone at the desk</small></span></a>
             <a role="menuitem" href="#a-onr">${icon('box')}<span><strong>Walk-in rental</strong><small>Rent gear to take away</small></span></a>
@@ -386,8 +386,23 @@ export function injectChrome() {
         side.classList.toggle('open', open);
         $('#scrim').classList.toggle('on', open);
     };
+    // menus ease out before they are hidden (the .out class plays the exit animation, see css/adminNav.css)
+    const calm = window.matchMedia('(prefers-reduced-motion: reduce)');
     const closePops = () => {
-        $$('.snav-pop').forEach(p => { p.hidden = true; });
+        $$('.snav-pop').forEach(p => {
+            if (p.hidden || p.classList.contains('out'))
+                return;
+            if (calm.matches) {
+                p.hidden = true;
+                return;
+            }
+            p.classList.add('out');
+            clearTimeout(p._t);
+            p._t = setTimeout(() => {
+                p.classList.remove('out');
+                p.hidden = true;
+            }, 150);
+        });
         ['#snav-cta', '#adm-me'].forEach(sel => {
             const b = $(sel);
             if (b)
@@ -395,9 +410,11 @@ export function injectChrome() {
         });
     };
     const togglePop = (btn, pop) => {
-        const wasOpen = !pop.hidden;
+        const wasOpen = !pop.hidden && !pop.classList.contains('out');
         closePops();
         if (!wasOpen) {
+            clearTimeout(pop._t);
+            pop.classList.remove('out');
             pop.hidden = false;
             btn.setAttribute('aria-expanded', 'true');
         }

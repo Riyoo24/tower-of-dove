@@ -127,7 +127,9 @@ body[data-role="admin"].sc {
     display: none;
 }
 
-/* ---------- New walk-in ---------- */
+/* ---------- New walk-in ----------
+   A quiet dark action card with a red plus tile, so it reads as a button and not as a form dropdown,
+   and does not compete with the selected row below it. Same family as the account bar at the bottom. */
 .snav-walk {
     position: relative;
 }
@@ -135,37 +137,82 @@ body[data-role="admin"].sc {
 .snav-cta {
     display: flex;
     align-items: center;
-    gap: 10px;
-    height: 42px;
+    gap: 11px;
     width: 100%;
-    padding: 0 12px;
-    border-radius: 12px;
-    background: linear-gradient(90deg, #8E161F 0%, var(--brand) 85%);
+    min-height: 54px;
+    padding: 7px 12px 7px 7px;
+    border-radius: 14px;
+    background: #141418;
+    border: 1px solid var(--line, #2A2A31);
     color: #fff;
-    font-weight: 600;
-    font-size: 14.5px;
     text-align: left;
-    box-shadow: 0 6px 20px #B3202F55;
-    transition: filter .2s, transform .18s var(--ease, ease), box-shadow .25s;
+    transition: background-color .2s, border-color .2s, transform .18s var(--ease, ease);
 }
 
 .snav-cta:hover {
-    filter: brightness(1.12);
+    background: #1A1A20;
+    border-color: #B3202F99;
 }
 
 .snav-cta:active {
-    transform: scale(.98);
+    transform: scale(.985);
 }
 
 .snav-cta.here,
 .snav-cta[aria-expanded="true"] {
-    box-shadow: 0 6px 20px #B3202F55, 0 0 0 2px #FF6B7866;
+    border-color: var(--brand-hi);
+    background: #1A1A20;
+}
+
+.snav-plus {
+    width: 40px;
+    height: 40px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #C42536 0%, #8E161F 100%);
+    box-shadow: inset 0 1px 0 #ffffff33;
+    transition: transform .25s var(--ease-spring, ease);
+}
+
+.snav-plus .icon {
+    width: 20px;
+    height: 20px;
+}
+
+.snav-cta:hover .snav-plus {
+    transform: rotate(90deg);
+}
+
+.snav-ct {
+    min-width: 0;
+    line-height: 1.25;
+}
+
+.snav-ct b {
+    display: block;
+    font-size: 14.5px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.snav-ct small {
+    display: block;
+    color: var(--mut);
+    font-size: 12px;
+    white-space: nowrap;
 }
 
 .snav-cta .snav-chev {
     margin-left: auto;
     display: grid;
-    transition: transform .2s;
+    color: var(--mut);
+    transition: transform .2s, color .2s;
+}
+
+.snav-cta:hover .snav-chev {
+    color: #fff;
 }
 
 .snav-cta .snav-chev .icon {
@@ -224,10 +271,101 @@ body[data-role="admin"].sc {
     line-height: 1.35;
 }
 
+/* ---------- menu animation ----------
+   Opening: the menu fades and slides in from the side it grows out of (down from New walk-in, up from the account bar,
+   sideways in the icon rail), and its rows follow one after another. Closing: a short fade (layout.js adds .out). */
+.snav-pop {
+    --pop-x: 0px;
+    --pop-y: -8px;
+    transform-origin: 50% 0;
+}
+
+.snav-foot .snav-pop {
+    --pop-y: 8px;
+    transform-origin: 50% 100%;
+}
+
+.snav-side.rail .snav-pop {
+    --pop-x: -10px;
+    --pop-y: 0px;
+    transform-origin: 0 0;
+}
+
+.snav-side.rail .snav-foot .snav-pop {
+    transform-origin: 0 100%;
+}
+
+.snav-pop:not([hidden]) {
+    animation: snavPopIn .24s cubic-bezier(.2, .9, .25, 1) both;
+}
+
+.snav-pop.out {
+    animation: snavPopOut .15s ease-in both;
+    pointer-events: none;
+}
+
+.snav-pop:not([hidden]):not(.out) > * {
+    animation: snavPopItem .28s cubic-bezier(.2, .9, .25, 1) both;
+}
+
+.snav-pop:not([hidden]):not(.out) > :nth-child(1) {
+    animation-delay: .04s;
+}
+
+.snav-pop:not([hidden]):not(.out) > :nth-child(2) {
+    animation-delay: .09s;
+}
+
+@keyframes snavPopIn {
+    from {
+        opacity: 0;
+        transform: translate(var(--pop-x), var(--pop-y)) scale(.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes snavPopOut {
+    from {
+        opacity: 1;
+        transform: none;
+    }
+
+    to {
+        opacity: 0;
+        transform: translate(var(--pop-x), calc(var(--pop-y) * .6)) scale(.97);
+    }
+}
+
+@keyframes snavPopItem {
+    from {
+        opacity: 0;
+        transform: translateX(-6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
 .snav-walk .snav-pop {
     top: calc(100% + 8px);
     left: 0;
     right: 0;
+}
+
+.snav-walk .snav-pop .icon {
+    width: 34px;
+    height: 34px;
+    padding: 8px;
+    margin-top: 0;
+    border-radius: 9px;
+    background: #B3202F26;
+    flex: none;
 }
 
 /* ---------- grouped menu ---------- */
@@ -449,7 +587,7 @@ body[data-role="admin"].sc {
     border-radius: 12px;
     text-align: left;
     color: var(--ink);
-    transition: background-color .2s;
+    transition: background-color .2s, transform .18s var(--ease, ease);
 }
 
 .snav-me:hover,
@@ -492,6 +630,29 @@ body[data-role="admin"].sc {
     margin-left: auto;
     color: var(--mut);
     display: grid;
+    transition: transform .25s var(--ease, ease), color .2s;
+}
+
+.snav-me[aria-expanded="true"] > .snav-chev {
+    transform: rotate(180deg);   /* the menu opens upward */
+    color: #fff;
+}
+
+.snav-me:active {
+    transform: scale(.985);
+}
+
+.snav-av {
+    transition: box-shadow .25s, transform .25s var(--ease-spring, ease);
+}
+
+.snav-me:hover .snav-av,
+.snav-me[aria-expanded="true"] .snav-av {
+    box-shadow: 0 0 0 3px #B3202F55;
+}
+
+.snav-me[aria-expanded="true"] .snav-av {
+    transform: scale(1.06);
 }
 
 .snav-me > .snav-chev .icon {
@@ -507,7 +668,7 @@ body[data-role="admin"].sc {
 
 /* ---------- icon rail (collapsed, desktop) ---------- */
 .snav-side.rail .snav-t,
-.snav-side.rail .snav-cta .lbl,
+.snav-side.rail .snav-ct,
 .snav-side.rail .snav-cta .snav-chev,
 .snav-side.rail .snav-gh,
 .snav-side.rail .snav-nav .lbl,
@@ -537,8 +698,17 @@ body[data-role="admin"].sc {
 
 .snav-side.rail .snav-cta {
     width: 44px;
+    min-height: 44px;
     justify-content: center;
     padding: 0;
+    border: 0;
+    background: none;
+}
+
+.snav-side.rail .snav-plus {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
 }
 
 .snav-side.rail .snav-grp + .snav-grp {
@@ -754,6 +924,15 @@ body[data-role="admin"].sc {
 }
 
 @media (prefers-reduced-motion: reduce) {
+    .snav-pop,
+    .snav-pop > *,
+    .snav-plus,
+    .snav-av,
+    .snav-me > .snav-chev {
+        animation: none !important;
+        transition: none;
+    }
+
     .snav-side,
     .snav-gb,
     .snav-cta .snav-chev,

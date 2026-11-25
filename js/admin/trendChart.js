@@ -25,7 +25,7 @@ let range = 7, days = [], vals = [], sel = 0, pinned = null;   // pinned = the d
 let sig = '', drawnW = 0, play = true, wired = false;
 
 /* Fritsch-Carlson smoothing: a curve that never overshoots the real values (a dip below 0 would be wrong for counts) */
-function smooth(xs, ys) {
+export function smooth(xs, ys) {
     const n = xs.length, m = [], t = [];
     for (let i = 0; i < n - 1; i++)
         m[i] = (ys[i + 1] - ys[i]) / (xs[i + 1] - xs[i]);
