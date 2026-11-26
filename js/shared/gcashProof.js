@@ -262,15 +262,32 @@ export function initGcashProof(p, { ref, onChange } = {}) {
     return { file: () => input.files[0] || null, reset };
 }
 
-/* Sends the screenshot to the private bucket. Call it after the form is validated, with the final reference number. */
-export async function uploadGcashProof(file, reference) {
-    const ext = ((file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '')) || 'png';
-    const path = `${reference}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
-    const up = await sb.storage.from(PROOF_BUCKET).upload(path, file, { contentType: file.type });
-    return { error: up.error || null, path };
+/* Short fingerprint of the picture's bytes (SHA-256, first 32 hex characters). Null when the browser cannot compute it. */
+async function fingerprint(file) {
+    try {
+        const sum = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+        return [...new Uint8Array(sum)].slice(0, 16).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    catch (e) {
+        return null;
+    }
 }
 
-/* Staff: short-lived links to the screenshot(s) sent with a GCash reference (newest first). */
+/* Sends the screenshot to the private bucket. Call it after the form is validated, with the final reference number.
+   The file is uploaded BEFORE the booking or payment is saved, so when saving fails (slot taken, hold lost, bad connection)
+   and the customer presses the button again, the same picture is sent again. The file name comes from the picture's content,
+   so the second upload lands on the same name and is treated as done instead of becoming a second screenshot for staff. */
+export async function uploadGcashProof(file, reference) {
+    const ext = ((file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '')) || 'png';
+    const fp = await fingerprint(file);
+    const path = fp ? `${reference}/${fp}.${ext}` : `${reference}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+    const up = await sb.storage.from(PROOF_BUCKET).upload(path, file, { contentType: file.type });
+    const same = up.error && (String(up.error.statusCode) === '409' || /already exists|duplicate/i.test(up.error.message || ''));
+    return { error: same ? null : (up.error || null), path };
+}
+
+/* Staff: short-lived links to the screenshot(s) sent with a GCash reference (newest first).
+   Files with identical content count once, so duplicates uploaded before the fix above do not show twice. */
 export async function listGcashProofs(reference) {
     if (!reference)
         return [];
@@ -278,8 +295,14 @@ export async function listGcashProofs(reference) {
     const { data: files, error } = await bucket.list(reference, { limit: 10, sortBy: { column: 'created_at', order: 'desc' } });
     if (error || !files || !files.length)
         return [];
-    const out = [];
+    const seen = new Set(), out = [];
     for (const f of files.filter(x => x.name)) {
+        const md = f.metadata || {}, key = md.eTag ? 'e' + md.eTag : null;   // eTag = checksum of the content
+        if (key) {
+            if (seen.has(key))
+                continue;
+            seen.add(key);
+        }
         const { data: s } = await bucket.createSignedUrl(`${reference}/${f.name}`, 600);
         if (s)
             out.push(s.signedUrl);
