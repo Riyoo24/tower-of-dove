@@ -61,13 +61,13 @@ function toolbar() {
     const span = oneDay() ? longDate(day) : `${shortDate(mondayOf(day))} to ${shortDate(addDays(mondayOf(day), 6))}`;
     return `<div class="cal-bar no-print">
       <div class="cal-nav">
-        <button class="btn sm line" data-cal="prev" aria-label="Previous ${oneDay() ? 'day' : 'week'}">&#8249;</button>
+        <button class="btn sm line cal-ic" data-cal="prev" aria-label="Previous ${oneDay() ? 'day' : 'week'}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
         <button class="btn sm line" data-cal="today">Today</button>
-        <button class="btn sm line" data-cal="next" aria-label="Next ${oneDay() ? 'day' : 'week'}">&#8250;</button>
+        <button class="btn sm line cal-ic" data-cal="next" aria-label="Next ${oneDay() ? 'day' : 'week'}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
         <input type="date" id="cal-date" value="${day}" aria-label="Jump to date">
       </div>
-      <div class="tabs" style="margin:0" aria-label="Calendar type"><button data-cal-mode="rooms" class="${mode === 'rooms' ? 'on' : ''}">Rooms</button><button data-cal-mode="equipment" class="${mode === 'equipment' ? 'on' : ''}">Equipment</button></div>
-      <div class="tabs" style="margin:0"><button data-cal-view="day" class="${view === 'day' ? 'on' : ''}">Day</button><button data-cal-view="week" class="${view === 'week' ? 'on' : ''}">Week</button></div>
+      <div class="tabs cal-seg" role="group" aria-label="Calendar type"><button data-cal-mode="rooms" class="${mode === 'rooms' ? 'on' : ''}">Rooms</button><button data-cal-mode="equipment" class="${mode === 'equipment' ? 'on' : ''}">Equipment</button></div>
+      <div class="tabs cal-seg" role="group" aria-label="Calendar view"><button data-cal-view="day" class="${view === 'day' ? 'on' : ''}">Day</button><button data-cal-view="week" class="${view === 'week' ? 'on' : ''}">Week</button></div>
       <button class="btn sm line" data-cal="print" title="Opens the print window. Choose Save as PDF as the printer.">Print / PDF</button>
     </div>
     <div class="row cal-title" style="justify-content:flex-start;gap:14px"><h2>${esc(span)}</h2>${mode === 'rooms' ? legend : equipLegend(eqShow)}</div>`;
