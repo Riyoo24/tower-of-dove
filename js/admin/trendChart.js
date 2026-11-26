@@ -10,7 +10,8 @@
    Pointing at a day only previews it; when the mouse leaves, the chart goes back to today. Click (or tap, or use the arrow keys)
    to keep a day chosen (click it again or press Escape to let go). The owner's "Open report" link then opens Reports comparing
    the chosen day with the day before it (reports.js, setReportCompare).
-   Styles: css/admin.css (the ".tc" block). Colours follow the site variables.
+   Styles: css/admin.css (the ".tc" block); the draw-in (area and points wipe in with the line, the marker fades in after it)
+   is in css/overview-motion.css and only runs when the line carries .draw. Colours follow the site variables.
    ===================================================================== */
 
 import { BK, RL } from './data.js';
@@ -85,11 +86,11 @@ function draw() {
         ${grid}${xl}
         <line class="tc-avg" x1="${PAD.l}" x2="${W - PAD.r}" y1="${y(avg)}" y2="${y(avg)}"/>
         <text class="tc-ax tc-avgl" x="${PAD.l + 2}" y="${y(avg) - 5}">avg ${avg.toFixed(1)}</text>
-        <path d="${line}L${xs[n - 1]},${y(0)}L${xs[0]},${y(0)}Z" fill="url(#tcg)"/>
+        <g class="tc-rev"><path d="${line}L${xs[n - 1]},${y(0)}L${xs[0]},${y(0)}Z" fill="url(#tcg)"/></g>
         <path class="tc-line${play ? ' draw' : ''}" pathLength="1" d="${line}"/>
-        ${pts}
-        <line class="tc-cl" id="tc-cl" y1="${PAD.t}" y2="${H - PAD.b}"/>
-        <circle class="tc-pulse" id="tc-pu" r="9"/><circle class="tc-dot" id="tc-dot" r="5"/></svg>
+        <g class="tc-rev">${pts}</g>
+        <g class="tc-cur"><line class="tc-cl" id="tc-cl" y1="${PAD.t}" y2="${H - PAD.b}"/>
+        <circle class="tc-pulse" id="tc-pu" r="9"/><circle class="tc-dot" id="tc-dot" r="5"/></g></svg>
         <div class="tc-chip" id="tc-chip"></div>`;
     drawnW = W;
     play = false;

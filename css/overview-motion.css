@@ -8,8 +8,9 @@
    - One short intro (about 1.3 s) when the real data arrives and the
      grey loading shapes are swapped for the real content. It runs as a
      cascade from the top of the page to the bottom: number cards, then the
-     bookings chart, equipment returns, studios and Needs attention. Each
-     section starts a beat after the one above it.
+     bookings chart (frame, then line and area wipe in left to right, then the
+     "today" marker and the totals), equipment returns, studios and Needs
+     attention. Each section starts a beat after the one above it.
    - After that, motion only shows that something changed: a studio with a
      live session, or a number that changed on refresh. No looping effects
      on numbers or text.
@@ -102,7 +103,7 @@
 @media (prefers-reduced-motion: no-preference) {
 
     /* the old entrances (motion.css) replayed on every refresh; now they play only during the intro */
-    #a-over:not(.ov-play) :is(.bars i, .kpi .num) {
+    #a-over:not(.ov-play) .kpi .num {
         animation: none;
     }
 
@@ -115,7 +116,7 @@
        The page reads in order, so it loads in order. Each section has a start time (--g-*), and the items
        inside it follow one after another (--i = position, --step = gap). A section never starts before the
        one above it, so the eye is led down the page:
-         1 number cards -> 2 bookings chart -> 3 equipment returns -> 4 studios -> 5 needs attention
+         1 number cards -> 2 bookings chart (its own timeline below) -> 3 equipment returns -> 4 studios -> 5 needs attention
        Change the five --g-* values to retime a whole section. The last item lands at about 1.5 s. */
     #a-over.ov-play {
         --g-kpi: 0ms;
@@ -126,23 +127,22 @@
     }
 
     #a-over.ov-play #ovk  { --g: var(--g-kpi);  --step: 55ms; }
-    #a-over.ov-play #bars { --g: var(--g-bars); --step: 45ms; }
     #a-over.ov-play #rkpi { --g: var(--g-ret);  --step: 55ms; }
     #a-over.ov-play #ost  { --g: var(--g-stu);  --step: 55ms; }
     #a-over.ov-play #ovl  { --g: var(--g-att);  --step: 45ms; }
 
     /* position inside the section (0 = first) */
-    #a-over.ov-play :is(#ovk, #bars, #rkpi, #ost, #ovl) > :nth-child(1) { --i: 0; }
-    #a-over.ov-play :is(#ovk, #bars, #rkpi, #ost, #ovl) > :nth-child(2) { --i: 1; }
-    #a-over.ov-play :is(#ovk, #bars, #rkpi, #ost, #ovl) > :nth-child(3) { --i: 2; }
-    #a-over.ov-play :is(#ovk, #bars, #rkpi, #ost, #ovl) > :nth-child(4) { --i: 3; }
-    #a-over.ov-play :is(#ovk, #bars, #rkpi, #ost, #ovl) > :nth-child(5) { --i: 4; }
-    #a-over.ov-play :is(#ovk, #bars, #rkpi, #ost, #ovl) > :nth-child(6) { --i: 5; }
-    #a-over.ov-play :is(#ovk, #bars, #rkpi, #ost, #ovl) > :nth-child(7) { --i: 6; }
-    #a-over.ov-play :is(#ovk, #bars, #rkpi, #ost, #ovl) > :nth-child(n+8) { --i: 7; }
+    #a-over.ov-play :is(#ovk, #rkpi, #ost, #ovl) > :nth-child(1) { --i: 0; }
+    #a-over.ov-play :is(#ovk, #rkpi, #ost, #ovl) > :nth-child(2) { --i: 1; }
+    #a-over.ov-play :is(#ovk, #rkpi, #ost, #ovl) > :nth-child(3) { --i: 2; }
+    #a-over.ov-play :is(#ovk, #rkpi, #ost, #ovl) > :nth-child(4) { --i: 3; }
+    #a-over.ov-play :is(#ovk, #rkpi, #ost, #ovl) > :nth-child(5) { --i: 4; }
+    #a-over.ov-play :is(#ovk, #rkpi, #ost, #ovl) > :nth-child(6) { --i: 5; }
+    #a-over.ov-play :is(#ovk, #rkpi, #ost, #ovl) > :nth-child(7) { --i: 6; }
+    #a-over.ov-play :is(#ovk, #rkpi, #ost, #ovl) > :nth-child(n+8) { --i: 7; }
 
     /* the moment each item starts (read by the rules below and by overviewMotion.js for the count-up) */
-    #a-over.ov-play :is(#ovk, #bars, #rkpi, #ost, #ovl) > * {
+    #a-over.ov-play :is(#ovk, #rkpi, #ost, #ovl) > * {
         --d: calc(var(--g) + var(--i) * var(--step));
     }
 
@@ -181,19 +181,65 @@
         padding: 8px 8px;
     }
 
-    /* the chart: the bars grow up from the baseline one after another, left to right (as in the original) */
-    #a-over.ov-play .bars i {
-        animation: growY .6s var(--ease) var(--d) backwards;
-    }
-
-    /* the count and the date under each bar wait for their bar (they used to show at once, before the cards above) */
-    #a-over.ov-play .bars > div {
-        animation: ovFade .3s ease var(--d) backwards;
-    }
-
     /* every number rolls up into place just after its own card arrives (zeros cannot count up, so they roll too) */
     #a-over.ov-play .kpi .num {
         animation: ovNum .5s var(--ease) calc(var(--d) + 80ms) backwards;
+    }
+
+    /* ---- the bookings chart: frame -> line and area -> "today" marker -> totals ----
+       The card shell stays put (so there is no blank gap); what is inside it arrives in order, starting at --g-bars.
+       --tc-delay / --tc-dur time the line, the area and the points together, so they wipe in as one shape.
+       Outside the intro (a 7D / 30D / 3M or Bookings / Rentals switch) the variables are unset, so it redraws at once and quicker. */
+    #a-over.ov-play #tc {
+        --tc-delay: calc(var(--g-bars) + 120ms);
+        --tc-dur: .7s;
+    }
+
+    #a-over.ov-play #tc .tc-hd {
+        animation: ovIn .45s var(--ease) var(--g-bars) backwards;
+    }
+
+    #a-over.ov-play #tc #bars svg {
+        animation: ovFade .35s ease var(--g-bars) backwards;
+    }
+
+    #a-over.ov-play #tc .tc-stats {
+        animation: ovIn .45s var(--ease) calc(var(--g-bars) + 300ms) backwards;
+    }
+
+    /* the line (dash draw, admin.css) gets the shared timing; the area and the points are revealed with the same clip */
+    .tc-line.draw {
+        animation: tcDraw var(--tc-dur, .45s) var(--ease) var(--tc-delay, 0ms) forwards;
+    }
+
+    #tc:has(.tc-line.draw) .tc-rev {
+        animation: tcWipe var(--tc-dur, .45s) var(--ease) var(--tc-delay, 0ms) backwards;
+    }
+
+    /* the crosshair, the pulsing dot and the date chip appear as the line reaches today */
+    #tc:has(.tc-line.draw) :is(.tc-cur, .tc-chip) {
+        animation: ovFade .25s ease calc(var(--tc-delay, 0ms) + var(--tc-dur, .45s) - 120ms) backwards;
+    }
+
+    /* the two headings above the equipment and studio cards arrive with their cards */
+    #a-over.ov-play h2:has(+ #rkpi) {
+        animation: ovIn .45s var(--ease) var(--g-ret) backwards;
+    }
+
+    #a-over.ov-play h2:has(+ #ost) {
+        animation: ovIn .45s var(--ease) var(--g-stu) backwards;
+    }
+
+    /* ---- feedback ---- */
+
+    /* a card that opens another tab is pressed in on click (it lifts on hover, motion.css) */
+    .card.go:active {
+        transform: scale(.98);
+        transition-duration: .12s;
+    }
+
+    .tc-tabs button:active {
+        transform: scale(.97);
     }
 
     /* ---- motion that carries meaning ---- */
@@ -235,6 +281,11 @@
         from { opacity: 0; transform: translateY(8px); }
     }
 
+    @keyframes tcWipe {
+        from { clip-path: inset(-4px 100% -4px -4px) fill-box; }
+        to   { clip-path: inset(-4px -4px -4px -4px) fill-box; }
+    }
+
     @keyframes ovLamp {
         0% { box-shadow: 0 0 0 0 #E23B4E99; }
         100% { box-shadow: 0 0 0 9px #E23B4E00; }
@@ -242,5 +293,21 @@
 
     @keyframes ovFlash {
         from { border-color: var(--accent); box-shadow: 0 0 0 3px #E23B4E40; }
+    }
+}
+
+/* the range / kind tabs: the pressed pill eases between buttons (colour only, so it also runs for reduced motion) */
+.tc-tabs button {
+    transition: color .15s ease, background-color .15s ease, box-shadow .15s ease, transform .16s var(--ease);
+}
+
+/* reduced motion: no wipe or lift, just a short fade when the chart is drawn */
+@media (prefers-reduced-motion: reduce) {
+    #tc:has(.tc-line.draw) .tc-plot svg {
+        animation: tcFade .25s ease backwards;
+    }
+
+    @keyframes tcFade {
+        from { opacity: 0; }
     }
 }
