@@ -95,10 +95,16 @@
                                         <div class="tc-d" id="tc-d"></div>
                                     </div>
                                 </div>
-                                <div class="tc-tabs" role="group" aria-label="Date range">
-                                    <button type="button" data-r="7" aria-pressed="true">7D</button>
-                                    <button type="button" data-r="30" aria-pressed="false">30D</button>
-                                    <button type="button" data-r="90" aria-pressed="false">3M</button>
+                                <div class="tc-ctl">
+                                    <div class="tc-tabs" role="group" aria-label="What to chart">
+                                        <button type="button" data-k="bookings" aria-pressed="true">Bookings</button>
+                                        <button type="button" data-k="rentals" aria-pressed="false">Rentals</button>
+                                    </div>
+                                    <div class="tc-tabs" role="group" aria-label="Date range">
+                                        <button type="button" data-r="7" aria-pressed="true">7D</button>
+                                        <button type="button" data-r="30" aria-pressed="false">30D</button>
+                                        <button type="button" data-r="90" aria-pressed="false">3M</button>
+                                    </div>
                                 </div>
                             </div>
                             <div class="tc-plot" id="bars" tabindex="0" role="group" aria-label="Bookings per day chart. Use the left and right arrow keys to move between days."></div>

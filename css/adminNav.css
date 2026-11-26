@@ -548,9 +548,11 @@ body[data-role="admin"].sc {
     font-variant-numeric: tabular-nums;
 }
 
+/* selected row: the badge keeps its amber colours (it used to turn near-black here, which hid it on the crimson tint) */
 .snav-nav li.active .cnt {
-    background: #00000047;
-    color: #fff;
+    background: var(--warn-bg);
+    color: var(--warn);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--warn) 45%, transparent);
 }
 
 @media (prefers-reduced-motion: no-preference) {

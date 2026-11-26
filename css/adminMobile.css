@@ -287,7 +287,8 @@
 
     #cal .cal-bar {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        /* "Rooms | Equipment" needs more room than "Day | Week" */
+        grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
         gap: 10px;
         align-items: stretch;
     }
@@ -301,13 +302,18 @@
         display: none;
     }
 
-    /* a segmented control: one rounded track, the chosen option filled */
-    #cal .cal-bar > .tabs {
+    /* a segmented control: one rounded track, the chosen option filled.
+       "#admin .tabs" (pill filters, above) forces negative side margins with !important so pills run flush with the gutter.
+       A segmented control must stay INSIDE the gutter, so these margins are forced back to zero; without that the two
+       controls bled past the page edge, ran into each other and clipped "Equipment". */
+    #admin #cal .cal-bar > .tabs {
         display: grid;
         grid-auto-flow: column;
         grid-auto-columns: minmax(0, 1fr);
         gap: 2px;
+        min-width: 0;
         overflow: visible;
+        margin: 0 !important;
         padding: 3px !important;
         background: var(--dove);
         border: 1px solid var(--line);
@@ -316,17 +322,20 @@
         mask-image: none;
     }
 
-    #cal .cal-bar > .tabs button {
-        min-height: 38px;
-        padding-inline: 6px;
-        font-size: 14px;
+    #admin #cal .cal-bar > .tabs button {
+        min-width: 0;
+        min-height: 40px;
+        padding-inline: 2px;
+        font-size: 13.5px;
         border: 0;
         border-radius: 9px;
         background: transparent;
         color: var(--mut);
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
-    #cal .cal-bar > .tabs button.on {
+    #admin #cal .cal-bar > .tabs button.on {
         background: var(--brand);
         color: #fff;
     }
@@ -335,7 +344,65 @@
         gap: 8px 14px;
     }
 
+    #cal .cal-title h2 {
+        flex: 1 1 100%;
+    }
+
+    /* colour key: an even grid instead of a ragged wrap that strands "Free" on its own line */
     #cal .cal-legend {
-        gap: 6px 12px;
+        flex: 1 1 100%;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+        gap: 6px 10px;
+        font-size: 12px;
+    }
+
+    #cal .cal-legend span {
+        min-width: 0;
+        white-space: nowrap;
+    }
+
+    #cal .cal-legend i {
+        flex: none;
+    }
+
+    /* room day view: studio columns snap into place while swiping, and the hour column stays in view.
+       Names and counts shorten with an ellipsis instead of spilling into the next column. */
+    #cal .cal-scroll {
+        scroll-snap-type: x proximity;
+        scroll-padding-left: 46px;
+        overscroll-behavior-x: contain;
+    }
+
+    #cal .cal-day .cal-col {
+        scroll-snap-align: start;
+    }
+
+    #cal .cal-colh b,
+    #cal .cal-colh span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* the tip about dragging is for a mouse; on a phone a tap on a booking opens it */
+    #cal .cal-scroll {
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
+/* very small phones (320px and under): the tabs get a little tighter and the legend drops to two columns */
+@media (max-width: 360px) {
+
+    #admin #cal .cal-bar > .tabs button {
+        font-size: 13px;
+    }
+
+    #cal .cal-legend {
+        grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    }
+
+    #cal .cal-nav .btn {
+        padding-inline: 10px;
     }
 }

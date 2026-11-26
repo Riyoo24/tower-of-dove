@@ -331,6 +331,15 @@ body[data-role="admin"] .pubside:not(.collapsed) .lbl {
     border-color: var(--line-strong);
 }
 
+/* the Bookings / Rentals switch and the date range sit together, top right */
+.tc-ctl {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+}
+
 .tc-tabs {
     display: flex;
     gap: 2px;
@@ -570,6 +579,12 @@ body[data-role="admin"] .pubside:not(.collapsed) .lbl {
 
     .tc-hd {
         gap: 10px;
+    }
+
+    /* Bookings / Rentals and the date range: full width, one under the other */
+    .tc-ctl {
+        width: 100%;
+        justify-content: stretch;
     }
 }
 

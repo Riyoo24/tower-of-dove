@@ -5,7 +5,7 @@
    (cancelled and rejected ones are left out, same as the old bars) into #bars, with:
    - a big number and a up/down change against the day before, like a stock quote,
    - a crosshair that follows the mouse or finger (and the arrow keys) and updates the number,
-   - 7D / 30D / 3M tabs, all read from the bookings already loaded (BK),
+   - 7D / 30D / 3M tabs, and a Bookings / Rentals switch (rentals = rental orders, counted once per order, on the day they start), all read from the data already loaded (BK, RL),
    - a small summary row (total, busiest day, trend). The line is always the brand red.
    Pointing at a day only previews it; when the mouse leaves, the chart goes back to today. Click (or tap, or use the arrow keys)
    to keep a day chosen (click it again or press Escape to let go). The owner's "Open report" link then opens Reports comparing
@@ -13,15 +13,16 @@
    Styles: css/admin.css (the ".tc" block). Colours follow the site variables.
    ===================================================================== */
 
-import { BK } from './data.js';
+import { BK, RL } from './data.js';
 import { OWNER, dOf } from './helpers.js';
 import { $, TODAY, dayOffset, pl, shortDate, sum } from '../shared/utils.js';
 
 const RANGES = { 7: 'last 7 days', 30: 'last 30 days', 90: 'last 3 months' };
 const PAD = { l: 8, r: 26, t: 8, b: 22 };
+const noun = () => kind === 'rentals' ? 'rental' : 'booking';
 const longDay = iso => new Date(iso + 'T00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 
-let range = 7, days = [], vals = [], sel = 0, pinned = null;   // pinned = the day kept by a click (index), null = follow the pointer
+let range = 7, kind = 'bookings', days = [], vals = [], sel = 0, pinned = null;   // pinned = the day kept by a click (index), null = follow the pointer
 let sig = '', drawnW = 0, play = true, wired = false;
 
 /* Fritsch-Carlson smoothing: a curve that never overshoots the real values (a dip below 0 would be wrong for counts) */
@@ -117,10 +118,10 @@ function place(i) {
         const w = chip.offsetWidth / 2;
         chip.style.left = Math.min(Math.max(px, w + 2), g.W - w - 2) + 'px';
     }
-    $('#tc-v').innerHTML = `${v}<small>${v === 1 ? 'booking' : 'bookings'} ${days[i] === TODAY ? 'today' : 'on ' + shortDate(days[i])}</small>`;
+    $('#tc-v').innerHTML = `${v}<small>${v === 1 ? noun() : noun() + 's'} ${days[i] === TODAY ? 'today' : 'on ' + shortDate(days[i])}</small>`;
     /* the owner's link opens Reports comparing this day with the day before it (also for the first day of the range) */
     const prev = dayOffset(i - range);
-    const dl = $('#tc-d'), open = OWNER ? `<button type="button" class="tc-open" data-go="rc:${prev},${days[i]}" title="Compare ${shortDate(prev)} with ${shortDate(days[i])}">Open report</button>` : '';
+    const dl = $('#tc-d'), open = OWNER && kind === 'bookings' ? `<button type="button" class="tc-open" data-go="rc:${prev},${days[i]}" title="Compare ${shortDate(prev)} with ${shortDate(days[i])}">Open report</button>` : '';
     if (i === 0) {
         dl.className = 'tc-d';
         dl.innerHTML = `<span>First day in this range</span>${open}`;
@@ -137,7 +138,7 @@ function place(i) {
 function summary() {
     const n = vals.length, tot = sum(vals), mx = Math.max(...vals), mi = vals.lastIndexOf(mx);
     const h = Math.floor(n / 2), a = sum(vals.slice(0, h)), b = sum(vals.slice(n - h));
-    $('#tc-s1').textContent = pl(tot, 'booking');
+    $('#tc-s1').textContent = pl(tot, noun());
     $('#tc-s2').textContent = mx ? `${shortDate(days[mi])} (${mx})` : 'None';
     $('#tc-s3').textContent = a > 0 ? `${b >= a ? '\u25B2 +' : '\u25BC \u2212'}${Math.round(Math.abs(b - a) / a * 100)}%` : b > 0 ? `\u25B2 +${b}` : 'No change';
 }
@@ -182,11 +183,15 @@ function wire() {
         pinned = Math.max(0, Math.min(n - 1, i));   // the arrow keys keep the day they land on
         place(pinned);
     });
+    /* two groups of tabs: data-r = date range, data-k = what is counted */
     document.querySelectorAll('#tc .tc-tabs button').forEach(b => b.addEventListener('click', () => {
-        range = +b.dataset.r;
+        if (b.dataset.k)
+            kind = b.dataset.k;
+        else
+            range = +b.dataset.r;
         sig = '';
         play = true;
-        document.querySelectorAll('#tc .tc-tabs button').forEach(x => x.setAttribute('aria-pressed', x === b));
+        b.parentElement.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
         renderTrend();
     }));
     /* the Overview may be hidden when the data arrives (width 0), and the width changes with the window and the sidebar */
@@ -202,21 +207,38 @@ export function renderTrend() {
         wire();
     days = Array.from({ length: range }, (_, i) => dayOffset(i - (range - 1)));
     const by = {};
-    BK.forEach(b => {
-        if (!['Cancelled', 'Rejected'].includes(b.status)) {
-            const d = dOf(b.start_at);
-            by[d] = (by[d] || 0) + 1;
-        }
-    });
+    if (kind === 'rentals') {
+        /* one count per rental order (an order can have several item lines), on the day it starts:
+           the pick-up time of an outside rental, the session start of the booking an add-on belongs to (same rule as the Rentals tab) */
+        const seen = new Set();
+        RL.forEach(l => {
+            if (seen.has(l.rental_ref) || ['Cancelled', 'Rejected'].includes(l.status))
+                return;
+            seen.add(l.rental_ref);
+            const b = l.rental_type === 'Add-on' && l.booking_ref ? BK.find(x => x.booking_ref === l.booking_ref) : null;
+            const t = (b && b.start_at) || l.pickup_date || l.created_at;
+            if (t) {
+                const d = dOf(t);
+                by[d] = (by[d] || 0) + 1;
+            }
+        });
+    } else {
+        BK.forEach(b => {
+            if (!['Cancelled', 'Rejected'].includes(b.status)) {
+                const d = dOf(b.start_at);
+                by[d] = (by[d] || 0) + 1;
+            }
+        });
+    }
     vals = days.map(d => by[d] || 0);
-    const s = range + '|' + TODAY + '|' + vals.join(',');
+    const s = kind + '|' + range + '|' + TODAY + '|' + vals.join(',');
     const same = s === sig;
     sig = s;
     if (!same) {
         sel = vals.length - 1;
         pinned = null;
     }
-    $('#tc-t').textContent = 'Bookings over the ' + RANGES[range];
+    $('#tc-t').textContent = (kind === 'rentals' ? 'Rentals' : 'Bookings') + ' over the ' + RANGES[range];
     summary();
     /* a silent refresh with the same numbers: leave the chart (and where the pointer is) alone */
     if (same && drawnW && drawnW === $('#bars').clientWidth && $('#bars svg')) {
