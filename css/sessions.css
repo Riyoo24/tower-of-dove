@@ -1,0 +1,243 @@
+/* =====================================================================
+   sessions.css - Studio sessions tab (admin). Markup: js/admin/sessions.js
+   One card layout for every state: studio + status pill, customer, time, tags, time line with its bar, buttons.
+   Colour and the status text change together, so state never relies on colour alone.
+   ===================================================================== */
+
+/* the studio cards: one column, stacked */
+#admin .ss-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+#admin .ss-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    padding: 14px 18px;
+    min-width: 0;
+}
+
+#admin .ss-head,
+#admin .ss-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+#admin .ss-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+#admin .ss-title h3 {
+    margin: 0;
+    font-size: 17px;
+    line-height: 1.2;
+}
+
+/* lamp: same colours as the Overview studio cards. Red = a session is running, green = nothing running, grey = not taking bookings */
+#admin .ss-lamp {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--ok);
+}
+
+#admin .ss-lamp.run {
+    background: var(--accent);
+}
+
+#admin .ss-lamp.off {
+    background: var(--mut);
+}
+
+#admin .ss-lamp.run.pulse {
+    animation: ssPulse 1.8s ease-out infinite;
+}
+
+@keyframes ssPulse {
+    from { box-shadow: 0 0 0 0 #E23B4E99; }
+    to { box-shadow: 0 0 0 9px #E23B4E00; }
+}
+
+#admin .ss-who {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+#admin .ss-cust {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+#admin .ss-cust.none {
+    font-weight: 500;
+    color: var(--mut);
+}
+
+#admin .ss-when,
+#admin .ss-sub,
+#admin .ss-note {
+    color: var(--mut);
+}
+
+#admin .ss-when {
+    font-size: 13px;
+}
+
+#admin .ss-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+/* tags and the status pill are the site's own .b badges (components.css); this only makes the tags a little smaller */
+#admin .ss-tag {
+    padding: 2px 9px;
+    font-size: 12px;
+}
+
+#admin .ss-note {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+#admin .ss-time {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 2px;
+}
+
+#admin .ss-line {
+    align-items: baseline;
+    flex-wrap: wrap;
+}
+
+#admin .ss-status {
+    color: var(--ink);
+    font-size: 16px;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+}
+
+/* only the release countdown and Over time use colour, as on the old cards */
+#admin .ss-s-warn { color: var(--warn); }
+#admin .ss-s-bad { color: var(--bad); }
+
+#admin .ss-sub {
+    font-size: 12.5px;
+}
+
+#admin .ss-bar {
+    height: 6px;
+    border-radius: 99px;
+    background: var(--dove);
+    overflow: hidden;
+}
+
+#admin .ss-bar i {
+    display: block;
+    height: 100%;
+    border-radius: 99px;
+    background: var(--brand);
+}
+
+/* over time: striped, so it differs from "ending soon" without relying on colour */
+#admin .ss-bar.stripe i {
+    background: repeating-linear-gradient(135deg, var(--brand-hi) 0 7px, var(--brand-lo) 7px 14px);
+}
+
+#admin .ss-ends {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--mut);
+    font-variant-numeric: tabular-nums;
+}
+
+#admin .ss-foot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 2px;
+}
+
+#admin .ss-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 34px;
+    margin: 0;
+    padding: 0 14px;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+#admin .ss-btn:focus-visible {
+    outline: 2px solid var(--bad);
+    outline-offset: 2px;
+}
+
+#admin .ss-menu {
+    margin-left: auto;
+}
+
+#admin .ss-dots {
+    display: none;
+}
+
+/* phone: buttons share the row, the Actions menu is a dots button */
+@media (max-width: 600px) {
+    #admin .ss-card {
+        padding: 12px 14px;
+    }
+
+    #admin .ss-title h3 {
+        font-size: 16px;
+    }
+
+    #admin .ss-foot {
+        flex-wrap: nowrap;
+    }
+
+    #admin .ss-foot .ss-btn:not(.ss-menu) {
+        flex: 1;
+    }
+
+    #admin .ss-menu {
+        flex: none;
+        width: 40px;
+        padding: 0;
+    }
+
+    #admin .ss-menu-t,
+    #admin .ss-caret {
+        display: none;
+    }
+
+    #admin .ss-dots {
+        display: block;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #admin .ss-lamp.run.pulse {
+        animation: none;
+    }
+}
