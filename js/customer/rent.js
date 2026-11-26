@@ -23,7 +23,7 @@ import { HOLD_TOKEN, holdEquipment, releaseHold } from '../shared/holds.js';
 import { CUSTOMER_HOLD_TTL, CUSTOMER_IDLE_TTL, holdCountdown } from '../shared/holdTimer.js';
 import { receiptSending, sendReceipt, showReceiptResult } from '../shared/receipt.js';
 import { btnBusy, btnReset, btnSuccess } from '../shared/btnState.js';
-import { applyChecks, check, clearFieldErrors, liveCheck } from '../shared/fieldCheck.js';
+import { applyChecks, check, clearFieldError, clearFieldErrors, liveCheck, setFieldError } from '../shared/fieldCheck.js';
 import { emptyState } from '../shared/emptyState.js';
 import {
     $,
@@ -444,11 +444,13 @@ function updateRequestButton() {
 /* The rules of the checkout form. Each is [field, () => message]; they are used when a field is left and when the request is sent. */
 const AGREE_MSG = 'Please tick the box to confirm you agree to the rental terms.';
 const SHOT_MSG = 'Attach a screenshot of your GCash payment.';
+const sameNumber = (a, b) => { const d = v => String(v).replace(/\D/g, ''); return !!d(a) && d(a) === d(b); };   // spaces and dashes are ignored
 const rules = {
     fn: ['#on-fn', () => check.first($('#on-fn').value)],
     ln: ['#on-ln', () => check.last($('#on-ln').value)],
     contact: ['#oc', () => check.phone($('#oc').value, 'contact number')],
-    backup: ['#sm-link', () => check.phone($('#sm-link').value, 'backup contact number')],
+    backup: ['#sm-link', () => check.phone($('#sm-link').value, 'backup contact number')
+        || (sameNumber($('#sm-link').value, $('#oc').value) ? 'The backup contact number must be different from your contact number.' : '')],
     id: ['#vf', () => check.file($('#vf').files[0], 'Attach a valid ID.')],
     outShot: ['#og-ss', () => check.file(proofs.og.file(), SHOT_MSG)],
     outRef: ['#og', () => check.gcashRef($('#og').value)],
@@ -945,6 +947,13 @@ export function initRentTab() {
     });
     setupProofs();
     liveCheck(Object.values(rules));   // fields are checked when left, and again while a mistake is being fixed
+    // the backup number depends on the contact number: re-check it when the contact number changes
+    ['input', 'blur'].forEach(ev => $('#oc').addEventListener(ev, () => {
+        if ($('#sm-link').value.trim() === '')
+            return;
+        const msg = rules.backup[1]();
+        msg ? setFieldError(rules.backup[0], msg) : clearFieldError(rules.backup[0]);
+    }));
     $('#vf').addEventListener('change', () => {
         updateIdPreview();
         updateRequestButton();
