@@ -130,6 +130,10 @@
     border-radius: 8px;
     cursor: pointer;
     font-weight: 600;
+    /* labels stay centred and evenly spaced even if a button ever has to wrap (never squeezed text hugging one edge) */
+    font-family: inherit;
+    line-height: 1.3;
+    text-align: center;
 }
 
 .btn:hover:not(:disabled) {
@@ -170,10 +174,14 @@
 }
 
 .btn.sm {
-    padding: 3px 10px;
+    padding: 5px 12px;
     font-size: 13px;
     font-weight: 500;
     margin-right: 4px;
+    /* small buttons carry short labels ("View before photo"): keep them on one line and never let a
+       flex row squash them narrower than their text, which is what made the label break in two */
+    white-space: nowrap;
+    flex: 0 0 auto;
 }
 
 .btn.line {
@@ -938,13 +946,47 @@ table.grouped .sub-row.strike .subtxt {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    flex-wrap: wrap;
+    gap: 8px 12px;
     padding: 8px 0;
+}
+
+/* item name takes the leftover space and wraps its own long names; the button keeps its natural width.
+   When the dialog is too narrow for both, the button drops under the name instead of being crushed. */
+.ret-line-info {
+    flex: 1 1 180px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.ret-line > .btn {
+    margin-right: 0;
 }
 
 .ret-nophoto {
     font-size: 12px;
     text-align: right;
+    flex: 0 1 auto;
+}
+
+/* any small button sitting beside text in a row (photo buttons, Replace photo, GCash screenshot, etc.) */
+.row > .btn.sm,
+.insp-before-row .btn.sm,
+.dc-shot .btn.sm {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.insp-before-row .btn.sm + .btn.sm {
+    margin-left: 0;
+}
+
+.insp-before-row > div[id^="bph-"],
+.insp-before-row > #hop-slot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
 }
 
 .insp-line {

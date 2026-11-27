@@ -1341,7 +1341,7 @@ export async function renderBeforePhotoSection(ref, container) {
             const signed = await signedPhotoUrl(l.before_photo_path);
             slot.innerHTML = signed
                 ? photoBtn(signed, 'Before photo: ' + l.equipment_name, 'View before photo')
-                + `<button type="button" class="btn sm line" data-replace-before="${l.rental_detail_id}" style="margin-left:8px">Replace photo</button>`
+                + `<button type="button" class="btn sm line" data-replace-before="${l.rental_detail_id}">Replace photo</button>`
                 : '<span class="mut">Photo saved (link expired; reload to view).</span>';
         } else {
             mountBeforePicker(slot, l, ref, container);
@@ -1385,7 +1385,7 @@ export async function renderHandoverSection(ref, container) {
         const signed = await signedPhotoUrl(path);
         slot.innerHTML = signed
             ? photoBtn(signed, 'Handover proof', 'View handover proof')
-            + '<button type="button" class="btn sm line" data-replace-handover style="margin-left:8px">Replace photo</button>'
+            + '<button type="button" class="btn sm line" data-replace-handover>Replace photo</button>'
             : '<span class="mut">Photo saved (link expired; reload to view).</span>';
         const rep = slot.querySelector('[data-replace-handover]');
         if (rep)
