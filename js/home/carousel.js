@@ -83,7 +83,7 @@ function drawMore() {
     ].filter(Boolean);
     const blocks = [
         s.about ? `<div><h3>About this room</h3><p style="white-space:pre-line">${esc(s.about)}</p></div>` : '',
-        items.length || notes.length ? `<div><h3>Included gear</h3>${items.length ? `<ul class="rs-gear">${items.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}${notes.length ? `<p class="rs-note" style="margin-top:10px">${notes.map(esc).join('<br>')}</p>` : ''}</div>` : ''
+        items.length || notes.length ? `<div><h3>Included gear</h3>${items.length ? `<ul class="rs-gear">${items.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}${notes.length ? `<ul class="rs-gearnote">${notes.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}</div>` : ''
     ].join('');
     $('#rs-more').innerHTML = `
     <div class="rs-body">
