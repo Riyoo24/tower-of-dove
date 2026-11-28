@@ -30,9 +30,13 @@ function getViewer() {
         }
     });
     viewer.addEventListener('close', () => {
-        viewer.innerHTML = '';
-        viewer.classList.remove('iv-wide');
         gal = null;
+        setTimeout(() => {   // wait for the 160ms fade-out (css/motion.css); skip if the viewer was opened again meanwhile
+            if (viewer.open)
+                return;
+            viewer.innerHTML = '';
+            viewer.classList.remove('iv-wide');
+        }, 200);
     });
     document.body.appendChild(viewer);
     return viewer;

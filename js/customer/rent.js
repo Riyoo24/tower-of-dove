@@ -310,6 +310,8 @@ export function renderEquipment() {
     }).join('');
 }
 
+let seenCart = null;   // equipment ids drawn in the cart last time: only an id that is new gets the small enter animation
+
 export function renderCart() {
     /* A cart restored from the last visit lists equipment ids, but the equipment list itself is still loading
        when the page starts. Drawing it now would crash on the missing items (and stop the whole page from
@@ -321,13 +323,15 @@ export function renderCart() {
     $('#bundle-tag-wrap').innerHTML = state.rentMode === 'out' && keys.length >= 2
         ? `<div class="bundle-tag">Rental bundle: ${keys.length} items</div>` : '';
 
+    const fresh = seenCart ? keys.filter(id => !seenCart.has(id)) : [];
+    seenCart = new Set(keys);
     $('#cart').innerHTML = keys.length
         ? keys.map(id => {
             const e = eqById(id), q = curCart()[id];
             // the quantity shows in the - / + stepper, so the name is not followed by "x 1"
             const label = state.rentMode === 'out' ? `${esc(e.name)} (${billedHours()} hrs)` : esc(e.name);
             const ok = remainingFor(state.rentMode, id) > 0 && !outBlocked();
-            return `<li><span class="cart-name"><span>${label}</span>
+            return `<li${fresh.includes(id) ? ' class="new"' : ''}><span class="cart-name"><span>${label}</span>
               <span class="qstep sm" role="group" aria-label="Quantity of ${esc(e.name)}">
                 <button type="button" class="qbtn" data-qstep="-1" data-id="${id}" aria-label="Remove one ${esc(e.name)}">&minus;</button>
                 <output class="qval" aria-live="polite">${q}</output>

@@ -172,15 +172,21 @@ export let toastTimer;
    element, so an error raised while a window was open used to be invisible. The last popover shown is the top-most,
    so the toast is re-shown each time. Browsers without popover support fall back to the plain fixed toast. */
 function hideToast(t) {
-    if (typeof t.hidePopover === 'function') {
-        try {
-            if (t.matches(':popover-open'))
-                t.hidePopover();
-        } catch (e) {
-            /* already closed */
+    if (t.hidden || t.classList.contains('leaving'))
+        return;
+    t.classList.add('leaving');   // fades down for 180ms (css/motion.css), then is really closed
+    t._leave = setTimeout(() => {
+        if (typeof t.hidePopover === 'function') {
+            try {
+                if (t.matches(':popover-open'))
+                    t.hidePopover();
+            } catch (e) {
+                /* already closed */
+            }
         }
-    }
-    t.hidden = true;
+        t.hidden = true;
+        t.classList.remove('leaving');
+    }, 180);
 }
 
 /* Only one floating message is on screen at a time (the page toast, the "added" pop-up and the browse-window
@@ -213,6 +219,8 @@ export function toast(message) {
     if (!t)
         return;
     dismissToasts(t);
+    clearTimeout(t._leave);   // a toast that was fading out is shown again
+    t.classList.remove('leaving');
     t.textContent = message;
     t.hidden = false;
     if (typeof t.showPopover === 'function') {

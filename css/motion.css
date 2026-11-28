@@ -2183,3 +2183,54 @@ tbody tr:not(.expand-row):not(.grp-row):not(.why-row):hover td {
         box-shadow: 0 1px 0 #ffffff08 inset, 0 14px 36px #00000052, 0 0 0 1px #B3202F22;
     }
 }
+
+/* ===== exits and small enters on the customer page =====
+   Windows and toasts already animated in but vanished at once. They now leave the way they came (160-180ms, strong ease-out).
+   display / overlay use allow-discrete so the browser keeps the element on screen while it fades; a browser without it just closes at once. */
+.dlg {
+    transition: opacity .16s cubic-bezier(.23, 1, .32, 1), transform .16s cubic-bezier(.23, 1, .32, 1),
+        overlay .16s allow-discrete, display .16s allow-discrete;
+}
+
+.dlg:not([open]) {
+    opacity: 0;
+    transform: scale(.97);
+}
+
+.dlg::backdrop {
+    transition: opacity .16s ease, overlay .16s allow-discrete, display .16s allow-discrete;
+}
+
+.dlg:not([open])::backdrop {
+    opacity: 0;
+}
+
+/* toast: js/shared/utils.js adds .leaving, waits 180ms, then closes it */
+.toast.leaving {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+    transition: opacity .18s cubic-bezier(.23, 1, .32, 1), transform .18s cubic-bezier(.23, 1, .32, 1);
+}
+
+/* a piece of equipment that was just added to the cart rises in; the rows already there do not move */
+#cart li.new {
+    animation: cartRowIn .22s cubic-bezier(.23, 1, .32, 1) backwards;
+}
+
+@keyframes cartRowIn {
+    from { opacity: 0; transform: translateY(6px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dlg:not([open]) {
+        transform: none;
+    }
+
+    .toast.leaving {
+        transform: translate(-50%, 0);
+    }
+
+    #cart li.new {
+        animation-name: fadeIn;
+    }
+}

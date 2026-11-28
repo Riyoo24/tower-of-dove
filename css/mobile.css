@@ -1100,3 +1100,30 @@ select,
         font-size: 13px;
     }
 }
+
+/* ---------- phones: the price bar slides up from the bottom edge when the cart gets its first item, and back down when it is emptied ----------
+   [hidden] is still what rent.js toggles; display / overlay use allow-discrete so the bar stays on screen while it slides away. */
+@media (max-width: 820px) {
+    .stickybar {
+        transition: transform .3s cubic-bezier(.32, .72, 0, 1), opacity .2s ease, display .3s allow-discrete;
+    }
+
+    .stickybar[hidden] {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+
+    @starting-style {
+        .stickybar {
+            transform: translateY(100%);
+            opacity: 0;
+        }
+    }
+}
+
+@media (max-width: 820px) and (prefers-reduced-motion: reduce) {
+    .stickybar,
+    .stickybar[hidden] {
+        transform: none;
+    }
+}
