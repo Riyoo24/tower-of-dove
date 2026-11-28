@@ -7,7 +7,7 @@ import { state } from './state.js';
 import { SUPABASE_ANON_KEY, SUPABASE_URL, sb } from '../config/supabaseClient.js';
 import { refreshBook } from './book.js';
 import { RELEASE, noShowSentence, releaseNote, runningLate, clock as releaseClock } from './noShow.js';
-import { BK_STATUS, loadMyBookings } from './data.js';
+import { loadMyBookings } from './data.js';
 import {
     askConfirm,
     dlg,
@@ -60,6 +60,8 @@ export const notFound = (ref, what) =>
 
 const CUTOFF_MSG = 'Changes and cancellations close 24 hours before your session.';
 
+const GUEST_CHANGE_MSG = 'To reschedule or cancel a guest booking, contact the studio. Log in to manage bookings online.';
+
 /* the extension request of a booking that is waiting for staff (or the last one if it was rejected), as a note under the row */
 const pendingExt = ref => (state.EXT[ref] || []).find(x => x.status === 'Pending');
 
@@ -84,8 +86,10 @@ function bookingMenuItems(b) {
         items.push(pendingExt(b.ref) ? { label: 'Extension pending', disabled: true } : { act: 'extend', label: 'Extend' });
     if (b.status === 'Confirmed' || b.status === 'Pending') {
         items.push({ act: 'cal', label: 'Add to calendar' });
-        items.push({ act: 'resched', label: 'Reschedule' });
-        items.push({ act: 'cancel', label: 'Cancel booking', danger: true });
+        if (isMember()) {   // changes need an account; guests contact the studio
+            items.push({ act: 'resched', label: 'Reschedule' });
+            items.push({ act: 'cancel', label: 'Cancel booking', danger: true });
+        }
     }
     return items.concat(addonMenuItems(b.ref));
 }
@@ -112,6 +116,8 @@ function runBookingAction(act, ref) {
         downloadIcs(bookingEvent(b));
         return toast('Calendar file saved. Open it to add the booking to your calendar.');
     }
+    if (!isMember())
+        return toast(GUEST_CHANGE_MSG);
     if (insideCutoff(b))
         return toast(CUTOFF_MSG);
     if (act === 'resched')
@@ -184,6 +190,7 @@ function nextSession(b) {
     const lockAttr = locked ? ` aria-disabled="true" title="${esc(CUTOFF_MSG)}"` : '';
     const payChip = b.down > 0 ? chip(`${b.payOpt === 'full' ? 'Full payment' : '50% down payment'} ${b.status === 'Pending' ? 'sent' : 'paid'}`) : '';
     const notes = [extNote(b), releaseNote(b)].filter(Boolean);
+    const canChange = isMember() && ['Pending', 'Confirmed'].includes(b.status);   // guests have no account to change it with
     return `<section class="mc-hero" aria-label="Next session">
         <div class="mc-hero-l">
             ${dateTile(dateParts(b.date), true)}
@@ -196,15 +203,16 @@ function nextSession(b) {
         </div>
         <div class="mc-hero-r">
             <div>
-                <div class="mc-window"><span>${locked ? 'Changes are closed' : 'Changes are open'}</span><b class="${locked ? 'locked' : ''}">${locked ? `closed ${whenLabel(cutoff)}` : `closes ${whenLabel(cutoff)}`}</b></div>
+                ${isMember() ? `<div class="mc-window"><span>${locked ? 'Changes are closed' : 'Changes are open'}</span><b class="${locked ? 'locked' : ''}">${locked ? `closed ${whenLabel(cutoff)}` : `closes ${whenLabel(cutoff)}`}</b></div>
                 ${pct === null ? '' : `<div class="mc-bar${locked ? ' is-late' : ''}" aria-hidden="true"><i style="width:${(locked ? 1 : pct) * 100}%"></i></div>`}
-                <div class="mc-hint">${locked ? 'Reschedule and cancel are locked. Contact the studio and we will help.' : 'After that, reschedule and cancel are locked.'}</div>
+                <div class="mc-hint">${locked ? 'Reschedule and cancel are locked. Contact the studio and we will help.' : 'After that, reschedule and cancel are locked.'}</div>` : `<div class="mc-window"><span>Guest booking</span><b>saved on this device</b></div>
+                <div class="mc-hint">To reschedule or cancel, contact the studio. Log in to manage your bookings online.</div>`}
             </div>
             <div class="mc-btns">
                 ${ghostBtn('details', b.ref, 'Details')}
                 ${['Pending', 'Confirmed'].includes(b.status) ? ghostBtn('cal', b.ref, 'Add to calendar') : ''}
-                ${['Pending', 'Confirmed'].includes(b.status) ? `<button type="button" class="mc-ghost${locked ? ' is-locked' : ''}" data-bact="resched" data-ref="${esc(b.ref)}"${lockAttr}>Reschedule</button>` : ''}
-                ${['Pending', 'Confirmed'].includes(b.status) ? `<button type="button" class="mc-ghost mc-danger${locked ? ' is-locked' : ''}" data-bact="cancel" data-ref="${esc(b.ref)}"${lockAttr}>Cancel</button>` : ''}
+                ${canChange ? `<button type="button" class="mc-ghost${locked ? ' is-locked' : ''}" data-bact="resched" data-ref="${esc(b.ref)}"${lockAttr}>Reschedule</button>` : ''}
+                ${canChange ? `<button type="button" class="mc-ghost mc-danger${locked ? ' is-locked' : ''}" data-bact="cancel" data-ref="${esc(b.ref)}"${lockAttr}>Cancel</button>` : ''}
             </div>
         </div>
         ${notes.length ? `<div class="mc-note wide">${notes.join('<br>')}</div>` : ''}
@@ -227,11 +235,15 @@ function bookingsSide(mine) {
         ${balance}
         <div class="mc-card">
             <h3 class="mc-h3">How changes work</h3>
-            <ul class="mc-steps">
+            <ul class="mc-steps">${isMember() ? `
                 <li><b>1</b><span>Reschedule or cancel up to 24 hours before.</span></li>
                 <li><b>2</b><span>Extend a running session from its Actions menu.</span></li>
                 <li><b>3</b><span>Within 24 hours, contact the studio and we will help.</span></li>
-                <li><b>4</b><span>Payments are not refunded if a booking is cancelled.</span></li>
+                <li><b>4</b><span>Payments are not refunded if a booking is cancelled.</span></li>` : `
+                <li><b>1</b><span>This booking is saved on this device.</span></li>
+                <li><b>2</b><span>To reschedule or cancel, contact the studio at least 24 hours before.</span></li>
+                <li><b>3</b><span>Log in to move your guest bookings to an account and manage them online.</span></li>
+                <li><b>4</b><span>Payments are not refunded if a booking is cancelled.</span></li>`}
             </ul>
         </div>
         <a class="mc-cta" href="#book">Book another session ${ARROW}</a>
@@ -1005,39 +1017,5 @@ export function initBookingsTab() {
         const again = e.target.closest('[data-rebook]');
         if (again)
             bookAgain(again.dataset.rebook);
-    });
-
-    /* Guest lookup by reference code. */
-    $('#gb-form').addEventListener('submit', async e => {
-        e.preventDefault();
-        const ref = normRef($('#gb-ref').value), box = $('#gb-res');
-        box.hidden = false;
-        const { data, error } = await sb.rpc('lookup_booking', { p_ref: ref });
-        if (error || !data) {
-            box.innerHTML = notFound(ref, 'booking');
-            return;
-        }
-        const a = manilaParts(data.start_at), z = manilaParts(data.end_at), hrs = z.hour - a.hour;
-        const status = BK_STATUS[data.status] || data.status;
-        box.innerHTML = `
-      <div class="row"><h3>${esc(data.booking_ref)}</h3>${badge(status)}</div>
-      <dl class="dl">
-        <dt>Studio</dt><dd>${esc(data.studio)}${data.studio_description ? ', ' + esc(data.studio_description) : ''}</dd>
-        <dt>Date</dt><dd>${longDate(a.date)}</dd>
-        <dt>Time</dt><dd>${SLOTS[a.hour - 10]} to ${endTime(SLOTS[a.hour - 10], hrs)} (${hrs} hr${hrs > 1 ? 's' : ''})</dd>
-        <dt>Studio price</dt><dd>${peso(+(data.studio_total ?? data.total))}</dd>
-        ${(data.addons || []).map(a => `<dt>Add-on</dt><dd>${esc(a.equipment)} x${a.quantity} (${peso(+a.price)})</dd>`).join('')}
-        <dt>Total</dt><dd><b>${peso(+(data.grand_total ?? data.total))}</b></dd>
-        ${+data.down_payment > 0 ? `<dt>Payment option</dt><dd>${data.payment_option === 'full' ? 'Full payment (100%)' : '50% down payment'}</dd>
-          <dt>${data.payment_option === 'full' ? 'Full payment' : 'Down payment (50%)'}</dt><dd>${peso(+data.down_payment)}</dd>
-          ${+data.addons_paid > 0 ? `<dt>Equipment added later, paid</dt><dd>${peso(+data.addons_paid)}</dd>` : ''}
-          ${+data.balance_paid > 0 ? `<dt>Balance paid at the studio</dt><dd>${peso(+data.balance_paid)}</dd>` : ''}
-          <dt>Balance at the studio</dt><dd>${+data.balance_due > 0.005 ? peso(+data.balance_due) : 'Paid in full'}</dd>
-          <dt>Pick-up</dt><dd>Studio ${esc(data.studio.replace(/^Studio\s*/i, ''))}, ${shortDate(a.date)}, ${SLOTS[a.hour - 10]}. ${+data.balance_due > 0.005 ? 'Pay the balance on arrival' : 'Nothing left to pay'}</dd>` : ''}
-        ${!(+data.down_payment > 0) && +data.addon_balance > 0.005 ? `<dt>Equipment balance at the studio</dt><dd>${peso(+data.addon_balance)}</dd>` : ''}
-        <dt>${+data.down_payment > 0 ? (data.payment_option === 'full' ? 'Payment status' : 'Down payment status') : 'Payment'}</dt><dd>${badge(data.payment_status || 'Pending')}</dd>
-        ${status === 'Rejected' ? `<dt>Reason for rejection</dt><dd>${esc(data.rejected_reason || 'No reason was given. Please contact the studio.')}</dd>` : ''}
-      </dl>
-      <p class="mut">${+data.down_payment > 0 ? (+data.balance_due > 0.005 ? 'Bookings are confirmed after staff verify your down payment. Pay the balance at the studio when you arrive.' : 'Bookings are confirmed after staff verify your payment. Nothing is left to pay at the studio.') : 'Bookings are confirmed after staff verify your payment.'}</p>`;
     });
 }

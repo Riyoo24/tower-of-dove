@@ -5,7 +5,7 @@
 
 import { state } from './state.js';
 import { sb } from '../config/supabaseClient.js';
-import { BK_STATUS, RN_STATUS, loadMyRentals } from './data.js';
+import { BK_STATUS, RN_STATUS, loadMyBookings, loadMyRentals } from './data.js';
 import { PHOTO_BUCKET } from '../shared/inspectionPhoto.js';
 import { normRef, notFound, startsAt } from './myBookings.js';
 import { fmtDT } from './rent.js';
@@ -22,20 +22,108 @@ import { gcashProofHtml, initGcashProof, uploadGcashProof } from '../shared/gcas
 import { applyChecks, check, liveCheck } from '../shared/fieldCheck.js';
 import { btnBusy, btnReset, btnSuccess } from '../shared/btnState.js';
 import { BOOKINGS } from '../shared/availability.js';
-import { getUser } from '../shared/session.js';
-import { $, badge, esc, manilaParts, peso, shortDate, sum, toast } from '../shared/utils.js';
+import { forgetGuestBookings, guestBookings, rememberGuestBooking } from '../shared/guestStore.js';
+import { getUser, isMember } from '../shared/session.js';
+import { $, SLOTS, badge, esc, manilaParts, peso, shortDate, sum, toast } from '../shared/utils.js';
 
 /* ============================ 5. MY RENTAL ============================ */
 
-/* Signed in: show the account tables. Guest: show the reference-code lookup. */
-export function applyAccessMode() {
+/* Signed in: show the account tables.
+   Guest: the bookings saved on this device are shown the same way. While one is open (Pending, Confirmed, In progress)
+   the "Find your booking" form is hidden; "Find another booking" brings it back.
+   My rental works on its own: a guest sees their rentals (equipment added to their bookings) once they have some,
+   and the "Find your rental" form until then.
+   loaded = false until the saved bookings were read from the database; rentalsLoaded = false until their rentals were. */
+const OPEN_STATUS = ['Pending', 'Confirmed', 'Active'];
+
+let rentalsKnown = false;   // true once the rentals were loaded; later calls that only touch the bookings keep My rental as it is
+
+let findOpen = false;   // the guest asked for the form again ("Find another booking")
+
+export function applyAccessMode(loaded = false, rentalsLoaded = false) {
+    if (rentalsLoaded)
+        rentalsKnown = true;
     const member = !!getUser();
-    $('#bk-member').hidden = !member;
-    $('#bk-guest').hidden = member;
-    $('#rt-member').hidden = !member;
-    $('#rt-guest').hidden = member;
-    $('#bk-tabs').hidden = !member;
-    $('#rt-tabs').hidden = !member;
+    const saved = member ? [] : (loaded ? BOOKINGS.filter(b => b.mine) : guestBookings());
+    const open = loaded ? saved.some(b => OPEN_STATUS.includes(b.status)) : saved.length > 0;
+    const showList = member || saved.length > 0;
+    $('#bk-member').hidden = !showList;
+    $('#bk-tabs').hidden = !showList;
+    $('#bk-gbar').hidden = member || !saved.length;
+    $('#bk-guest').hidden = member || (open && !findOpen);
+
+    // My rental: a guest with saved bookings waits for the rentals to load before choosing between the list and the form
+    const pending = !member && saved.length > 0 && !rentalsKnown;
+    const hasRentals = member || (rentalsKnown && state.RENTALS.length > 0);
+    $('#rt-member').hidden = pending || !hasRentals;
+    $('#rt-tabs').hidden = pending || !hasRentals;
+    $('#rt-guest').hidden = member || pending || hasRentals;
+}
+
+/* The two links above a guest's saved bookings. */
+let findDlg = null;   // the window that holds the "Find your booking" card while a guest looks up another booking
+
+/* "Find another booking" opens the lookup card in a window (Close, Esc or a click outside closes it again).
+   The card is moved into the window and back, so its form keeps working. */
+function openFindWindow() {
+    const card = $('#bk-guest'), home = card.parentElement;
+    if (!findDlg) {
+        findDlg = document.createElement('dialog');
+        findDlg.className = 'lk-dlg';
+        findDlg.setAttribute('aria-label', 'Find another booking');
+        findDlg.innerHTML = '<div class="lk-dlg-in"><button type="button" class="lk-dlg-x" aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>';
+        document.body.appendChild(findDlg);
+        findDlg.addEventListener('click', e => {
+            if (e.target === findDlg || e.target.closest('.lk-dlg-x'))
+                closeFindWindow();
+        });
+        findDlg.addEventListener('cancel', e => {   // Esc: play the closing animation first
+            e.preventDefault();
+            closeFindWindow();
+        });
+        findDlg.addEventListener('close', () => {
+            home.prepend(card);   // back where it was
+            home.classList.remove('is-away');
+            findDlg.classList.remove('closing');
+            findOpen = false;
+            applyAccessMode(true);
+        });
+    }
+    findOpen = true;
+    findDlg.querySelector('.lk-dlg-in').appendChild(card);
+    home.classList.add('is-away');   // hides the "How it works" panel behind the window
+    applyAccessMode(true);   // shows the card
+    findDlg.showModal();
+    $('#gb-ref').focus();
+}
+
+/* fade and shrink out, then close (straight away when the person prefers less motion) */
+function closeFindWindow() {
+    if (!findDlg || !findDlg.open || findDlg.classList.contains('closing'))
+        return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+        return findDlg.close();
+    findDlg.classList.add('closing');
+    findDlg.addEventListener('animationend', () => findDlg.close(), { once: true });
+}
+
+export function initGuestDevice() {
+    $('#bk-gfind').addEventListener('click', openFindWindow);
+    $('#bk-gforget').addEventListener('click', async () => {
+        const ok = await askConfirm({
+            title: 'Remove bookings from this device?',
+            message: 'They stay in our system and the studio still expects you. You can bring them back any time with the reference code and phone number. Use this on a shared device.',
+            ok: 'Remove from this device',
+            cancel: 'Keep them'
+        });
+        if (!ok)
+            return;
+        forgetGuestBookings(guestBookings().map(b => b.ref));
+        findOpen = false;
+        await loadMyBookings();
+        await loadMyRentals();
+        toast('Removed from this device.');
+    });
 }
 
 /* Phone as typed: digits only (spaces and dashes are dropped). */
@@ -107,6 +195,25 @@ export function initBookingLookup() {
         const { data, error } = await sb.rpc('lookup_booking', { p_ref: ref, p_phone: phone });
         if (error || !data) {
             box.innerHTML = '<p class="mut">No booking found for that reference and phone number. Check your confirmation receipt, or email the studio.</p>';
+            return;
+        }
+        // found: keep it on this device, so My bookings shows it from now on instead of the form
+        if (data.start_at && data.end_at) {
+            const a = manilaParts(data.start_at), z = manilaParts(data.end_at);
+            rememberGuestBooking({
+                phone,
+                ref: data.booking_ref,
+                studio: String(data.studio || '').replace(/^Studio\s*/i, ''),
+                date: a.date,
+                start: SLOTS[a.hour - 10],
+                hours: z.hour - a.hour
+            });
+            closeFindWindow();
+            findOpen = false;
+            box.hidden = true;
+            await loadMyBookings();
+            await loadMyRentals();
+            toast('Booking saved on this device.');
             return;
         }
         const addons = data.addons || [];
@@ -204,7 +311,7 @@ export function addonMenuItems(bookingRef) {
         const name = o.lines.map(l => l.item).join(', ');
         if (offersFor(o.rentalRef)[0])
             items.push({ act: `rental:choose:${o.rentalRef}`, label: `Choose replacement for ${name}` });
-        if (['Pending', 'Approved'].includes(o.rawStatus))
+        if (isMember() && ['Pending', 'Approved'].includes(o.rawStatus))   // guests change add-ons through the studio
             items.push({ act: `rental:cancel:${o.rentalRef}`, label: `Cancel add-on: ${name}`, danger: true });
     });
     return items;
@@ -412,7 +519,7 @@ export function renderMyRentals() {
     closeActionMenu();
     const tabsBox = $('#rt-tabs');
     const mineBookings = new Set(BOOKINGS.filter(b => b.mine).map(b => b.ref));
-    const orders = rentalOrders().filter(o => o.type === 'out' || !mineBookings.has(o.ref));
+    const orders = rentalOrders().filter(o => o.type === 'out' || !mineBookings.has(o.ref) || !isMember());   // a guest's add-ons are listed here too
     if (!orders.length) {
         tabsBox.innerHTML = '';
         $('#myrent').innerHTML = emptyState({

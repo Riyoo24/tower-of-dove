@@ -11,13 +11,13 @@ import { openBook } from './bookingForm.js';
 import { loadMyBookings, loadMyRentals, profileReady } from './data.js';
 import { initBookingsTab } from './myBookings.js';
 import { initHome } from '../home/index.js';
-import { applyAccessMode, initBookingLookup, initMyRentals, initRentalLookup } from './myRentals.js';
+import { applyAccessMode, initBookingLookup, initGuestDevice, initMyRentals, initRentalLookup } from './myRentals.js';
 import { initSwapChoice } from './swapChoice.js';
 import { initRentTab, renderCart, renderEquipment, renderRentMode } from './rent.js';
 import { bkDlg, showTab } from './ui.js';
 import { firstBookableDate, isPastSlot, lastBookableDate, loadBusy, takenSlots } from '../shared/availability.js';
 import { EQUIPMENT, STUDIOS, dataReady, isClosed, studioIndex } from '../shared/catalog.js';
-import { clearPendingBooking, readPendingBooking } from '../shared/guestStore.js';
+import { clearPendingBooking, guestBookings, readPendingBooking } from '../shared/guestStore.js';
 import { isMember } from '../shared/session.js';
 import { $, SLOTS, everyVisible, toast } from '../shared/utils.js';
 import { injectChrome } from '../shared/layout.js';
@@ -121,6 +121,8 @@ initRentalLookup();
 
 initBookingLookup();
 
+initGuestDevice();   // "Find another booking" / "Remove from this device" above a guest's saved bookings
+
 initMyRentals();
 initSwapChoice();   // the Choose button of the "choose your replacement item" notice
 initDamageBlock();
@@ -166,8 +168,8 @@ dataReady.then(async () => {
     everyVisible(() => {
         if (state.PROFILE) {
             loadMyBookings().then(loadMyRentals).then(loadDamageBlock);   // one after the other: rentals read the bookings
+        } else if (!isMember() && guestBookings().length) {
+            loadMyBookings().then(loadMyRentals);   // guests: staff verifying a payment shows up without a reload
         }
     }, 30000);
 });
-
-

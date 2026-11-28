@@ -965,3 +965,164 @@ html body .btn.gold:not(.is-done) {
     border-radius: 10px;
     font-weight: 600;
 }
+
+/* =====================================================================
+   Guest: the bar above the bookings saved on this device
+   ===================================================================== */
+.mc-gbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 20px;
+    margin: 0 0 16px;
+    padding: 12px 16px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+}
+
+.mc-gbar[hidden] {
+    display: none;
+}
+
+.mc-gbar p {
+    flex: 1 1 320px;
+    margin: 0;
+    color: var(--mut);
+    font-size: 13.5px;
+    line-height: 1.45;
+}
+
+.mc-gbar-acts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 18px;
+}
+
+.mc-gbtn {
+    min-height: 44px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: 600 13.5px 'Instrument Sans', system-ui, sans-serif;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+}
+
+.mc-gbtn:hover {
+    text-decoration-thickness: 2px;
+}
+
+.mc-gbtn:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+}
+
+
+/* Guest: "Find another booking" window: centred, fades and rises in, fades out */
+dialog.lk-dlg {
+    position: fixed;
+    inset: 0;
+    width: min(740px, calc(100vw - 24px));
+    height: fit-content;
+    max-width: none;
+    max-height: calc(100dvh - 24px);
+    margin: auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    overflow: visible;
+}
+
+dialog.lk-dlg[open] {
+    animation: lk-in 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+dialog.lk-dlg[open]::backdrop {
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(3px);
+    animation: lk-fade 0.32s ease-out;
+}
+
+dialog.lk-dlg.closing {
+    animation: lk-out 0.2s ease-in forwards;
+}
+
+dialog.lk-dlg.closing::backdrop {
+    animation: lk-fade 0.2s ease-in reverse forwards;
+}
+
+@keyframes lk-in {
+    from {
+        opacity: 0;
+        transform: translateY(18px) scale(0.96);
+    }
+}
+
+@keyframes lk-out {
+    to {
+        opacity: 0;
+        transform: translateY(10px) scale(0.97);
+    }
+}
+
+@keyframes lk-fade {
+    from {
+        opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    dialog.lk-dlg[open],
+    dialog.lk-dlg[open]::backdrop {
+        animation: none;
+    }
+}
+
+.lk-row.is-away>.lk-side {
+    display: none;
+}
+
+.lk-dlg-in {
+    position: relative;
+}
+
+.lk-dlg-in>.card.lookup {
+    margin: 0;
+    max-width: none;
+    max-height: calc(100dvh - 24px);
+    overflow: auto;
+}
+
+.lk-dlg-in>.card.lookup {
+    width: 100%;
+}
+
+.lk-dlg-x {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    background: #ffffff0d;
+    color: inherit;
+    cursor: pointer;
+}
+
+.lk-dlg-x:hover {
+    background: #ffffff1c;
+}
+
+.lk-dlg-x:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+}

@@ -409,9 +409,19 @@
           <div class="mc-tabs" id="bk-tabs"></div>
         </header>
         <!-- Signed in: the customer's own bookings -->
-        <div class="mc-wrap" id="bk-member"><div id="mybk"></div></div>
+        <div class="mc-wrap" id="bk-member">
+          <!-- Guest: bookings saved on this device (hidden for signed-in customers) -->
+          <div class="mc-gbar" id="bk-gbar" hidden>
+            <p>Saved on this device. We found them with the reference code and phone number you booked with.</p>
+            <div class="mc-gbar-acts">
+              <button type="button" class="mc-gbtn" id="bk-gfind">Find another booking</button>
+              <button type="button" class="mc-gbtn" id="bk-gforget">Remove from this device</button>
+            </div>
+          </div>
+          <div id="mybk"></div>
+        </div>
 
-        <!-- Guest: reference code only -->
+        <!-- Guest with nothing saved on this device: reference code and phone number -->
         <div class="lk-row">
         <div class="card lookup" id="bk-guest" hidden>
           <div class="lk-grid">
