@@ -176,10 +176,8 @@
         // My account page (the profile forms are drawn by js/account/profilePanel.js)
         ['#account-profile', accountPanel],
         // home page
-        ['#studio-grid', function () { return many(4, card); }],
+        ['#rs-detail', function () { return slide(0); }],     // the "Our rooms" gallery (drawn by js/home/carousel.js)
         ['#equipment-grid', function () { return many(4, card); }],
-        ['#slider', function () { return slide(0); }],        // the big showcase slide (the Home "hero" picture)
-        ['#sdots', dots, true],                               // third item: quiet, no message of its own when loading fails
         // Contact Us: the three info lists (filled by js/home/contact.js)
         ['#ct-touch', function () { return many(2, ctRow); }],
         ['#ct-follow', function () { return many(2, ctRow); }],

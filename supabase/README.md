@@ -33,7 +33,7 @@ supabase/
 ├── 02_functions.sql           RPC functions and views the website calls
 ├── 03_security.sql            Privileges, Row Level Security, Storage buckets and policies
 ├── 04_seed.sql                Starting data (studios, categories, equipment) + owner setup notes
-├── 05_… → 94_…                Incremental feature migrations (see the reference below)
+├── 05_… → 105_…               Incremental feature migrations (see the reference below)
 ├── all_in_one.sql             Combined script of the early files (not a full replacement, see below)
 ├── functions/
 │   ├── create-staff/index.ts  Edge Function: staff accounts and customer removal (Owner only)
@@ -371,10 +371,13 @@ Staff extending a **running session** get the same two choices: **Full payment (
 #### `94_qa_hardening.sql`
 Fixes from the QA audit. **(B-01)** Guest lookups by reference code now **require the phone number**. **(B-02)** `hold_slot` is throttled (60 attempts per IP per 10 minutes, and at most 10 different people holding one studio at once). **(B-03)** Online guest bookings and outside-rental contact numbers must be a real 11-digit Philippine mobile number (`09` + 9 digits). **(B-04)** The booking window (28 days), change / cancel cutoff (24 hours) and slot-hold length (2 minutes) now live in `app_setting` and are enforced from there; the website reads them through `get_public_settings()`. No new jobs, buckets or policies. *Rename the file to remove the space before `.sql`.*
 
+#### `105_studio_room_details.sql`
+Room details are editable in Admin > Studio Management. `studio` gains `capacity`, `room_size_sqm`, `location`, `about` and `sort_order` (backfilled from `studio_id`; `room_specs` from file 95 stays as the "Included gear" list). New table `studio_photo` (the room gallery; the lowest `sort_order` is the main photo, and a trigger keeps `studio.image` equal to it). RLS: anyone reads photos of Available and Maintenance studios, staff read all, only the Owner writes. Photos reuse the `studio-images` bucket. Adding or removing a photo is audited when file 98 is present. No new jobs or buckets. Run after 98.
+
 ### Other files
 
 #### `all_in_one.sql`
-The four core files plus a selection of later migrations (05 to 18, 20, 21, 23 to 28, 30, 38 to 45, 65 to 67). A convenience for early setups only; it is **not** a full replacement. For a complete, current database, run the numbered files.
+The four core files plus a selection of later migrations (05 to 18, 20, 21, 23 to 28, 30, 38 to 45, 65 to 67, 105). A convenience for early setups only; it is **not** a full replacement. For a complete, current database, run the numbered files.
 
 #### `tests/qa_tests.sql`
 The database QA suite. See [Testing](#testing).

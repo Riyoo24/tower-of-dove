@@ -2011,3 +2011,203 @@ body.hastop[data-active="home"] .hero {
 .pick .pk-b {
     z-index: 6;
 }
+/* "Our rooms" slot: sits where the old carousel was, right under the hero */
+body.hastop .fold,body.hastop[data-active="home"] .fold{min-height:100svh;display:flex;flex-direction:column;padding-bottom:16px;box-sizing:border-box}
+.sec.rs{padding-top:22px;padding-bottom:0;display:flex;flex-direction:column;flex:1;min-height:0}
+#rs-detail{display:flex;flex-direction:column;flex:1;min-height:0}
+.sec.rs-more{padding-top:12px}
+.rs-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:16px}
+.rs-title{font-size:34px;line-height:1.12;margin:0 0 6px}
+.rs-off{font:600 12px 'Instrument Sans',sans-serif;color:var(--warn);background:var(--warn-bg);border-radius:99px;padding:3px 10px;vertical-align:middle;margin-left:6px}
+.rs-meta{color:var(--mut);display:flex;gap:8px 16px;flex-wrap:wrap;font-size:14.5px;margin:0}
+.rs-meta span{display:inline-flex;align-items:center;gap:6px}
+.rs-meta svg{width:16px;height:16px;color:var(--link)}
+.rs-arrows{display:flex;align-items:center;gap:10px;flex:none;margin-top:6px}
+.rs-count{color:var(--mut);font-size:13px;font-variant-numeric:tabular-nums;min-width:38px;text-align:center}
+/* gallery keeps the big layout; height shrinks only as far as needed so it shows in the first screen */
+.rs-gal{display:grid;grid-template-columns:2fr 1fr 1fr;grid-template-rows:1fr 1fr;gap:10px;flex:1;min-height:240px;margin-bottom:0}
+.rs-ph{position:relative;overflow:hidden;border-radius:14px;border:1px solid var(--line);background:linear-gradient(135deg,#1c1c22,#26262c 55%,#1c1c22);display:flex;align-items:flex-end;padding:14px;color:var(--mut);font-size:13px;isolation:isolate}
+.rs-ph::before{content:"";position:absolute;inset:0;background:radial-gradient(120% 90% at 85% 0%,#b3202f33,transparent 60%);z-index:-1}
+.rs-ph svg{position:absolute;top:14px;right:14px;width:22px;height:22px;opacity:.35;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.rs-ph.main{grid-row:span 2}
+.rs-ph.main::after{content:"";position:absolute;left:0;right:0;bottom:0;height:55%;background:linear-gradient(transparent,#0b0b0dcc);z-index:-1}
+.rs-ph.more{justify-content:center;align-items:center;color:var(--ink);font-weight:600;cursor:pointer;background:linear-gradient(135deg,#450011,#2a0a10)}
+.rs-ph.more:hover{filter:brightness(1.15)}
+.rs-body{display:grid;grid-template-columns:1.5fr 1fr;gap:20px;align-items:stretch;margin-bottom:20px}
+.rs-info{display:flex;flex-direction:column;gap:22px;padding:22px 24px}
+.rs-info h3{font-size:20px;margin-bottom:8px}
+.rs-info p{color:var(--mut);line-height:1.65;margin:0}
+.rs-gear{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.rs-gear li{display:flex;gap:10px;align-items:center;padding:10px 14px;border:1px solid var(--line);background:#ffffff08;border-radius:10px;font-size:14.5px}
+.rs-gear li::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--glow);box-shadow:0 0 10px var(--glow);flex:none}
+.rs-book{display:flex;flex-direction:column;gap:12px;padding:22px 24px}
+.rs-price{margin:0}
+.rs-price b{font-size:30px;font-family:'Bricolage Grotesque',Georgia,serif}
+.rs-price span{color:var(--mut)}
+.rs-free{display:flex;align-items:center;gap:8px;color:var(--ok);font-weight:600;font-size:14px;margin:0}
+.rs-free i{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.rs-free.bad{color:var(--warn)}.rs-free.bad i{background:var(--warn);box-shadow:0 0 8px var(--warn)}
+.rs-eyebrow{font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--link);font-weight:600}
+.rs-hh{display:flex;justify-content:space-between;align-items:center;font-size:13.5px;color:var(--mut);margin-top:2px}
+.rs-hh .rs-free{font-size:13.5px}
+.hr-grid{gap:7px}
+button.rs-hr{cursor:pointer;font-family:inherit;min-height:40px}
+button.rs-hr:hover{filter:brightness(1.25)}
+button.rs-hr.on{background:var(--sel);border-color:var(--sel);color:#fff}
+.hr-key{list-style:none;display:flex;gap:16px;margin:0;padding:0;font-size:12.5px;color:var(--mut)}
+.hr-key li{display:flex;align-items:center;gap:6px}
+.hr-key i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.hr-key .k-free{background:var(--ok-bg);border:1px solid #4ed3a066}
+.hr-key .k-sel{background:var(--sel)}
+.rs-note{font-size:13px;color:var(--mut);margin:0}
+.rs-cmp{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;padding:18px 22px}
+.rs-cmp span{font-weight:600}
+a.btn{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+@media(max-width:900px){
+ .rs-body{grid-template-columns:1fr}
+ .rs-title{font-size:26px}
+ body.hastop .fold,body.hastop[data-active="home"] .fold{min-height:0}
+ .rs-gal{flex:none;height:300px}
+}
+@media(max-width:640px){
+ .rs-gal{grid-template-columns:1fr 1fr;grid-template-rows:200px 110px 110px;height:auto;flex:none}
+ .rs-ph.main{grid-column:span 2;grid-row:auto}
+ .rs-gear{grid-template-columns:1fr}
+ .rs-cmp{flex-direction:column;align-items:stretch;text-align:center}
+}
+
+.rs-specs{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:auto;padding-top:18px;border-top:1px solid var(--line)}
+.rs-specs div{display:flex;flex-direction:column;gap:2px}
+.rs-specs small{font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
+.rs-specs b{font-size:15px;font-weight:600}
+@media(max-width:640px){.rs-specs{grid-template-columns:1fr 1fr}}
+
+
+/* ---- "Our rooms": photo tiles, gallery layouts for 1 to 5+ photos, the no-photo tile, screen-reader status ---- */
+button.rs-ph {
+    appearance: none;
+    font-family: inherit;
+    text-align: left;
+}
+
+.rs-ph.pic {
+    padding: 0;
+    cursor: zoom-in;
+}
+
+.rs-ph.pic::before,
+.rs-ph.pic::after {
+    display: none;
+}
+
+.rs-ph img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.rs-ph.pic:hover img {
+    filter: brightness(1.08);
+}
+
+.rs-ph:focus-visible {
+    outline: 2px solid var(--focus, #fff);
+    outline-offset: 2px;
+}
+
+.rs-ph.tile {
+    align-items: center;
+    justify-content: center;
+}
+
+.rs-letter {
+    font: 700 clamp(64px, 12vw, 120px) 'Bricolage Grotesque', Georgia, serif;
+    color: #ffffffd9;
+}
+
+/* 1 or 0 photos: one big tile. 2: big + tall. 3: big + two. 4: big + three. 5 or more: big + three + "View all" */
+.rs-gal.n0,
+.rs-gal.n1 {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+}
+
+.rs-gal.n0 .rs-ph.main,
+.rs-gal.n1 .rs-ph.main,
+.rs-gal.n2 .rs-ph.main {
+    grid-row: auto;
+}
+
+.rs-gal.n2 {
+    grid-template-columns: 2fr 1fr;
+    grid-template-rows: 1fr;
+}
+
+.rs-gal.n3 {
+    grid-template-columns: 2fr 1fr;
+}
+
+.rs-gal.n4 .rs-ph:nth-child(2) {
+    grid-column: 2;
+    grid-row: 1;
+}
+
+.rs-gal.n4 .rs-ph:nth-child(3) {
+    grid-column: 2;
+    grid-row: 2;
+}
+
+.rs-gal.n4 .rs-ph:nth-child(4) {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+}
+
+.rs-more:empty {
+    display: none;
+}
+
+.rs-live {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.rs-book .btn.full {
+    width: 100%;
+}
+
+@media (max-width: 640px) {
+    .rs-gal.n1,
+    .rs-gal.n2,
+    .rs-gal.n3,
+    .rs-gal.n4,
+    .rs-gal.n5 {
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 200px;
+        grid-auto-rows: 110px;
+    }
+
+    .rs-gal.n0 {
+        grid-template-rows: 200px;
+    }
+
+    .rs-gal .rs-ph:nth-child(n) {
+        grid-column: auto;
+        grid-row: auto;
+    }
+
+    .rs-gal .rs-ph.main {
+        grid-column: 1 / -1;
+    }
+
+    .rs-gal.n2 .rs-ph:nth-child(2) {
+        grid-column: 1 / -1;
+    }
+}

@@ -1,143 +1,207 @@
 /* =====================================================================
-   home/carousel.js - studio showcase carousel on the landing page
-   Slides, prev/next arrows, dots, a "01 / 04" counter and auto-advance
-   (stopped on hover, focus, touch, or when the visitor prefers reduced motion).
+   home/carousel.js - "Our rooms" on the landing page: one room at a time
+   DB: studio + studio_photo through shared/catalog.js (STUDIOS), and the live hour grid through
+   shared/availability.js (rpc get_busy_slots). Rooms that are Available are shown, and rooms under
+   Maintenance too (with a badge and a disabled Book button), in the order set in Admin > Studio management.
+   Prev / next arrows and the Left / Right keys change the room. Everything the owner types is escaped.
    ===================================================================== */
 
-import { $, esc, peso, reducedMotion } from '../shared/utils.js';
+import { firstBookableDate, isPastSlot, loadBusy, takenSlots } from '../shared/availability.js';
+import { STUDIOS, isClosed } from '../shared/catalog.js';
+import { openImageViewer } from '../shared/imageViewer.js';
 import { goBook } from '../shared/navigation.js';
-import { photo } from '../shared/cards.js';
+import { $, SLOTS, esc, manilaDay, peso, specsOf } from '../shared/utils.js';
 
-/* Carousel slides. index.js fills in `img`, `sub` (the studio's Description, never its Room specs) and `price` from the studio data (Supabase).
-   `studio` (set by index.js) is the studio's position in STUDIOS, so the button opens the booking page on that studio. */
-export const SLIDES = [
-    { label: 'Studio A', tag: 'Rehearsal room', price: 0, c1: '#C92C3E', c2: '#3D0C14', img: null, cta: 'Book this room' },
-    { label: 'Studio B', tag: 'Rehearsal room', price: 0, c1: '#C98512', c2: '#33220A', img: null, cta: 'Book this room' },
-    { label: 'Studio C', tag: 'Rehearsal room', price: 0, c1: '#8E161F', c2: '#1E0A0F', img: null, cta: 'Book this room' },
-    { label: 'Studio D', tag: 'Rehearsal room', price: 0, c1: '#4A4A55', c2: '#16161A', img: null, cta: 'Book this room' }
-];
+const USR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-5.5 7-5.5s7 2 7 5.5M16 4.5a3.5 3.5 0 010 7M22 20c0-2.5-1.5-4.2-4-5"/></svg>';
+const PIN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>';
 
-/* Placeholder art for rooms without a photo: a quiet equalizer. Heights are fixed per slide, so they never jump around. */
-function equalizer(seed) {
-    let x = seed * 9301 + 49297;
-    const bars = [];
-    for (let i = 0; i < 28; i++) {
-        x = (x * 9301 + 49297) % 233280;
-        const h = 18 + Math.round((x / 233280) * 72);
-        bars.push(`<rect x="${i * 10 + 1}" y="${100 - h}" width="6" height="${h}" rx="3"/>`);
-    }
-    return `<svg class="slide-art" viewBox="0 0 280 100" preserveAspectRatio="none" aria-hidden="true">${bars.join('')}</svg>`;
+/* Opening hours come from the bookable start times (utils SLOTS): the first start time to one hour after the last one */
+const hourOf = t => {
+    const m = /^(\d+):\d+ (AM|PM)$/.exec(t);
+    return (+m[1] % 12) + (m[2] === 'PM' ? 12 : 0);
+};
+const hr12 = h => `${h % 12 || 12} ${h < 12 || h === 24 ? 'AM' : 'PM'}`;
+const short = t => t.replace(':00 ', ' ');   // 10:00 AM -> 10 AM
+const OPEN = {
+    from: hr12(hourOf(SLOTS[0])),
+    to: hr12(hourOf(SLOTS[SLOTS.length - 1]) + 1),
+    last: short(SLOTS[SLOTS.length - 1])
+};
+
+let rooms = [];   // [{ s: STUDIOS entry, i: its index in STUDIOS }]: booking and availability address a room by that index
+let cur = 0, slot = null, date = '', when = '';
+
+const plural = (n, w) => `${n} ${w}${+n === 1 ? '' : 's'}`;
+
+/* ---- the photo gallery ---- */
+function gallery(s) {
+    const ph = s.photos, n = ph.length;
+    if (!n)   // no photo yet: the coloured tile with the room letter
+        return `<div class="rs-gal n0"><div class="rs-ph main tile" style="background:linear-gradient(135deg,${s.c1},${s.c2})" role="img" aria-label="${esc(s.name)}, no photo yet"><span class="rs-letter" aria-hidden="true">${esc(s.id)}</span></div></div>`;
+    const cell = (k, main) => `<button type="button" class="rs-ph pic${main ? ' main' : ''}" data-photo="${k}" aria-label="Open photo ${k + 1} of ${n}"><img src="${esc(ph[k])}" alt="${esc(s.name)}, photo ${k + 1}" width="${main ? 800 : 400}" height="${main ? 520 : 250}" ${k ? 'loading="lazy"' : 'fetchpriority="high"'} decoding="async"></button>`;
+    const cells = ph.slice(0, 4).map((_, k) => cell(k, k === 0));
+    if (n > 4)
+        cells.push(`<button type="button" class="rs-ph more" data-photo="0">View all ${n} photos</button>`);
+    return `<div class="rs-gal n${Math.min(n, 5)}">${cells.join('')}</div>`;
 }
 
-function slideHTML(s, i) {
-    const media = s.img
-        ? photo(s.img, '', { width: 1200, height: 440, sizes: '(max-width: 900px) 100vw, 1120px', eager: i === 0 })
-        : equalizer(i + 1);
-    return `
-    <article class="slide" role="group" aria-roledescription="slide" aria-label="${i + 1} of ${SLIDES.length}: ${esc(s.label)}" style="--c1:${s.c1};--c2:${s.c2}">
-      ${media}
-      <div class="slide-cap">
-        <div class="slide-txt">
-          <span class="slide-tag">${esc(s.tag)}</span>
-          <h3>${esc(s.label)}</h3>
-          ${s.sub ? `<p>${esc(s.sub)}</p>` : ''}
-        </div>
+/* ---- the top part: title, meta and gallery ---- */
+function drawTop() {
+    const { s } = rooms[cur], off = isClosed(s), n = rooms.length;
+    const meta = [
+        s.capacity ? `<span>${USR}Fits up to ${plural(s.capacity, 'player')}</span>` : '',
+        s.sqm ? `<span>${esc(s.sqm)} sqm</span>` : '',
+        s.location ? `<span>${PIN}${esc(s.location)}</span>` : ''
+    ].filter(Boolean);
+    $('#rs-detail').innerHTML = `
+    <div class="rs-top">
+      <div>
+        <h2 class="rs-title">${esc(s.name)}${s.desc ? ` &middot; ${esc(s.desc)}` : ''}${off ? ' <span class="rs-off">Maintenance</span>' : ''}</h2>
+        ${meta.length ? `<p class="rs-meta">${meta.join('')}</p>` : ''}
       </div>
-    </article>`;
+      ${n > 1 ? `<div class="sc-arrows rs-arrows"><button type="button" id="rs-prev" aria-label="Previous studio">&#8249;</button><span class="rs-count" aria-hidden="true">${cur + 1} / ${n}</span><button type="button" id="rs-next" aria-label="Next studio">&#8250;</button></div>` : ''}
+    </div>
+    ${gallery(s)}`;
+}
+
+const bookLabel = () => slot ? `Book ${esc(short(slot))} &rarr;` : 'Book this room';
+
+/* ---- the details under the fold: about, gear, facts and the booking panel ---- */
+function drawMore() {
+    const { s } = rooms[cur], off = isClosed(s);
+    const { items, notes } = specsOf('', s.specs);
+    const facts = [
+        s.capacity ? ['Capacity', `Up to ${plural(s.capacity, 'player')}`] : null,
+        s.sqm ? ['Room size', `${esc(s.sqm)} sqm`] : null,
+        s.location ? ['Location', esc(s.location)] : null,
+        ['Open', `${OPEN.from} &ndash; ${OPEN.to}`]
+    ].filter(Boolean);
+    const blocks = [
+        s.about ? `<div><h3>About this room</h3><p style="white-space:pre-line">${esc(s.about)}</p></div>` : '',
+        items.length || notes.length ? `<div><h3>Included gear</h3>${items.length ? `<ul class="rs-gear">${items.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}${notes.length ? `<p class="rs-note" style="margin-top:10px">${notes.map(esc).join('<br>')}</p>` : ''}</div>` : ''
+    ].join('');
+    $('#rs-more').innerHTML = `
+    <div class="rs-body">
+      <div class="card rs-info">
+        ${blocks}
+        <div class="rs-specs">${facts.map(([k, v]) => `<div><small>${k}</small><b>${v}</b></div>`).join('')}</div>
+      </div>
+      <aside class="card rs-book" aria-label="Book ${esc(s.name)}">
+        <span class="rs-eyebrow">${when} &middot; ${esc(s.name)}</span>
+        <p class="rs-price"><b>${peso(s.rate)}</b> <span>/ hour</span></p>
+        ${off ? '<p class="rs-free bad"><i></i>Closed for maintenance</p>'
+        : '<div id="rs-hours" aria-busy="true"><p class="rs-note">Checking the hours&hellip;</p></div>'}
+        <button type="button" class="btn gold lg full" id="rs-book" data-rs-book ${off ? 'disabled' : ''}>${off ? 'Unavailable' : bookLabel()}</button>
+        <p class="rs-note">Open daily ${OPEN.from} to ${OPEN.to} &middot; last start ${OPEN.last}</p>
+      </aside>
+    </div>`;
+}
+
+/* ---- the live hour grid (real availability: free hours are the ones nobody has booked or is holding, and that are still ahead) ---- */
+async function loadHours() {
+    const at = cur, { s, i } = rooms[at];
+    if (isClosed(s))
+        return;
+    const box = $('#rs-hours');
+    let ok = true;
+    try {
+        ok = (await loadBusy(i, date, date)) !== false;
+    } catch (e) {
+        ok = false;
+    }
+    if (at !== cur || !box.isConnected)
+        return;   // the visitor moved to another room while this one was loading
+    box.removeAttribute('aria-busy');
+    if (!ok) {
+        box.innerHTML = '<p class="rs-note">Could not check the hours right now.</p><button type="button" class="btn line sm" data-rs-retry>Try again</button>';
+        return;
+    }
+    const taken = takenSlots(i, date);
+    const state = SLOTS.map((t, k) => [t, !taken.has(k) && !isPastSlot(date, k)]);
+    const free = state.filter(([, f]) => f).length;
+    if (slot && !state.some(([t, f]) => t === slot && f))
+        slot = null;
+    $('#rs-book').innerHTML = bookLabel();
+    box.innerHTML = `<div class="rs-hh"><span>Hours ${when.toLowerCase()}</span>${free ? `<b class="rs-free"><i></i>${free} free</b>` : '<b class="rs-free bad"><i></i>Fully booked</b>'}</div>
+      <div class="hr-grid">${state.map(([t, f]) => f
+        ? `<button type="button" class="hr free rs-hr${t === slot ? ' on' : ''}" data-t="${esc(t)}" aria-pressed="${t === slot}">${esc(short(t))}</button>`
+        : `<span class="hr taken" title="Taken">${esc(short(t))}<span class="sr">, taken</span></span>`).join('')}</div>
+      <ul class="hr-key" aria-hidden="true"><li><i class="k-free"></i>Free</li><li><i class="k-sel"></i>Selected</li></ul>`;
+}
+
+function draw() {
+    drawTop();
+    drawMore();
+    loadHours();
+}
+
+function go(d, focusId) {
+    if (rooms.length < 2)
+        return;
+    cur = (cur + d + rooms.length) % rooms.length;
+    slot = null;
+    draw();
+    $('#rs-live').textContent = `${rooms[cur].s.name}, ${cur + 1} of ${rooms.length}`;
+    $(focusId || (d > 0 ? '#rs-next' : '#rs-prev'))?.focus({ preventScroll: true });
+}
+
+function selectSlot(t) {
+    slot = slot === t ? null : t;
+    document.querySelectorAll('#rs-more .rs-hr').forEach(b => {
+        const on = b.dataset.t === slot;
+        b.classList.toggle('on', on);
+        b.setAttribute('aria-pressed', String(on));
+    });
+    $('#rs-book').innerHTML = bookLabel();
+}
+
+function onClick(e) {
+    const t = e.target;
+    if (t.closest('#rs-next'))
+        return go(1, '#rs-next');
+    if (t.closest('#rs-prev'))
+        return go(-1, '#rs-prev');
+    const ph = t.closest('[data-photo]');
+    if (ph) {
+        const { s } = rooms[cur];
+        return openImageViewer({ url: s.photos[+ph.dataset.photo], title: s.name, gallery: s.photos, index: +ph.dataset.photo });
+    }
+    const hr = t.closest('.rs-hr');
+    if (hr)
+        return selectSlot(hr.dataset.t);
+    if (t.closest('[data-rs-retry]')) {
+        $('#rs-hours').innerHTML = '<p class="rs-note">Checking the hours&hellip;</p>';
+        return loadHours();
+    }
+    if (t.closest('[data-rs-book]') && !t.closest('[disabled]')) {
+        // the real booking flow opens with this room (and the hour, when one was picked) already chosen
+        const { i } = rooms[cur];
+        return slot ? goBook(i, date, slot) : goBook(i);
+    }
 }
 
 export function initCarousel() {
-    const slider = $('#slider'), dots = $('#sdots'), wrap = $('#sw'), count = $('#scount');
-    const n = SLIDES.length;
-    let current = 0, timer, target = null, release;   // target: slide we are scrolling to ourselves
-
-    slider.innerHTML = SLIDES.map(slideHTML).join('');
-    dots.innerHTML = SLIDES.map((s, i) => `<button type="button" aria-label="Go to ${esc(s.label)} (${i + 1} of ${n})"></button>`).join('');
-    const slides = [...slider.children];
-
-    const pad = v => String(v).padStart(2, '0');
-    const mark = () => {
-        [...dots.children].forEach((d, i) => {
-            d.classList.toggle('active', i === current);
-            d.setAttribute('aria-current', i === current ? 'true' : 'false');
-        });
-        count.textContent = `${pad(current + 1)} / ${pad(n)}`;
-    };
-
-    // slides can be narrower than the box (the next one peeks in on phones), so go by each slide's own position
-    const left = i => slides[i].offsetLeft - slides[0].offsetLeft;
-    const goTo = i => {
-        if (!slider.clientWidth)
+    const sec = $('#rooms'), more = $('#rs-more');
+    if (!sec || !more)
+        return;
+    // rooms the owner switched off (Unavailable) are not shown; the index into STUDIOS is kept for booking
+    rooms = STUDIOS.map((s, i) => ({ s, i })).filter(({ s }) => s.status !== 'Unavailable');
+    date = firstBookableDate();
+    when = date === manilaDay(0) ? 'Today' : 'Tomorrow';
+    if (!rooms.length) {
+        $('#rs-detail').innerHTML = '<div class="card"><h3>No rooms are open for booking right now</h3><p class="mut">Please check back soon, or contact the studio.</p></div>';
+        more.hidden = true;
+        return;
+    }
+    cur = 0;
+    slot = null;
+    draw();
+    sec.addEventListener('click', onClick);
+    more.addEventListener('click', onClick);
+    [sec, more].forEach(box => box.addEventListener('keydown', e => {
+        if ((e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') || e.altKey || e.ctrlKey || e.metaKey || e.target.closest('input, select, textarea'))
             return;
-        current = (i + n) % n;
-        target = current;   // ignore scroll events on the way there, or the dots jump back to the old slide
-        clearTimeout(release);
-        release = setTimeout(() => { target = null; }, 1000);   // safety: never stay locked
-        slider.scrollTo({ left: left(current), behavior: reducedMotion() ? 'auto' : 'smooth' });
-        mark();
-    };
-    const start = () => {
-        clearInterval(timer);
-        if (!reducedMotion())
-            timer = setInterval(() => {
-                if (!document.hidden)
-                    goTo(current + 1);   // no sliding in a background tab
-            }, 5500);
-    };
-    const stop = () => clearInterval(timer);
-
-    // follow the visitor's own swipes: the slide nearest the left edge is the current one
-    let raf = 0;
-    slider.addEventListener('scroll', () => {
-        cancelAnimationFrame(raf);
-        raf = requestAnimationFrame(() => {
-            const x = slider.scrollLeft;
-            if (target !== null) {
-                if (Math.abs(x - Math.min(left(target), slider.scrollWidth - slider.clientWidth)) < 3)
-                    target = null;   // arrived
-                return;
-            }
-            let near = 0, best = Infinity;
-            slides.forEach((_, k) => {
-                const d = Math.abs(left(k) - x);
-                if (d < best) { best = d; near = k; }
-            });
-            if (x + slider.clientWidth >= slider.scrollWidth - 2)
-                near = n - 1;   // the last slide may not reach the left edge
-            if (near !== current) {
-                current = near;
-                mark();
-            }
-        });
-    }, { passive: true });
-
-    ['pointerdown', 'wheel'].forEach(ev => slider.addEventListener(ev, () => { target = null; }, { passive: true }));
-
-    dots.addEventListener('click', e => {
-        const b = e.target.closest('button');
-        if (b) { goTo([...dots.children].indexOf(b)); start(); }
-    });
-    $('#sprev').addEventListener('click', () => { goTo(current - 1); start(); });
-    $('#snext').addEventListener('click', () => { goTo(current + 1); start(); });
-    slider.addEventListener('keydown', e => {
-        if (e.key === 'ArrowLeft') { e.preventDefault(); goTo(current - 1); start(); }
-        if (e.key === 'ArrowRight') { e.preventDefault(); goTo(current + 1); start(); }
-    });
-
-    // "Book this room" opens the booking page with that slide's studio already selected
-    slider.addEventListener('click', e => {
-        const b = e.target.closest('[data-book-studio]');
-        if (b)
-            goBook(b.dataset.bookStudio);
-    });
-
-    wrap.addEventListener('mouseenter', stop);
-    wrap.addEventListener('mouseleave', start);
-    wrap.addEventListener('focusin', stop);
-    wrap.addEventListener('focusout', start);
-    wrap.addEventListener('touchstart', stop, { passive: true });
-    wrap.addEventListener('touchend', start);
-
-    mark();
-    start();
+        e.preventDefault();
+        go(e.key === 'ArrowRight' ? 1 : -1);
+    }));
 }

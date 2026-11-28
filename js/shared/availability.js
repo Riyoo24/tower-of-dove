@@ -45,7 +45,7 @@ export async function loadBusy(studioIdx, fromDate, toDate) {
     if (error) {
         console.error(error);
         toast('Could not load availability.');
-        return;
+        return false;
     }
     (data || []).forEach(r => {
         const end = new Date(r.end_at).getTime();
@@ -61,6 +61,7 @@ export async function loadBusy(studioIdx, fromDate, toDate) {
                 (STAFF_HELD[key] = STAFF_HELD[key] || new Set()).add(idx);
         }
     });
+    return true;   // false when the request failed (the home page room panel then says so instead of showing every hour as free)
 }
 
 /* Has this hour already started or passed (Manila time)? Index 0 = 10:00 AM.

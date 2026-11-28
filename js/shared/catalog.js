@@ -18,7 +18,8 @@ export const gcashQrUrl = bust =>
 
 /* Studios and equipment are loaded from Supabase when the page opens (see loadCatalog).
    Page scripts must wait for `dataReady` before using them.
-   Studio: { dbId, id: 'A', desc, specs, rate, status, c1, c2 }   status: Available | Maintenance | Unavailable */
+   Studio: { dbId, id: 'A', name, desc, specs, about, capacity, sqm, location, photos, rate, status, c1, c2 }   status: Available | Maintenance | Unavailable
+   (name, about, capacity, sqm, location and photos come from 105_studio_room_details.sql; photos = image URLs, main photo first) */
 export const STUDIOS = [];
 
 export const EQUIPMENT = [];
@@ -38,10 +39,12 @@ export async function fetchSortPairs() {
 }
 
 export async function loadCatalog() {
-    const [st, eq, pairs] = await Promise.all([
+    const [st, eq, pairs, ph] = await Promise.all([
         run(sb, 'studio', COLS.studio, q => q.order('studio_id')),
         run(sb, 'v_equipment_stock', COLS.v_equipment_stock, q => q.order('equipment_id')),
-        fetchSortPairs()
+        fetchSortPairs(),
+        // room gallery: if 105_studio_room_details.sql has not been run yet, the rooms simply have no photos here
+        sb.from('studio_photo').select('studio_id,url,sort_order,photo_id').order('sort_order').order('photo_id').then(r => r.error ? { data: [] } : r)
     ]);
     const order = new Map(pairs);
     const pos = e => order.get(e.equipment_id) ?? e.equipment_id;
@@ -54,12 +57,21 @@ export async function loadCatalog() {
     }
     STUDIOS.length = 0;
     EQUIPMENT.length = 0;
+    // the owner's order (Admin > Studio Management, needs 105_studio_room_details.sql); without it rooms stay in id order
+    st.data.sort((a, b) => (a.sort_order ?? a.studio_id) - (b.sort_order ?? b.studio_id) || a.studio_id - b.studio_id);
     st.data.forEach((s, i) => {
         const c = STUDIO_COLORS[i % STUDIO_COLORS.length];
+        const pics = (ph.data || []).filter(x => x.studio_id === s.studio_id).map(x => x.url);
         STUDIOS.push({
             dbId: s.studio_id,
             id: s.name.replace(/^studio\s*/i, ''),
+            name: s.name,
             desc: s.description || '',
+            about: s.about || '',
+            capacity: s.capacity ?? null,
+            sqm: s.room_size_sqm == null ? null : +s.room_size_sqm,
+            location: s.location || '',
+            photos: pics.length ? pics : (s.image ? [s.image] : []),
             specs: s.room_specs || '',   // gear list, one item per line (95_studio_room_specs.sql)
             rate: +s.hourly_rate,
             status: s.status,

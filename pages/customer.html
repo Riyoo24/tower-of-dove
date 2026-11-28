@@ -71,7 +71,7 @@
 
     <!-- ============ Home + Contact Us (they are tabs of this page, so nothing reloads when you move between tabs) ============ -->
     <div id="home" class="pg on">
-      <!-- First screen: hero + availability results + carousel fill the window; "Our rooms" starts below the fold -->
+      <!-- First screen: hero + availability results + the room gallery fill the window; the room details start below the fold -->
       <div class="fold">
         <section class="hero hx">
           <div class="hx-art" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
@@ -125,28 +125,15 @@
         </section>
         <section class="avail" id="avail" hidden aria-live="polite"></section>
 
-        <!-- Showcase carousel (slides are built in js/home/carousel.js; photos come from the studio dashboard) -->
-        <section class="slider-container" aria-roledescription="carousel" aria-label="Studio showcase">
-          <div class="sc-head">
-            <div>
-              <span class="sc-eyebrow">Inside the studio</span>
-              <h2>Find your room</h2>
-              <p class="sub">Swipe through our rooms, then book the one that fits your band.</p>
-            </div>
-            <div class="sc-arrows">
-              <button type="button" id="sprev" aria-label="Previous slide">&#8249;</button>
-              <button type="button" id="snext" aria-label="Next slide">&#8250;</button>
-            </div>
-          </div>
-          <div class="slider-wrapper" id="sw">
-            <div class="slider" id="slider" tabindex="0" aria-live="off"></div>
-          </div>
-          <div class="sc-foot">
-            <div class="slider-nav" id="sdots"></div>
-            <span class="sc-count" id="scount" aria-hidden="true"></span>
-          </div>
+        <!-- Our rooms: one room at a time (js/home/carousel.js). Name, photos, capacity, size, location, about text and gear
+             come from the studio dashboard (Admin > Studio management); the hour grid and Book buttons use the live availability. -->
+        <section class="sec rs" id="rooms" aria-label="Our rooms" aria-roledescription="carousel">
+          <div id="rs-detail"></div>
+          <p class="rs-live" id="rs-live" role="status" aria-live="polite"></p>
         </section>
       </div>
+
+      <section class="sec rs-more" id="rs-more" aria-label="Room details"></section>
 
       <!-- How booking works: one slim strip, three steps joined by a line. js/shared/path.js starts the one-time
            animation when it scrolls into view; css/signal.css styles it. Without the script it is simply shown finished. -->
@@ -163,14 +150,6 @@
         <p class="sub">Four things worth knowing, so nothing surprises you at the door.</p>
         <ul class="byb-list" id="byb-list"></ul>
       </section>
-
-      <section class="sec" id="studios">
-        <span class="eyebrow">The rooms</span>
-        <h2>Our rooms</h2>
-        <p class="sub">Pick a room, then choose a date and time.</p>
-        <div class="grid g4" id="studio-grid"></div>
-      </section>
-
 
       <section class="sec" id="equipment">
         <span class="eyebrow">The gear</span>

@@ -27,6 +27,7 @@ export let BK = [],
     STAFF = [],
     CATS = [],
     STU = [],
+    PHO = [],   // room photos: { photo_id, studio_id, url, sort_order } (needs 105_studio_room_details.sql)
     DMG = [],   // damage fees of outside rentals (needs 58_damage_charges.sql)
     SWP = [],   // items swapped on a rental (needs 61_swap_rental_item.sql)
     OFR = [],   // replacement offers: staff let the customer choose a replacement item, each with its rental_swap_offer_option rows (needs 71_customer_swap_choice.sql)
@@ -78,7 +79,9 @@ async function loadAll(poll) {
         // late fee history: if 83_late_fee_collection.sql has not been run yet, carry on without it
         sb.from('late_fee_log').select('log_id,rental_ref,action,amount,old_status,new_status,note,by_user_id,by_customer,created_at').order('log_id', { ascending: false }).limit(LIMIT.rentals).then(r => r.error ? { data: [], error: null } : r),
         // check-in times: if 87_booking_check_in.sql has not been run yet, carry on without them (and hide the Check in buttons)
-        sb.rpc('staff_check_in_times').then(r => r.error ? { data: [], error: null, missing: true } : r)
+        sb.rpc('staff_check_in_times').then(r => r.error ? { data: [], error: null, missing: true } : r),
+        // room photos: if 105_studio_room_details.sql has not been run yet, carry on without them
+        sb.from('studio_photo').select('photo_id,studio_id,url,sort_order').order('sort_order').order('photo_id').then(r => r.error ? { data: [], error: null } : r)
     ]);
     const bad = res.find(r => r.error);
     if (bad) {
@@ -104,6 +107,8 @@ async function loadAll(poll) {
     LFL = res[20].data || [];
     CHK = res[21].data || [];
     CHK_OK = !res[21].missing;
+    PHO = res[22].data || [];
+    STU.sort((a, b) => (a.sort_order ?? a.studio_id) - (b.sort_order ?? b.studio_id) || a.studio_id - b.studio_id);   // the owner's order
     REP = REP || [];
     SHORT = SHORT || [];
     OFR = OFR || [];

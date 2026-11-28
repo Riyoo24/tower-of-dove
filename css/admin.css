@@ -2978,3 +2978,179 @@ body[data-role="admin"] #mb-user:active .tn-av {
     background: var(--bad-bg);
     color: var(--bad);
 }
+/* ---- Studio management (admin/studios.js): room cards, order arrows, the Edit window with its live preview ---- */
+.sx-m {
+    font-size: 13px;
+    margin: 4px 0 0;
+}
+
+.sx-two {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 12px;
+}
+
+.sx-two .sx-full {
+    grid-column: 1 / -1;
+}
+
+.sx-meta {
+    display: grid;
+    gap: 2px;
+    margin: 6px 0 0;
+    font-size: 13px;
+}
+
+.sx-foot {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+    display: grid;
+    gap: 10px;
+}
+
+.sx-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.sx-seg {
+    display: inline-flex;
+    border: 1px solid var(--btn-bd);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.sx-seg button {
+    background: transparent;
+    color: var(--ink);
+    border: 0;
+    width: 32px;
+    height: 30px;
+    font-size: 15px;
+    cursor: pointer;
+}
+
+.sx-seg button + button {
+    border-left: 1px solid var(--btn-bd);
+}
+
+.sx-seg button:hover:not(:disabled) {
+    background: var(--btn);
+}
+
+.sx-seg button:disabled {
+    opacity: .35;
+    cursor: default;
+}
+
+.sx-seg button:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: -2px;
+}
+
+/* Edit, Disable / Enable and Delete: three equal buttons, always on one row */
+.sx-act {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+
+.sx-act .btn {
+    min-height: 32px;
+    font-size: 13px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 6px;
+    margin: 0;
+    width: auto;
+}
+
+.sx-act .sx-dng {
+    color: var(--bad);
+}
+
+.sx-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 18px;
+}
+
+.sx-pv {
+    align-self: start;
+    position: sticky;
+    top: 0;
+}
+
+.sx-pv ul {
+    margin: 6px 0 0;
+    padding-left: 18px;
+    color: var(--mut);
+}
+
+.sx-price {
+    font: 700 24px 'Bricolage Grotesque';
+}
+
+.sx-photos {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.sx-pi .ph {
+    height: 84px;
+    margin: 0 0 4px;
+    position: relative;
+}
+
+.sx-pi .tag {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    background: var(--brand);
+    color: #fff;
+    font-size: 11px;
+    padding: 1px 7px;
+    border-radius: 99px;
+}
+
+.sx-pt {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.sx-pt button {
+    background: var(--btn);
+    color: var(--ink);
+    border: 1px solid var(--btn-bd);
+    border-radius: 6px;
+    font-size: 11px;
+    padding: 2px 6px;
+    cursor: pointer;
+}
+
+.sx-pt button:disabled {
+    opacity: .35;
+    cursor: default;
+}
+
+.sx-pt button:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+}
+
+@media (max-width: 760px) {
+    .sx-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .sx-pv {
+        position: static;
+    }
+}

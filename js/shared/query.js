@@ -7,7 +7,7 @@
 
 /* Columns the site reads from each view / table (columns no script uses are left out). */
 export const COLS = {
-    studio: 'studio_id,name,image,description,room_specs,hourly_rate,status',
+    studio: 'studio_id,name,image,description,room_specs,hourly_rate,status,capacity,room_size_sqm,location,about,sort_order',   // the last five need 105_studio_room_details.sql
     v_equipment_stock: 'equipment_id,name,image,description,category_name,total_quantity,in_use,available,stock_status,add_on_rate,outside_rate,allow_addon,allow_outside,min_hours,owned_quantity,out_of_service',
     v_booking_summary: 'booking_id,booking_ref,status,source,studio_id,studio_name,customer_id,customer_name,customer_number,is_guest,start_at,end_at,hours,total_amount,payment_id,payment_method,gcash_reference,payment_status,created_at,rejected_reason,down_payment,payment_option,balance_paid_amount,balance_paid_at,balance_paid_method,balance_due',
     v_payment_queue: 'payment_id,status,method,gcash_reference,amount,created_at,reference,kind,customer_name,extension_id,payment_option,balance_paid_amount,balance_paid_at,balance_paid_method',

@@ -321,28 +321,35 @@
                     </section>
                     <section id="a-stud" class="pg">
                         <h1>Studio management</h1>
-                        <p class="sub">Studios marked Available show up on the customer booking page.</p>
+                        <p class="sub">Studios marked Available show up on the customer booking page, in the order below. Open a studio to change everything customers see about it.</p>
                         <div class="grid g2">
                             <div class="grid ge" id="ast"></div>
                             <aside class="card">
                                 <h2>Add new studio</h2>
                                 <label for="sn">Name or code</label>
                                 <input id="sn" placeholder="Studio E">
-                                <label for="sd">Description</label>
-                                <textarea id="sd" rows="3" maxlength="200" style="resize:vertical" placeholder="Short line about the room, e.g. Mid-size band room"></textarea>
-                                <label for="sp">Room specs</label>
-                                <textarea id="sp" rows="6" style="resize:vertical" placeholder="One item per line, e.g.&#10;Drum set with cymbals&#10;1 Guitar amp, 4x10 cab&#10;Electric guitars not included"></textarea>
+                                <label for="sd">Short description</label>
+                                <input id="sd" maxlength="200" placeholder="e.g. Mid-size band room">
+                                <div class="sx-two">
+                                    <div>
+                                        <label for="sc">Fits up to (players)</label>
+                                        <input id="sc" type="number" min="1" step="1">
+                                    </div>
+                                    <div>
+                                        <label for="sq">Room size (sqm)</label>
+                                        <input id="sq" type="number" min="0" step="any">
+                                    </div>
+                                </div>
                                 <label for="sr">Hourly rate (₱)</label>
-                                <input id="sr" type="number">
-                                <label for="sf">Photo</label>
-                                <input id="sf" type="file">
+                                <input id="sr" type="number" min="0">
                                 <label for="ss">Status</label>
                                 <select id="ss">
                                     <option>Available</option>
                                     <option>Unavailable</option>
                                     <option>Maintenance</option>
                                 </select>
-                                <button class="btn gold full" id="sbtn" type="button">Save studio</button>
+                                <p class="mut sx-m">Add photos, gear and the “About” text after saving, with Edit.</p>
+                                <button class="btn gold full" id="sbtn" type="button" style="margin-top:12px">Save studio</button>
                             </aside>
                         </div>
                     </section>

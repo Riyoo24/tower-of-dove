@@ -2022,3 +2022,44 @@ dialog.qr-zoom .gq-acct dd {
 .qr-zoom-save {
     margin-top: 4px;
 }
+/* photo gallery in the image viewer (room photos): the picture between two round arrows */
+.imgviewer .iv-gal {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+}
+
+.imgviewer .iv-gal .idfull {
+    max-height: 70vh;
+    width: 100%;
+    object-fit: contain;
+}
+
+.imgviewer .iv-go {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid var(--line-strong);
+    background: var(--char);
+    color: var(--ink);
+    font-size: 26px;
+    line-height: 1;
+    padding: 0 0 3px;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+}
+
+.imgviewer .iv-go:hover {
+    background: var(--brand);
+    border-color: var(--brand);
+}
+
+@media (max-width: 520px) {
+    .imgviewer .iv-go {
+        width: 36px;
+        height: 36px;
+        font-size: 22px;
+    }
+}

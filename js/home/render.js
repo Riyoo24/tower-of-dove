@@ -1,14 +1,12 @@
 /* =====================================================================
-   home/render.js - studio and equipment cards on the landing page
+   home/render.js - the studio dropdown and the equipment cards on the landing page
+   (the room section is drawn by home/carousel.js)
    Data comes from shared/catalog.js (Supabase tables studio and v_equipment_stock).
    ===================================================================== */
 
-import { equipmentImage, studioThumb } from '../shared/cards.js';
-import { EQUIPMENT, STUDIOS, isClosed } from '../shared/catalog.js';
-import { cachedAvailLine, fillAvailLines } from '../shared/liveAvail.js';
-import { flipCard, specsButton } from '../shared/roomFlip.js';
-import { showRoomStatus } from '../shared/roomStatus.js';
-import { $, badge, esc, peso, specsOf } from '../shared/utils.js';
+import { equipmentImage } from '../shared/cards.js';
+import { EQUIPMENT, STUDIOS } from '../shared/catalog.js';
+import { $, esc, peso } from '../shared/utils.js';
 
 /* ============================ RENDERING ============================ */
 
@@ -17,31 +15,6 @@ export function renderStudioOptions() {
     $('#qs').innerHTML = '<option value="all" selected>All studios</option>' + STUDIOS
         .map((s, i) => `<option value="${i}">Studio ${s.id}, ${peso(s.rate)}/hr</option>`)
         .join('');
-}
-
-export function renderStudios() {
-    $('#studio-grid').innerHTML = STUDIOS.map((s, i) => {
-        const closed = isClosed(s);
-        const key = 'h' + i;
-        const { tagline, items, notes } = specsOf(s.desc, s.specs);
-        // the front shows only the short description and one "See room specs" button; the full gear list is on the back
-        const specs = (tagline ? `<p class="rm-tag">${esc(tagline)}</p>` : '') + (items.length ? specsButton(key) : '');
-        const front = `
-        ${studioThumb(s)}
-        <div class="rm-head"><h3>Studio ${esc(s.id)}</h3>${closed ? badge(s.status) : `<span class="hx-b" data-room-status="${i}"><i></i>Checking...</span>`}</div>
-        <div class="rm-body">${specs}</div>
-        ${cachedAvailLine(i)}
-        <div class="row hx-foot">
-          <span><b>${peso(s.rate)}</b> <span class="mut">/ hour</span></span>
-          <button class="btn gold" data-book-studio="${i}" ${closed ? 'disabled' : ''}>${closed ? 'Closed' : 'Book now'}</button>
-        </div>`;
-        return `
-      <div class="card hx-room">
-        ${flipCard(key, s, items, notes, front)}
-      </div>`;
-    }).join('');
-    showRoomStatus();
-    fillAvailLines($('#studio-grid'));
 }
 
 export function renderEquipment() {

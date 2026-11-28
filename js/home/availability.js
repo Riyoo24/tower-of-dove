@@ -174,13 +174,8 @@ export function initAvailability() {
     });
 }
 
-/* Buttons inside the generated cards */
+/* Buttons inside the generated cards (the room section handles its own buttons, see home/carousel.js) */
 export function initCardButtons() {
-    $('#studio-grid').addEventListener('click', e => {
-        const b = e.target.closest('[data-book-studio]');
-        if (b)
-            goBook(b.dataset.bookStudio);
-    });
     $('#equipment-grid').addEventListener('click', e => {
         const b = e.target.closest('[data-rent-item]');
         if (b)
