@@ -1,5 +1,5 @@
 /* =====================================================================
-   admin/audit.js - Audit Log tab (OWNER ONLY)
+   admin/audit.js - Audit Trail tab (OWNER ONLY)
    What every staff member did in the dashboard. Reads public.audit_log (supabase/98_audit_log.sql).
    - The rows are written by the database only. This file only READS them (select), nothing here can add, edit or delete one.
    - Row Level Security lets only the Owner read the table, so even if someone unhides the tab, staff get an empty list.
@@ -150,7 +150,7 @@ function skeleton() {
     const W = ['62%', '78%', '48%', '70%', '56%', '84%', '44%', '66%'];
     const rows = Array.from({ length: PAGE }, (_, r) =>
         `<div class="sk-tr" aria-hidden="true">${Array.from({ length: 6 }, (__, c) => bar(W[(r * 3 + c * 5) % W.length])).join('')}</div>`).join('');
-    return `<div class="sk sk-table al-sk" role="status" aria-label="Loading the audit log"><span class="sk-sr">Loading</span>`
+    return `<div class="sk sk-table al-sk" role="status" aria-label="Loading the audit trail"><span class="sk-sr">Loading</span>`
         + `<div class="sk-tr sk-th" aria-hidden="true">${Array.from({ length: 6 }, () => bar('52%')).join('')}</div>${rows}</div>`;
 }
 
@@ -210,7 +210,7 @@ function drawError(msg) {
     st.rows = [];
     st.total = 0;
     setPager();
-    stateBox(`<div class="sk-fail" role="alert"><span>${esc(msg || 'Could not load the audit log. Check your connection.')}</span>${btn('al-retry', '', 'Try again', 1)}</div>`);
+    stateBox(`<div class="sk-fail" role="alert"><span>${esc(msg || 'Could not load the audit trail. Check your connection.')}</span>${btn('al-retry', '', 'Try again', 1)}</div>`);
 }
 
 /* ---------------------------------------------------------------- loading */
@@ -243,7 +243,7 @@ async function load() {
         if (my !== st.seq)
             return;
         console.error(err);
-        drawError(/42P01|does not exist/i.test(`${err.code} ${err.message}`) ? 'The audit log is not set up yet. Run supabase/98_audit_log.sql first.' : '');
+        drawError(/42P01|does not exist/i.test(`${err.code} ${err.message}`) ? 'The audit trail is not set up yet. Run supabase/98_audit_log.sql first.' : '');
     } finally {
         if (my === st.seq)
             box().removeAttribute('aria-busy');
@@ -276,14 +276,14 @@ async function exportCsv() {
         const rows = out.map(r => [csvTime(r.created_at), r.actor_name, r.actor_role, r.category, labelOf(r.action), r.description,
             r.entity_ref || '', r.related_ref || '', r.item || '',
             r.old_values ? JSON.stringify(r.old_values) : '', r.new_values ? JSON.stringify(r.new_values) : '']);
-        csvDownload(`tower-of-dove-audit-log-${f.from || f.to ? (f.from || 'start') + '_to_' + (f.to || dayOffset(0)) : dayOffset(0)}.csv`, [{
+        csvDownload(`tower-of-dove-audit-trail-${f.from || f.to ? (f.from || 'start') + '_to_' + (f.to || dayOffset(0)) : dayOffset(0)}.csv`, [{
             head: ['Time (Manila)', 'Staff', 'Role', 'Category', 'Action', 'Description', 'Reference', 'Booking reference', 'Item', 'Before', 'After'],
             rows
-        }], [['Tower of Dove Music Studio'], ['Audit log'], ['Dates', label], ['Entries', rows.length + (out.length >= CSV_CAP ? ` (first ${CSV_CAP} only: narrow the dates for the rest)` : '')],
+        }], [['Tower of Dove Music Studio'], ['Audit trail'], ['Dates', label], ['Entries', rows.length + (out.length >= CSV_CAP ? ` (first ${CSV_CAP} only: narrow the dates for the rest)` : '')],
             ['Created', new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' })]]);
     } catch (err) {
         console.error(err);
-        toast('Could not download the audit log: ' + (err.message || 'try again.'));
+        toast('Could not download the audit trail: ' + (err.message || 'try again.'));
     } finally {
         btnReset(b);
     }
@@ -357,7 +357,7 @@ ACT['al-det'] = (id, button) => {
         row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 };
 
-/* called by index.js every time the Audit Log tab is opened */
+/* called by index.js every time the Audit Trail tab is opened */
 export async function renderAudit() {
     if (!OWNER || !SEC)
         return;
@@ -373,7 +373,7 @@ export async function renderAudit() {
         ['al-staff', 'al-from', 'al-to', 'al-act', 'al-q', 'al-csv', 'al-refresh', 'al-clear', 'al-prev', 'al-next'].forEach(id => {
             $('#' + id).disabled = true;
         });
-        return error ? drawError('') : stateBox(emptyState({ title: 'Only the owner can see the audit log', hint: 'Ask the owner if you need something from it.' }));
+        return error ? drawError('') : stateBox(emptyState({ title: 'Only the owner can see the audit trail', hint: 'Ask the owner if you need something from it.' }));
     }
     return load();
 }

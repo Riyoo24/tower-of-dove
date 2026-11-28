@@ -76,7 +76,7 @@ export const ADMIN_GROUPS = [
     { id: 'owner', label: 'Owner tools', owner: true, closed: true, items: [
         ['a-stud', 'Studio Management', 'door'],
         ['a-rep', 'Reports', 'chart'],
-        ['a-audit', 'Audit Log', 'shield'],
+        ['a-audit', 'Audit Trail', 'shield'],
         ['a-set', 'Settings', 'gear']] }
 ];
 
