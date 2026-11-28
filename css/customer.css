@@ -1816,3 +1816,12 @@ body[data-active="contact"] #home > :not(#contact):not(.foot) {
 #fa-guest #lb-saved select {
     width: 100%;
 }
+
+/* a time that has already passed: still shown in its place so the grid keeps its shape, just greyed out */
+.hr.taken.past {
+    background: transparent;
+    border: 1px dashed #ffffff14;
+    color: #55535c;
+    opacity: .6;
+    cursor: default;
+}

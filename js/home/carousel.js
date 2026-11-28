@@ -30,6 +30,10 @@ const OPEN = {
 
 let rooms = [];   // [{ s: STUDIOS entry, i: its index in STUDIOS }]: booking and availability address a room by that index
 let cur = 0, slot = null, date = '', when = '';
+let timer = 0;   // auto-advance timer
+
+const AUTO_MS = 12000;   // time each room stays on screen; the main photo's zoom (css .rs-ph.main img) lasts as long
+const still = matchMedia('(prefers-reduced-motion: reduce)');
 
 const plural = (n, w) => `${n} ${w}${+n === 1 ? '' : 's'}`;
 
@@ -125,7 +129,9 @@ async function loadHours() {
     box.innerHTML = `<div class="rs-hh"><span>Hours ${when.toLowerCase()}</span>${free ? `<b class="rs-free"><i></i>${free} free</b>` : '<b class="rs-free bad"><i></i>Fully booked</b>'}</div>
       <div class="hr-grid">${state.map(([t, f]) => f
         ? `<button type="button" class="hr free rs-hr${t === slot ? ' on' : ''}" data-t="${esc(t)}" aria-pressed="${t === slot}">${esc(short(t))}</button>`
-        : `<span class="hr taken" title="Taken">${esc(short(t))}<span class="sr">, taken</span></span>`).join('')}</div>
+        : isPastSlot(date, SLOTS.indexOf(t)) && !taken.has(SLOTS.indexOf(t))
+            ? `<span class="hr taken past" title="Time has passed">${esc(short(t))}<span class="sr">, time has passed</span></span>`
+            : `<span class="hr taken" title="Taken">${esc(short(t))}<span class="sr">, taken</span></span>`).join('')}</div>
       <ul class="hr-key" aria-hidden="true"><li><i class="k-free"></i>Free</li><li><i class="k-sel"></i>Selected</li></ul>`;
 }
 
@@ -135,14 +141,89 @@ function draw() {
     loadHours();
 }
 
-function go(d, focusId) {
-    if (rooms.length < 2)
+let busy = false;   // true while one room fades out and the next fades in
+const photoReady = new Map();   // photo url -> promise that settles once the browser has downloaded and decoded it
+const photoDone = new Set();    // photo urls that are already downloaded
+const wait = ms => new Promise(r => setTimeout(r, ms));
+
+/* Download and decode a room's main photo ahead of time, so it is on screen together with the text and not after it */
+function preload(room) {
+    const url = room?.s.photos?.[0];
+    if (!url)
+        return Promise.resolve();
+    if (!photoReady.has(url)) {
+        const im = new Image();
+        im.decoding = 'async';
+        im.src = url;
+        photoReady.set(url, (im.decode ? im.decode().catch(() => {}) : new Promise(r => { im.onload = im.onerror = r; })).then(() => photoDone.add(url)));
+    }
+    return photoReady.get(url);
+}
+
+const isReady = room => !room.s.photos?.[0] || photoDone.has(room.s.photos[0]);
+
+/* Download the other rooms' photos one after another (the next room first), so they do not fight each other or the photo on screen */
+async function warm() {
+    for (let k = 1; k < rooms.length; k++)
+        await preload(rooms[(cur + k) % rooms.length]);
+}
+
+/* Change room: the content fades out (180ms), then the next room's content fades in. The boxes never move.
+   A visitor never waits long: if the next photo is not downloaded after 0.4s the room changes anyway and the photo fades in when it arrives.
+   Automatic changes only start once the next photo is downloaded (see startAuto). */
+function go(d, focusId, auto) {
+    if (rooms.length < 2 || busy)
         return;
-    cur = (cur + d + rooms.length) % rooms.length;
-    slot = null;
-    draw();
-    $('#rs-live').textContent = `${rooms[cur].s.name}, ${cur + 1} of ${rooms.length}`;
-    $(focusId || (d > 0 ? '#rs-next' : '#rs-prev'))?.focus({ preventScroll: true });
+    const next = (cur + d + rooms.length) % rooms.length;
+    const boxes = ['#rs-detail', '#rs-more'].map($).filter(Boolean);
+    const change = () => {
+        cur = next;
+        slot = null;
+        draw();
+        if (auto)
+            return;   // automatic change: no focus jump, no screen-reader announcement
+        $('#rs-live').textContent = `${rooms[cur].s.name}, ${cur + 1} of ${rooms.length}`;
+        $(focusId || (d > 0 ? '#rs-next' : '#rs-prev'))?.focus({ preventScroll: true });
+    };
+    if (!auto)
+        startAuto();   // the visitor took control: restart the countdown
+    if (still.matches)
+        return preload(rooms[next]), change();   // reduced motion: swap at once
+    busy = true;
+    boxes.forEach(b => {
+        b.classList.remove('rs-in');
+        b.classList.add('rs-out');
+    });
+    Promise.all([wait(180), Promise.race([preload(rooms[next]), wait(400)])]).then(() => {
+        change();
+        boxes.forEach(b => b.classList.replace('rs-out', 'rs-in'));
+        setTimeout(() => { busy = false; }, 300);
+        setTimeout(() => boxes.forEach(b => b.classList.remove('rs-in')), 800);
+    });
+}
+
+/* ---- auto-advance: skipped while the visitor is on this room (mouse over the gallery or the details / booking panel, focus or a picked hour in the panel),
+   the tab is hidden, a photo viewer is open, or reduced motion is on ---- */
+function startAuto() {
+    clearInterval(timer);
+    if (rooms.length < 2 || still.matches)
+        return;
+    let due = Date.now() + AUTO_MS;
+    timer = setInterval(() => {
+        if (Date.now() < due)
+            return;
+        if (document.hidden || slot || document.querySelector('dialog[open]') || $('#rs-detail')?.matches(':hover') || $('#rs-more')?.matches(':hover, :focus-within')) {
+            due = Date.now() + 3000;   // the visitor is busy here: look again in 3s
+            return;
+        }
+        const next = rooms[(cur + 1) % rooms.length];
+        if (!isReady(next)) {
+            preload(next);   // wait (checked every 0.5s) until the next photo is downloaded, so the change is instant
+            return;
+        }
+        due = Date.now() + AUTO_MS;
+        go(1, null, true);
+    }, 500);
 }
 
 function selectSlot(t) {
@@ -196,6 +277,9 @@ export function initCarousel() {
     cur = 0;
     slot = null;
     draw();
+    preload(rooms[0]).then(warm);   // once this room's photo is in, download the other rooms' main photos one by one
+    startAuto();
+    still.addEventListener?.('change', startAuto);
     sec.addEventListener('click', onClick);
     more.addEventListener('click', onClick);
     [sec, more].forEach(box => box.addEventListener('keydown', e => {

@@ -2211,3 +2211,108 @@ button.rs-ph {
         grid-column: 1 / -1;
     }
 }
+
+/* "Our rooms": the main photo fades in and then zooms in slowly while the room is on screen (carousel.js changes the room every 12s).
+   The fade is "backwards" only, so the room change (.rs-out below) can still fade the photo out. */
+.rs-ph.main img {
+    transform-origin: center;
+    animation: rs-zoom 12s linear both, rs-fade .5s cubic-bezier(.23, 1, .32, 1) backwards;
+    will-change: transform;
+}
+
+#rs-detail:hover .rs-ph.main img {
+    animation-play-state: paused;
+}
+
+@keyframes rs-zoom {
+    from { transform: scale(1); }
+    to { transform: scale(1.12); }
+}
+
+@keyframes rs-fade {
+    from { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .rs-ph.main img {
+        animation: rs-fade .3s ease backwards;
+    }
+}
+
+
+
+/* "Our rooms": smooth change between rooms. Only the content moves (photos, title, text, hours); the boxes, borders and arrows stay put.
+   carousel.js adds rs-out, loads the next photo, swaps the room, then adds rs-in. Curve: strong ease-out; the content rises 8px and the pieces stagger by 60ms.
+   The main photo has its own fade-in above, so it is left out of rs-in. */
+#rs-detail.rs-out :is(.rs-title, .rs-meta, .rs-ph > *),
+#rs-more.rs-out :is(.rs-info > *, .rs-book > *) {
+    opacity: 0;
+    transition: opacity .18s cubic-bezier(.23, 1, .32, 1);
+}
+
+#rs-detail.rs-in :is(.rs-title, .rs-meta, .rs-ph:not(.main) > *),
+#rs-more.rs-in :is(.rs-info > *, .rs-book > *) {
+    animation: rs-in .45s cubic-bezier(.23, 1, .32, 1) backwards;
+}
+
+#rs-detail.rs-in .rs-meta { animation-delay: .04s; }
+#rs-detail.rs-in .rs-ph:nth-child(2) > * { animation-delay: .08s; }
+#rs-detail.rs-in .rs-ph:nth-child(3) > * { animation-delay: .14s; }
+#rs-detail.rs-in .rs-ph:nth-child(4) > * { animation-delay: .2s; }
+#rs-more.rs-in :is(.rs-info, .rs-book) > :nth-child(2) { animation-delay: .06s; }
+#rs-more.rs-in :is(.rs-info, .rs-book) > :nth-child(3) { animation-delay: .12s; }
+#rs-more.rs-in :is(.rs-info, .rs-book) > :nth-child(n+4) { animation-delay: .18s; }
+
+@keyframes rs-in {
+    from { opacity: 0; transform: translateY(8px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #rs-detail.rs-in *,
+    #rs-more.rs-in * {
+        animation-name: rs-fade-only;
+    }
+
+    @keyframes rs-fade-only {
+        from { opacity: 0; }
+    }
+}
+
+
+/* "Our rooms": click feedback on the hour chips and the Book button.
+   Transitions (not keyframes) so fast repeated clicks retarget from the current value. Press = squeeze, selected = small lift and glow. */
+button.rs-hr {
+    transition: transform .16s cubic-bezier(.23, 1, .32, 1), background-color .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease, filter .2s ease;
+}
+
+button.rs-hr:active {
+    transform: scale(.94);
+    transition-duration: .08s;
+}
+
+button.rs-hr.on {
+    transform: scale(1.04);
+    box-shadow: 0 6px 16px -6px var(--sel);
+}
+
+button.rs-hr.on:active {
+    transform: scale(.97);
+}
+
+.rs-book .btn.gold {
+    transition: transform .16s cubic-bezier(.23, 1, .32, 1), background-color .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+
+.rs-book .btn.gold:active:not(:disabled) {
+    transform: scale(.97);
+    transition-duration: .08s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    button.rs-hr,
+    button.rs-hr.on,
+    button.rs-hr:active,
+    .rs-book .btn.gold:active:not(:disabled) {
+        transform: none;
+    }
+}

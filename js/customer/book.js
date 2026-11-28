@@ -217,7 +217,9 @@ function renderBook() {
     const freeEl = $('#cal-free');
     freeEl.textContent = roomClosed ? 'Closed' : `${free} free`;
     freeEl.classList.toggle('none', roomClosed || free === 0);
-    $('#dayocc').innerHTML = SLOTS.map((t, i) => isTaken(i)
+    $('#dayocc').innerHTML = SLOTS.map((t, i) => !roomClosed && !taken.has(i) && isPastSlot(state.selDate, i)
+        ? `<span class="hr taken past" title="Time has passed">${esc(hourLabel(t))}<span class="sr">, time has passed</span></span>`
+        : isTaken(i)
         ? `<span class="hr taken" title="Taken">${esc(hourLabel(t))}<span class="sr">, taken</span></span>`
         : `<span class="hr free" title="Free">${esc(hourLabel(t))}<span class="sr">, free</span></span>`).join('');
     $('#cal-rate').innerHTML = room.rate > 0
