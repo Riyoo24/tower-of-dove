@@ -281,7 +281,7 @@ export function renderEquipment() {
         const st = stockOf(e, state.rentMode), ok = st > 0 && !outBlocked();
         const unit = state.rentMode === 'addon' ? 'per session' : 'per 8 hours, then 1/8 per extra hour';
 
-        const info = `${e.desc ? `<p class="mut" style="margin-top:4px">${esc(e.desc)}</p>` : ''}<p class="mut">${st} ${state.winStock[state.rentMode] ? 'free for your hours' : 'in stock now'}${mine || room < st ? `, ${room} still selectable` : ''}</p>${st < 1 && state.rentMode === 'out' && state.winStock.out && state.nextFree.out[e.id] ? `<p class="mut">Available again from ${fmtDT(state.nextFree.out[e.id])}</p>` : ''}`;
+        const info = `${e.desc ? `<p class="mut" style="margin-top:4px">${esc(e.desc)}</p>` : ''}<p class="mut">${st} ${state.winStock[state.rentMode] ? (state.rentMode === 'out' && state.winPartial.out ? 'free at your pick-up time' : 'free for your hours') : 'in stock now'}${mine || room < st ? `, ${room} still selectable` : ''}</p>${st < 1 && state.rentMode === 'out' && state.winStock.out && state.nextFree.out[e.id] ? `<p class="mut">Available again from ${fmtDT(state.nextFree.out[e.id])}</p>` : ''}`;
 
         /* − / count / + : the count is what is in this rental right now, so taking one back is one tap on the card.
            (+ stays enabled while the item can be bought, so tapping it at the limit explains where the stock is held.) */
@@ -595,6 +595,17 @@ function windowFor(ctx) {
     return new Date(z) > new Date(a) ? [a, z] : null;
 }
 
+/* Pick-up chosen but the return not yet: check the stock for the first hour from pick-up, so the numbers follow the pick-up
+   time straight away (the full pick-up to return hours are checked as soon as the return is chosen). Only for the list:
+   checkout, holds and requests still need the real window from windowFor(). */
+function previewWindow() {
+    const pd = $('#pd').value, pt = $('#pt').value;
+    if (!pd || !pt || ($('#rd').value && $('#rt').value))
+        return null;
+    const a = manilaTS(pd, +pt), t = new Date(a).getTime();
+    return Number.isFinite(t) ? [a, new Date(t + 3600e3).toISOString()] : null;
+}
+
 /* One line above the cards that says what the numbers mean, so a customer is never left guessing:
    - the numbers are for the chosen hours, or only today's stock because the hours are not known yet
    - the check failed (then it says so instead of quietly showing today's stock)
@@ -620,14 +631,21 @@ function renderStockNote() {
     else {
         el.className = 'mut';
         const w = windowFor(ctx);
-        el.textContent = (ctx === 'out' && w ? `Showing what is free from ${fmtDT(w[0])} to ${fmtDT(w[1])}. Another customer's rental is kept free for a short return and inspection time after it ends, so an item may be available a little later than its return time. Change the pick-up or return time in the Rental summary to check another time. ` : 'Numbers are for your hours only. ')
+        if (ctx === 'out' && state.winPartial.out && previewWindow())
+            el.textContent = `Showing what is free at your pick-up time, ${fmtDT(previewWindow()[0])}. Choose a return time to check your whole rental. `
+                + 'Your items are held for up to 10 minutes while checkout is open (released sooner after 2 minutes of inactivity), and reserved once you send your request.';
+        else
+            el.textContent = (ctx === 'out' && w ? `Showing what is free from ${fmtDT(w[0])} to ${fmtDT(w[1])}. Another customer's rental is kept free for a short return and inspection time after it ends, so an item may be available a little later than its return time. Change the pick-up or return time in the Rental summary to check another time. ` : 'Numbers are for your hours only. ')
             + 'Your items are held for up to 10 minutes while checkout is open (released sooner after 2 minutes of inactivity), and reserved once you send your request.';
     }
 }
 
 /* force = ask again even if the hours are the same as a moment ago (timer, or a request that was refused for stock) */
 export async function refreshWindowStock(force = false) {
-    const wins = { addon: windowFor('addon'), out: windowFor('out') }, key = JSON.stringify(wins);
+    const wins = { addon: windowFor('addon'), out: windowFor('out') }, partial = !wins.out && !!previewWindow();
+    if (partial)
+        wins.out = previewWindow();
+    const key = JSON.stringify([wins, partial]);
     if (!force && key === winKey && Date.now() - winAt < 30000)
         return;   // same hours as a moment ago: nothing to ask again
     winKey = key;
@@ -664,6 +682,7 @@ export async function refreshWindowStock(force = false) {
     state.winErr.addon = errs.addon;
     state.winErr.out = errs.out;
     state.nextFree.out = nextFree;
+    state.winPartial.out = partial && !!maps.out;
     const trimmed = trimCartToStock();
     renderEquipment();
     renderCart();

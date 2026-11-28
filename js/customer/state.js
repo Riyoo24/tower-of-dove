@@ -47,6 +47,8 @@ export const state = {
     /* Outside rentals only: { equipmentId: ISO time } = when an item that has nothing free for the chosen hours is free
        again for a rental of the same length (equipment_next_free, file 104). Empty when unknown. */
     nextFree: { out: {} },
+    /* true while the outside list shows the stock at the PICK-UP time only (the return is not chosen yet) */
+    winPartial: { out: false },
     /* The signed-in customer's own details, used to pre-fill the booking and rental forms. */
     PROFILE: null,
 };
