@@ -353,7 +353,12 @@
                 <select id="lb"></select>
               </div>
               <div id="fa-guest" hidden>
-                <div class="lb-grid">
+                <!-- Bookings saved on this device: pick one instead of typing its code and phone number -->
+                <div id="lb-saved" hidden>
+                  <label for="lb-pick">Your bookings on this device</label>
+                  <select id="lb-pick"></select>
+                </div>
+                <div class="lb-grid" id="lb-manual">
                   <div>
                     <label for="lb-ref">Booking reference code</label>
                     <input id="lb-ref" placeholder="e.g. TOD-9F3A21C7" autocomplete="off">

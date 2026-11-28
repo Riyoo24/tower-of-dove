@@ -19,6 +19,7 @@ import { bindToolbar, matchesSearch, suggestFor, suggestionsHtml, toolbarHtml } 
 import { EQUIPMENT, STUDIOS, dataReady, gcashQrUrl } from '../shared/catalog.js';
 import { gcashProofHtml, initGcashProof, uploadGcashProof } from '../shared/gcashProof.js';
 import { isMember } from '../shared/session.js';
+import { guestBookings } from '../shared/guestStore.js';
 import { HOLD_TOKEN, holdEquipment, releaseHold } from '../shared/holds.js';
 import { CUSTOMER_HOLD_TTL, CUSTOMER_IDLE_TTL, holdCountdown } from '../shared/holdTimer.js';
 import { receiptSending, sendReceipt, showReceiptResult } from '../shared/receipt.js';
@@ -403,9 +404,79 @@ async function findGuestBooking() {
     updateRequestButton();
 }
 
+/* A guest with bookings saved on this device picks one from a list; the code and phone number come from the device.
+   "Enter a different booking" (or no saved booking) shows the typed form instead. */
+const PICK_HINT = 'Choose the booking to add the equipment to. Its total is updated.';
+const OTHER = '__other';
+const OPEN_BK = ['Pending', 'Confirmed', 'Active'];
+
+function showManual(on) {
+    $('#lb-manual').hidden = !on;
+    const info = $('#lb-info');
+    if (!attachBooking && !info.classList.contains('bad-text')) {
+        info.className = 'mut';
+        info.textContent = on ? GUEST_LOOKUP_HINT : PICK_HINT;
+    }
+}
+
+export function renderGuestPicker() {
+    if (isMember() || !$('#lb-pick'))
+        return;
+    const known = new Map(BOOKINGS.filter(b => b.mine).map(b => [b.ref, b]));
+    const usable = guestBookings()
+        .filter(b => b && b.ref && /^09\d{9}$/.test(String(b.phone || '')))
+        .filter(b => !known.has(b.ref) || OPEN_BK.includes(known.get(b.ref).status));
+    $('#lb-saved').hidden = !usable.length;
+    if (!usable.length) {
+        $('#lb-pick').innerHTML = '';
+        showManual(true);
+        return;
+    }
+    const pick = $('#lb-pick');
+    const cur = pick.value;
+    pick.innerHTML = '<option value="" disabled>Choose a saved booking</option>'
+        + usable.map(b => {
+            const k = known.get(b.ref);
+            const when = k ? ` - Studio ${esc(k.studio)}, ${k.date === TODAY ? 'today' : esc(shortDate(k.date))} ${esc(k.start)}` : '';
+            return `<option value="${esc(b.ref)}">${esc(b.ref)}${when}</option>`;
+        }).join('')
+        + `<option value="${OTHER}">Enter a different booking</option>`;
+    const keep = cur === OTHER || usable.some(b => b.ref === cur) ? cur
+        : (attachBooking && usable.some(b => b.ref === attachBooking.ref) ? attachBooking.ref : '');
+    pick.value = keep;
+    showManual(keep === OTHER);
+    if (!keep && usable.length === 1 && !attachBooking) {   // only one saved booking: use it right away
+        pick.value = usable[0].ref;
+        onGuestPick();
+    }
+}
+
+function onGuestPick() {
+    const v = $('#lb-pick').value;
+    const hit = guestBookings().find(b => b.ref === v);
+    attachBooking = null;
+    $('#lb-info').className = 'mut';
+    if (hit) {
+        $('#lb-ref').value = hit.ref;
+        $('#lb-ph').value = hit.phone;
+        showManual(false);
+        findGuestBooking();
+        return;
+    }
+    $('#lb-ref').value = '';
+    $('#lb-ph').value = '';
+    showManual(v === OTHER);
+    $('#lb-info').textContent = v === OTHER ? GUEST_LOOKUP_HINT : PICK_HINT;
+    syncAddonPayOption();
+    refreshWindowStock();
+    renderSuggestions();
+    updateRequestButton();
+}
+
 export function renderRentMode() {
     $('#fa-member').hidden = !isMember();
     $('#fa-guest').hidden = isMember();
+    renderGuestPicker();
     $('#fa').hidden = state.rentMode !== 'addon';
     $('#fo').hidden = state.rentMode === 'addon';
     $('#fo-guest').hidden = !outBlocked();
@@ -631,6 +702,7 @@ export function renderAttachOptions() {
     $('#lb').innerHTML = usable.length
         ? usable.map(b => `<option value="${b.ref}">${b.ref} - Studio ${b.studio}, ${b.date === TODAY ? 'today' : shortDate(b.date)} ${b.start}</option>`).join('')
         : '<option value="">No upcoming booking. Book a studio first.</option>';
+    renderGuestPicker();
     syncAddonPayOption();
     refreshWindowStock();
 }
@@ -982,6 +1054,7 @@ export function initRentTab() {
             $('#rcdlg').close();
     });
     $('#lb-find').addEventListener('click', findGuestBooking);
+    $('#lb-pick').addEventListener('change', onGuestPick);
     // the reference and the phone number work together: pressing Enter in either looks the booking up, and
     // changing either one forgets the booking that was found
     ['#lb-ref', '#lb-ph'].forEach(sel => {
@@ -1068,7 +1141,7 @@ async function openCheckout() {
     // the booking is picked in the Rental summary on the page, so ask for it there rather than inside the pop-up
     if (state.rentMode === 'addon' && !(isMember() ? $('#lb').value : (attachBooking && attachBooking.ref))) {
         toast(isMember() ? 'Attach the rental to a studio booking first.' : 'Find your booking with its reference code and phone number first.');
-        return $(isMember() ? '#lb' : ($('#lb-ref').value.trim() ? '#lb-ph' : '#lb-ref')).focus();
+        return $(isMember() ? '#lb' : (!$('#lb-saved').hidden && !$('#lb-pick').value ? '#lb-pick' : ($('#lb-ref').value.trim() ? '#lb-ph' : '#lb-ref'))).focus();
     }
     // Hold the items for 10 minutes (same as the studio booking form) so nobody else can take the last unit meanwhile
     const req = holdRequest();
@@ -1233,6 +1306,8 @@ async function requestRental() {
                 attachBooking = null;
                 $('#lb-info').className = 'mut';
                 $('#lb-info').textContent = GUEST_LOOKUP_HINT;
+                $('#lb-pick').value = '';   // the saved booking is chosen again (and found again, with its new total)
+                renderGuestPicker();
             }
             $('#rcdlg').close();
             if (payLater) {

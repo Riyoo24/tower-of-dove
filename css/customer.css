@@ -1803,3 +1803,16 @@ body[data-active="contact"] #home > :not(#contact):not(.foot) {
         margin-top: 10px;
     }
 }
+
+/* Guest: pick a booking saved on this device instead of typing its code and phone number */
+#fa-guest #lb-saved {
+    margin-bottom: 10px;
+}
+
+#fa-guest #lb-saved label {
+    margin-top: 0;
+}
+
+#fa-guest #lb-saved select {
+    width: 100%;
+}
