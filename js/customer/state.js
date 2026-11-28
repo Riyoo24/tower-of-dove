@@ -44,6 +44,9 @@ export const state = {
     winStock: { addon: null, out: null, book: null },
     /* true when the last attempt to ask for the hours' free stock FAILED (then the cards show today's stock and say so) */
     winErr: { addon: false, out: false, book: false },
+    /* Outside rentals only: { equipmentId: ISO time } = when an item that has nothing free for the chosen hours is free
+       again for a rental of the same length (equipment_next_free, file 104). Empty when unknown. */
+    nextFree: { out: {} },
     /* The signed-in customer's own details, used to pre-fill the booking and rental forms. */
     PROFILE: null,
 };

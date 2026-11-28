@@ -538,7 +538,7 @@ async function orHold(force = false) {
     if (!force && orHeld && key === orHoldKey)
         return;   // nothing changed since the last hold
     const seq = ++orHoldSeq;
-    const ok = await holdEquipment(items, w[0], w[1]);
+    const ok = await holdEquipment(items, w[0], w[1], $('#or-m').value !== 'a');   // outside rentals also hold the return buffer (file 103)
     if (seq !== orHoldSeq)
         return;   // the list or hours changed again (or the hold was released) while asking
     if (!orOn())
@@ -614,7 +614,7 @@ async function refreshOnsiteStock() {
     const seq = ++winSeq;
     let map = null, failed = false;
     if (w) {
-        const { data, error } = await sb.rpc('equipment_available_between', { p_from: w[0], p_to: w[1], p_token: HOLD_TOKEN });   // p_token: this form's own hold is not counted as taken
+        const { data, error } = await sb.rpc('equipment_available_between', { p_from: w[0], p_to: w[1], p_token: HOLD_TOKEN, p_outside: $('#or-m').value !== 'a' });   // p_token: this form's own hold is not counted as taken
         if (!error && data)
             map = Object.fromEntries(data.map(r => [r.equipment_id, r.available]));
         else

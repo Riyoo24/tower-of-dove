@@ -107,14 +107,16 @@ export function holdRescheduleSlots(bookingRef, studioIdx, date, first, hours) {
 }
 
 /* Rental checkout: hold the cart's items for the hours they are needed (rpc hold_equipment, file 89), the same 2-minute
-   hold as the studio booking form. Resolves true when held, false when someone else holds / has reserved them. */
-export function holdEquipment(items, startAt, endAt) {
+   hold as the studio booking form. Resolves true when held, false when someone else holds / has reserved them.
+   outside = true for an outside rental: the hold also covers the return buffer (file 103). Add-ons have no buffer. */
+export function holdEquipment(items, startAt, endAt, outside = false) {
     return queueHold(async () => {
         const { data, error } = await sb.rpc('hold_equipment', {
             p_items: items,
             p_start_at: startAt,
             p_end_at: endAt,
-            p_token: HOLD_TOKEN
+            p_token: HOLD_TOKEN,
+            p_outside: outside
         });
         holdError = error ? (error.message || 'Could not hold this equipment.') : '';
         if (error) {

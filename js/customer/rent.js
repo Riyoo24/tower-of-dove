@@ -281,7 +281,7 @@ export function renderEquipment() {
         const st = stockOf(e, state.rentMode), ok = st > 0 && !outBlocked();
         const unit = state.rentMode === 'addon' ? 'per session' : 'per 8 hours, then 1/8 per extra hour';
 
-        const info = `${e.desc ? `<p class="mut" style="margin-top:4px">${esc(e.desc)}</p>` : ''}<p class="mut">${st} ${state.winStock[state.rentMode] ? 'free for your hours' : 'in stock now'}${mine || room < st ? `, ${room} still selectable` : ''}</p>`;
+        const info = `${e.desc ? `<p class="mut" style="margin-top:4px">${esc(e.desc)}</p>` : ''}<p class="mut">${st} ${state.winStock[state.rentMode] ? 'free for your hours' : 'in stock now'}${mine || room < st ? `, ${room} still selectable` : ''}</p>${st < 1 && state.rentMode === 'out' && state.winStock.out && state.nextFree.out[e.id] ? `<p class="mut">Available again from ${fmtDT(state.nextFree.out[e.id])}</p>` : ''}`;
 
         /* − / count / + : the count is what is in this rental right now, so taking one back is one tap on the card.
            (+ stays enabled while the item can be bought, so tapping it at the limit explains where the stock is held.) */
@@ -620,7 +620,7 @@ function renderStockNote() {
     else {
         el.className = 'mut';
         const w = windowFor(ctx);
-        el.textContent = (ctx === 'out' && w ? `Showing what is free from ${fmtDT(w[0])} to ${fmtDT(w[1])}. Change the pick-up or return time in the Rental summary to check another time. ` : 'Numbers are for your hours only. ')
+        el.textContent = (ctx === 'out' && w ? `Showing what is free from ${fmtDT(w[0])} to ${fmtDT(w[1])}. Another customer's rental is kept free for a short return and inspection time after it ends, so an item may be available a little later than its return time. Change the pick-up or return time in the Rental summary to check another time. ` : 'Numbers are for your hours only. ')
             + 'Your items are held for up to 10 minutes while checkout is open (released sooner after 2 minutes of inactivity), and reserved once you send your request.';
     }
 }
@@ -634,6 +634,7 @@ export async function refreshWindowStock(force = false) {
     winAt = Date.now();
     await dataReady;   // never trim or redraw the cart before the equipment list is loaded
     const seq = ++winSeq, maps = {}, errs = {};
+    let nextFree = {};
     if (wins[state.rentMode] && $('#eq-note')) {
         $('#eq-note').className = 'mut';
         $('#eq-note').textContent = 'Checking what is free for your hours...';
@@ -644,11 +645,17 @@ export async function refreshWindowStock(force = false) {
         errs[ctx] = false;
         if (!w)
             continue;
-        const { data, error } = await sb.rpc('equipment_available_between', { p_from: w[0], p_to: w[1], p_token: HOLD_TOKEN });
+        const { data, error } = await sb.rpc('equipment_available_between', { p_from: w[0], p_to: w[1], p_token: HOLD_TOKEN, p_outside: ctx === 'out' });   // outside: also needs 103_outside_return_buffer.sql
         if (!error && data)
             maps[ctx] = Object.fromEntries(data.map(r => [r.equipment_id, r.available]));   // needs 51_stock_by_time.sql
         else
             errs[ctx] = true;   // not installed yet, or the network failed: say so instead of quietly showing today's stock
+        if (ctx === 'out' && maps[ctx] && Object.values(maps[ctx]).some(n => n < 1)) {
+            // "Available again from ..." for the items that are fully reserved for these hours (file 104; optional: the cards just omit the line if it fails)
+            const nf = await sb.rpc('equipment_next_free', { p_from: w[0], p_to: w[1], p_outside: true });
+            if (!nf.error && nf.data)
+                nextFree = Object.fromEntries(nf.data.filter(r => r.free_at).map(r => [r.equipment_id, r.free_at]));
+        }
     }
     if (seq !== winSeq)
         return;   // the hours changed again while asking: the newer answer wins
@@ -656,6 +663,7 @@ export async function refreshWindowStock(force = false) {
     state.winStock.out = maps.out;
     state.winErr.addon = errs.addon;
     state.winErr.out = errs.out;
+    state.nextFree.out = nextFree;
     const trimmed = trimCartToStock();
     renderEquipment();
     renderCart();
@@ -1087,7 +1095,7 @@ function stopCheckoutTimers() {
 function holdRequest() {
     const w = windowFor(state.rentMode);
     const items = Object.entries(curCart()).map(([id, quantity]) => ({ equipment_id: +id, quantity }));
-    return w && items.length ? { items, from: w[0], to: w[1] } : null;
+    return w && items.length ? { items, from: w[0], to: w[1], outside: state.rentMode === 'out' } : null;
 }
 
 /* Checkout pressed before the pick-up / return date and time were chosen: scroll up to the "When do you need it?"
@@ -1153,7 +1161,7 @@ async function openCheckout() {
         return toast(state.rentMode === 'addon' ? 'Choose the booking this equipment is for first.' : 'Choose a pick-up and return time first.');
     const btns = [$('#rco'), $('#rco-m')];
     btns.forEach(b => (b.disabled = true));
-    const held = await holdEquipment(req.items, req.from, req.to);
+    const held = await holdEquipment(req.items, req.from, req.to, req.outside);
     btns.forEach(b => (b.disabled = false));
     renderRentMode();   // puts the disabled state of the buttons back the way the mode needs it
     if (!held) {
@@ -1169,7 +1177,7 @@ async function openCheckout() {
     // keep the hold alive while the window is open; if it can no longer be held (a long sleep, say) close the window
     coRenew = setInterval(async () => {
         const r = holdRequest();
-        if (r && !(await holdEquipment(r.items, r.from, r.to)) && $('#rcdlg').open) {
+        if (r && !(await holdEquipment(r.items, r.from, r.to, r.outside)) && $('#rcdlg').open) {
             $('#rcdlg').close();
             refreshWindowStock(true);
             toast('Your equipment hold ran out and someone else took it. The list was updated.');
