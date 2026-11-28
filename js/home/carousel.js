@@ -34,6 +34,7 @@ let timer = 0;   // auto-advance timer
 
 const AUTO_MS = 12000;   // time each room stays on screen; the main photo's zoom (css .rs-ph.main img) lasts as long
 const still = matchMedia('(prefers-reduced-motion: reduce)');
+const mouse = matchMedia('(hover: hover) and (pointer: fine)');   // phones keep :hover stuck after a tap, so hover only counts with a real mouse
 
 const plural = (n, w) => `${n} ${w}${+n === 1 ? '' : 's'}`;
 
@@ -42,7 +43,7 @@ function gallery(s) {
     const ph = s.photos, n = ph.length;
     if (!n)   // no photo yet: the coloured tile with the room letter
         return `<div class="rs-gal n0"><div class="rs-ph main tile" style="background:linear-gradient(135deg,${s.c1},${s.c2})" role="img" aria-label="${esc(s.name)}, no photo yet"><span class="rs-letter" aria-hidden="true">${esc(s.id)}</span></div></div>`;
-    const cell = (k, main) => `<button type="button" class="rs-ph pic${main ? ' main' : ''}" data-photo="${k}" aria-label="Open photo ${k + 1} of ${n}"><img src="${esc(ph[k])}" alt="${esc(s.name)}, photo ${k + 1}" width="${main ? 800 : 400}" height="${main ? 520 : 250}" ${k ? 'loading="lazy"' : 'fetchpriority="high"'} decoding="async"></button>`;
+    const cell = (k, main) => `<button type="button" class="rs-ph pic${main ? ' main' : ''}" data-photo="${k}" aria-label="Open photo ${k + 1} of ${n}"><img src="${esc(ph[k])}" alt="${esc(s.name)}, photo ${k + 1}" width="${main ? 800 : 400}" height="${main ? 520 : 250}" ${k ? 'fetchpriority="low"' : 'fetchpriority="high"'} decoding="async"></button>`;
     const cells = ph.slice(0, 4).map((_, k) => cell(k, k === 0));
     if (n > 4)
         cells.push(`<button type="button" class="rs-ph more" data-photo="0">View all ${n} photos</button>`);
@@ -135,8 +136,20 @@ async function loadHours() {
       <ul class="hr-key" aria-hidden="true"><li><i class="k-free"></i>Free</li><li><i class="k-sel"></i>Selected</li></ul>`;
 }
 
+/* A photo tile shows a soft shimmer until its image has really arrived, then the photo fades in (and starts to zoom) */
+function watchPhotos() {
+    document.querySelectorAll('#rs-detail .rs-ph.pic').forEach(b => {
+        const im = b.querySelector('img'), ready = () => b.classList.add('ready');
+        if (!im || (im.complete && im.naturalWidth))
+            return ready();
+        im.addEventListener('load', ready, { once: true });
+        im.addEventListener('error', ready, { once: true });
+    });
+}
+
 function draw() {
     drawTop();
+    watchPhotos();
     drawMore();
     loadHours();
 }
@@ -212,7 +225,7 @@ function startAuto() {
     timer = setInterval(() => {
         if (Date.now() < due)
             return;
-        if (document.hidden || slot || document.querySelector('dialog[open]') || $('#rs-detail')?.matches(':hover') || $('#rs-more')?.matches(':hover, :focus-within')) {
+        if (document.hidden || slot || document.querySelector('dialog[open]') || (mouse.matches && ($('#rs-detail')?.matches(':hover') || $('#rs-more')?.matches(':hover'))) || $('#rs-more')?.matches(':focus-within')) {
             due = Date.now() + 3000;   // the visitor is busy here: look again in 3s
             return;
         }

@@ -2220,8 +2220,12 @@ button.rs-ph {
     will-change: transform;
 }
 
-#rs-detail:hover .rs-ph.main img {
-    animation-play-state: paused;
+/* hover pauses only the zoom (first animation in the list), never the fade-in, and only on devices that really hover:
+   on a phone the last tap leaves :hover stuck, which froze the fade half way and left the photo dim */
+@media (hover: hover) and (pointer: fine) {
+    #rs-detail:hover .rs-ph.main img {
+        animation-play-state: paused, running;
+    }
 }
 
 @keyframes rs-zoom {
@@ -2393,5 +2397,34 @@ button.rs-hr.on:active {
 
     .rs-top {
         flex-wrap: wrap;
+    }
+}
+
+
+/* "Our rooms": a photo tile shimmers until its image has arrived (carousel.js adds .ready), then the photo fades in and starts to zoom.
+   Without this a slow photo left a plain dark box and then popped in. */
+.rs-ph.pic img {
+    transition: opacity .4s ease;
+}
+
+.rs-ph.pic:not(.ready) img {
+    opacity: 0;
+    animation-play-state: paused;
+}
+
+.rs-ph.pic:not(.ready)::before {
+    display: block;
+    background: linear-gradient(100deg, transparent 30%, #ffffff12 50%, transparent 70%) 0 0 / 220% 100%;
+    animation: rs-shimmer 1.3s linear infinite;
+}
+
+@keyframes rs-shimmer {
+    from { background-position: 120% 0; }
+    to { background-position: -120% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .rs-ph.pic:not(.ready)::before {
+        animation: none;
     }
 }
