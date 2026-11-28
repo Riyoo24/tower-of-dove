@@ -114,7 +114,7 @@ let obCash = null, orCash = null;
 function gcashBlock(p) {
     $(`#${p}-gw`).innerHTML = `<div class="gq">
       <img id="${p}-qr" alt="GCash QR code to scan" hidden>
-      <p class="mut" id="${p}-qn">Ask the customer to scan this QR code with GCash and pay the Total received shown below.</p>
+      <p class="mut" id="${p}-qn">Ask the customer to scan this QR code with GCash and pay the Total payment shown below.</p>
     </div>
     ${gcashProofHtml(p)}
     <label for="${p}-g">GCash reference number <span class="req" aria-hidden="true">*</span></label>
@@ -308,7 +308,7 @@ window.addEventListener('hashchange', () => {
         onbRelease();
 });
 
-/* "Total received". A booking for a later day can take a 50% down payment (the rest is collected at the studio),
+/* "Total payment". A booking for a later day can take a 50% down payment (the rest is collected at the studio),
    so the payment option box only appears for a date after today. */
 function onbTot() {
     const si = +$('#ob-s').value, h = +$('#ob-h').value, d = $('#ob-d').value;

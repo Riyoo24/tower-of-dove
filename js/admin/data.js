@@ -41,9 +41,6 @@ export let BK = [],
 
 /* true once 87_booking_check_in.sql has been run (the Check in buttons only show then) */
 export let CHK_OK = false;
-/* time of the last successful load, shown as "Updated 12s ago" (admin/topbar.js) */
-export let LOADED_AT = 0;
-
 let lastSig = '', dataChanged = true;
 
 async function loadAll(poll) {
@@ -111,7 +108,6 @@ async function loadAll(poll) {
     SHORT = SHORT || [];
     OFR = OFR || [];
     CNT = res[6].data || {};
-    LOADED_AT = Date.now();
     notifyConnection(true);
     return true;
 }

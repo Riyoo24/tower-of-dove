@@ -318,12 +318,22 @@ function bookingCfg(b) {
     };
 }
 
+/* Starting before the scheduled time: the question staff must answer first (also when a balance window follows) */
+const isEarly = iso => !!iso && Date.now() < new Date(iso).getTime();
+const earlySpec = (what, ref, iso) => ({
+    title: 'Start the session early?',
+    message: `Are you sure you want to start the session? ${what} ${ref} is scheduled for ${shortDate(dOf(iso))} at ${tOf(iso)}, and that time has not arrived yet.`,
+    ok: 'Yes, start session'
+});
+
 /* Start session (Bookings tab, Studio sessions tab, Verify window).
    No balance: the usual "Are you sure?" question. Balance due: the verification window below. */
 CONFIRM['bk-go'] = ref => {
     const b = findBk(ref);
     if (!b || balanceOf(b) > EPS || needsCheckIn(ref))
-        return undefined;   // the balance window asks instead (or, before check-in, ACT 'bk-go' says to check in first)
+        return b && !needsCheckIn(ref) && isEarly(b.start_at) ? earlySpec('Booking', ref, b.start_at) : undefined;   // the balance window asks next (or, before check-in, ACT 'bk-go' says to check in first)
+    if (isEarly(b.start_at))
+        return earlySpec('Booking', ref, b.start_at);
     return {
         title: 'Start this session?',
         message: `Start the session for ${b.booking_ref} (${b.customer_name}, ${b.studio_name}, ${shortDate(dOf(b.start_at))} ${tOf(b.start_at)}) now? It will be marked Active.`,
@@ -437,6 +447,8 @@ CONFIRM['rn-issue'] = ref => {
         return undefined;   // ACT below says why it cannot be issued yet
     if (g && addonWaitingBooking(g))
         return undefined;   // add-on: ACT below opens the booking in the Bookings tab and asks there
+    if (g && g.type === 'Outside' && isEarly(g.lines[0].pickup_date))
+        return earlySpec('Rental', ref, g.lines[0].pickup_date);   // the balance / before-photo window asks next
     if (!g || rentalBalance(g) > EPS || g.type === 'Outside')
         return undefined;   // the balance window (or the before-photo window of an outside rental) asks instead
     return {
