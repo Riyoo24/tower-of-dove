@@ -6,6 +6,7 @@
    ===================================================================== */
 
 import { $, esc, reducedMotion } from '../shared/utils.js';
+import { showRow } from '../shared/pager.js';   // the row may be on another page of the list
 
 /* the link: a real <a href="#tab"> (keyboard, right-click friendly); the click is handled by the tab modules */
 export const refLink = (kind, ref, title) =>
@@ -21,6 +22,8 @@ export function focusRows(tabId, root, ref) {
     const go = (tries = 0) => {
         const rows = [...$(root).querySelectorAll('[data-rowref]')]
             .filter(el => el.dataset.rowref === ref).map(el => el.closest('tr')).filter(Boolean);
+        if (rows.length && rows[0].classList.contains('pg-hide'))
+            showRow(rows[0]);   // it is on another page of the list: open that page first
         // the tab becomes visible on the next hashchange; wait until the row can be measured
         if (!rows.length || !rows[0].offsetParent) {
             if (tries < 20)
