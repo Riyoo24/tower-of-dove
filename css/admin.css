@@ -936,84 +936,7 @@ tr.has-why td {
     background: var(--surface);
 }
 
-/* ===== pop-up alerts (js/admin/alerts.js) ===== */
-.adm-toasts {
-    position: fixed;
-    top: 16px;
-    right: 16px;
-    z-index: 900;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    width: min(340px, calc(100vw - 32px));
-    pointer-events: none;
-}
-
-.adm-toast {
-    pointer-events: auto;
-    background: var(--card, #17171b);
-    color: var(--txt, #f4efe7);
-    border: 1px solid #ffffff1f;
-    border-left: 4px solid #B3202F;
-    border-radius: 12px;
-    padding: 12px 14px;
-    box-shadow: 0 12px 30px #000a;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    animation: admToastIn .4s cubic-bezier(.2, 1.2, .4, 1) backwards;
-}
-
-.adm-toast.pay {
-    border-left-color: #e8c26a;
-}
-
-.adm-toast.out {
-    opacity: 0;
-    transform: translateX(30px);
-    transition: opacity .25s, transform .25s;
-}
-
-.adm-toast b {
-    font-size: 14px;
-}
-
-.adm-toast span {
-    font-size: 13px;
-    color: var(--mut, #9a948a);
-}
-
-.adm-toast .ho-item {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px solid #ffffff1a;
-}
-
-.adm-toast .ho-item b {
-    font-weight: 600;
-    color: var(--txt, #f4efe7);
-}
-
-.adm-toast-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-    margin-top: 10px;
-}
-
-.adm-toast-x {
-    background: none;
-    border: 0;
-    color: var(--mut, #9a948a);
-    cursor: pointer;
-    font-size: 13px;
-}
-
+/* ===== pop-up alerts (js/admin/alerts.js): one floating "Needs attention" card that opens into a panel. Built only from the dashboard's own tokens, .card, .b and .btn. ===== */
 @keyframes admToastIn {
     from {
         opacity: 0;
@@ -1021,16 +944,118 @@ tr.has-why td {
     }
 }
 
-@media (max-width: 820px) {
-    .adm-toasts {
-        top: 64px;   /* below the mobile top bar */
-    }
-}
+.na-dock { position: fixed; inset: 0; z-index: 900; pointer-events: none; }
+.na-dock > * { pointer-events: auto; }
+.na-dock { --na-w: min(380px, calc(100vw - 32px)); }
 
+/* one floating card. Collapsed it is a 48px bell tile with a count badge; hover, focus or a new alert widens it. */
+.na-card {
+    --na-h: 48px;
+    position: fixed; top: 16px; right: 16px; width: var(--na-h); max-width: 100%;
+    background: var(--card, #17171b); color: var(--txt, #f4efe7);
+    border: 1px solid #ffffff1f; border-radius: 14px; box-shadow: 0 12px 30px #000a;
+    transition: width .28s cubic-bezier(.2, .8, .2, 1), border-color .2s;
+    animation: admToastIn .4s cubic-bezier(.2, 1.2, .4, 1) backwards;
+}
+.na-card.alert, .na-card:has(.na-trig:focus-visible) { width: var(--na-w); border-color: #ffffff3d; }
+@media (hover: hover) { .na-card:hover { width: var(--na-w); border-color: #ffffff3d; } }
+.na-card[data-top="1"] { border-color: #FF7A8566; }   /* same steady red edge as the Overdue rentals card */
+.na-card[data-top="2"] { border-color: #e8c26a55; }
+.na-card[data-top="1"]:not(.alert) { animation: admToastIn .4s cubic-bezier(.2, 1.2, .4, 1) backwards, naRing 2.8s ease-out .6s infinite; }
+@keyframes naRing { 0% { box-shadow: 0 12px 30px #000a, 0 0 0 0 #ff7a8559; } 65%, 100% { box-shadow: 0 12px 30px #000a, 0 0 0 10px #ff7a8500; } }
+
+.na-trig { display: flex; align-items: center; gap: 8px; width: 100%; min-height: var(--na-h); padding: 0 14px 0 0; background: none; border: 0; border-radius: 14px; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.na-ico { position: relative; width: calc(var(--na-h) - 2px); height: calc(var(--na-h) - 2px); display: grid; place-items: center; flex: none; }
+.na-ico .icon { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; color: var(--ink); }
+.na-n { position: absolute; top: -5px; right: -5px; min-width: 21px; height: 21px; padding: 0 6px; border-radius: 99px; display: grid; place-items: center; font-size: 12px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; background: var(--dove); color: var(--ink); box-shadow: 0 0 0 2px var(--paper); }
+.na-card[data-top="1"] .na-n { background: var(--brand); color: #fff; }
+.na-card[data-top="2"] .na-n { background: var(--warn); color: #261b00; }
+.na-card[data-top="3"] .na-n { background: var(--info); color: #0c1a3a; }
+.na-card[data-top="0"] .na-n { background: var(--ok); color: #06241b; }
+.na-trig .na-t { display: flex; flex-direction: column; min-width: 0; flex: 1; overflow: hidden; opacity: 0; transition: opacity .12s; }
+.na-trig .na-t b { font-size: 14px; white-space: nowrap; }
+.na-trig .na-t span { font-size: 13px; color: var(--mut, #9a948a); white-space: nowrap; }
+.na-trig > .icon { width: 16px; height: 16px; fill: none; stroke: var(--mut); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; margin-left: 8px; opacity: 0; transition: opacity .12s; }
+.na-card.alert .na-t, .na-card:has(.na-trig:focus-visible) .na-t,
+.na-card.alert .na-trig > .icon, .na-card:has(.na-trig:focus-visible) .na-trig > .icon { opacity: 1; transition: opacity .18s .1s; }
+@media (hover: hover) { .na-card:hover .na-t, .na-card:hover .na-trig > .icon { opacity: 1; transition: opacity .18s .1s; } }
+.na-head .icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; color: var(--mut); flex: none; }
+.na-dock[data-open="true"] .na-card { visibility: hidden; }
+
+.na-peek { margin: 0 14px; padding: 10px 0 12px; border-top: 1px solid var(--line); animation: naPeekIn .3s ease-out backwards; }
+.na-peek[hidden] { display: none; }
+.na-peek .na-r1 b { font-size: 14px; }
+.na-peek .mut { margin-top: 2px; }
+.na-peek .na-r3 { margin-top: 10px; }
+.na-peek .na-r3 .btn.sm { margin: 0; }
+@keyframes naPeekIn { from { opacity: 0; transform: translateY(-6px); } }
+
+/* the expanded panel */
+.na-dock .na-panel {
+    padding: 0; position: fixed; top: 16px; right: 16px; width: var(--na-w);
+    max-height: calc(100vh - 32px); display: flex; flex-direction: column;
+    background: var(--surface); border: 1px solid #ffffff1f; border-radius: 12px; box-shadow: 0 12px 30px #000a;
+    transform-origin: top right; transform: translateY(-6px) scale(.97); opacity: 0; visibility: hidden;
+    transition: transform .22s cubic-bezier(.2, .8, .2, 1), opacity .18s, visibility 0s .22s;
+}
+.na-dock[data-open="true"] .na-panel { transform: none; opacity: 1; visibility: visible; transition: transform .22s cubic-bezier(.2, .8, .2, 1), opacity .18s, visibility 0s; }
+.na-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 16px 12px; border-bottom: 1px solid var(--line); }
+.na-head h3 { font-size: 18px; }
+.na-head .mut b { color: var(--bad); font-weight: 600; }
+.na-body { overflow-y: auto; padding: 4px 16px 16px; min-height: 0; flex: 1; overscroll-behavior: contain; scrollbar-color: var(--line-strong) transparent; }
+.na-clear { padding: 40px 12px; text-align: center; }
+.na-clear b { color: var(--ok); font-size: 16px; display: block; }
+.na-foot { border-top: 1px solid var(--line); padding: 10px 16px; font-size: 13px; color: var(--mut); display: flex; gap: 10px; align-items: center; }
+.na-foot[hidden] { display: none; }
+
+/* tiers: most urgent first, using the dashboard's own tones (bad / warn / info / muted) */
+.na-tier { padding-top: 14px; }
+.na-th { display: flex; align-items: center; gap: 8px; width: 100%; padding: 0; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.na-th h3 { font-size: 15px; margin: 0; color: var(--tc); }
+.na-th .b { background: color-mix(in srgb, var(--tc) 16%, transparent); color: var(--tc); padding: 0 8px; font-size: 12px; }
+.na-th .icon { margin-left: auto; transition: transform .2s; }
+.na-tier[data-fold="true"] .na-th .icon { transform: rotate(-90deg); }
+.na-tier[data-fold="true"] .na-rows { display: none; }
+.na-tier > .mut { margin-top: 2px; }
+.na-tier.t1 { --tc: var(--bad); } .na-tier.t1 .na-th h3 { font-size: 17px; }
+.na-tier.t2 { --tc: var(--warn); }
+.na-tier.t3 { --tc: var(--info); }
+.na-tier.t4 { --tc: var(--mut); }
+.na-rows { list-style: none; padding: 0; margin: 10px 0 0; display: flex; flex-direction: column; gap: 8px; }
+.na-row { background: var(--paper); border: 1px solid var(--line); border-radius: var(--r); padding: 11px 12px; transition: opacity .22s, transform .22s; }
+.t1 .na-row { border-color: #FF7A8566; }   /* a steady red edge, as on the Overdue rentals card */
+.na-row.gone { opacity: 0; transform: translateX(24px); }
+.na-row.flash { animation: naFlash 1.4s ease-out; }
+@keyframes naFlash { 0%, 35% { background: var(--dove); border-color: var(--ink); } }
+.na-r1 { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.na-r1 b { font-size: 14px; }
+.na-row .mut { margin-top: 2px; overflow-wrap: anywhere; }
+.na-hint { font-size: 13px; margin-top: 6px; }
+.na-r3 { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
+.na-r3 .btn.sm { margin: 0; }
+.na-snz { background: none; border: 0; color: var(--mut); font: inherit; font-size: 13px; cursor: pointer; padding: 4px 2px; }
+.na-snz:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.na-foot button { background: none; border: 0; padding: 0; color: var(--ink); font: inherit; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+
+.na-x { flex: none; width: 34px; height: 34px; display: grid; place-items: center; margin: -4px -6px 0 0; padding: 0; background: none; border: 0; border-radius: 8px; color: var(--mut); cursor: pointer; transition: background-color .15s, color .15s; }
+.na-x:hover { background: var(--dove); color: var(--ink); }
+.na-x .icon { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* visible keyboard focus on every control of the card and the panel */
+.na-trig:focus-visible, .na-th:focus-visible, .na-snz:focus-visible, .na-x:focus-visible, .na-foot button:focus-visible { outline: 2px solid var(--brand-hi); outline-offset: 2px; border-radius: 6px; }
+.na-trig:focus-visible { outline-offset: -2px; border-radius: 14px; }
+.na-dock .btn:focus-visible { outline: 2px solid var(--brand-hi); outline-offset: 2px; }
+.na-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@media (max-width: 820px) {
+    .na-card, .na-panel { top: 64px; }
+    .na-panel { max-height: calc(100vh - 80px); }
+}
 @media (prefers-reduced-motion: reduce) {
-    .adm-toast {
-        animation: none;
-    }
+    .na-card, .na-card[data-top="1"]:not(.alert), .na-peek, .na-row.flash { animation: none; }
+    .na-card, .na-trig .na-t, .na-trig > .icon { transition: none; }
+    .na-panel, .na-row, .na-th .icon { transition: none; }
 }
 
 /* Equipment tab: out-of-service count and the "upcoming rentals are short of stock" warning (60_out_of_service_stock.sql) */
@@ -1081,6 +1106,15 @@ tr.row-flash > td {
     animation: rowflash 4.2s ease-out;
 }
 tr.row-flash > td:first-child { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 50%, transparent); }
+/* a session card the "Needs attention" card jumped to */
+.na-hl { animation: naHl 4.2s ease-out; }
+@keyframes naHl {
+    0%, 60% { box-shadow: 0 0 0 2px var(--brand-hi); background-color: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+    100% { box-shadow: 0 0 0 2px transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .na-hl { animation: none; box-shadow: 0 0 0 2px var(--brand-hi); }
+}
 @media (prefers-reduced-motion: reduce) {
     tr.row-flash > td { animation: none; background-color: color-mix(in srgb, var(--accent) 10%, transparent); }
 }
@@ -2388,7 +2422,7 @@ body[data-role="admin"] #mb-user:active .tn-av {
     align-items: center;
     gap: 10px;
     max-width: 100%;
-    margin: 4px 0 12px 16px;
+    margin: 4px 60px 12px 16px;   /* right margin keeps the bar clear of the floating "Needs attention" tile (48px + 16px from the edge) */
 }
 
 /* the search box now lives inside the bar (this overrides its earlier float and width) */
@@ -2404,8 +2438,8 @@ body[data-role="admin"] #mb-user:active .tn-av {
     .gbar {
         float: none;
         flex-wrap: wrap;
-        width: 100%;
-        margin: 0 0 16px;
+        width: calc(100% - 60px);
+        margin: 0 60px 16px 0;
     }
 
     .gbar .gs {

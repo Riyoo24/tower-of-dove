@@ -9,7 +9,7 @@ import { DMG, PAY, RL, refresh } from './data.js';
 import { dmgOf, dmgStatus } from './damage.js';
 import { repFlag } from './reputation.js';
 import { sb } from '../config/supabaseClient.js';
-import { refLink, rowMark } from './jump.js';
+import { focusRows, refLink, rowMark } from './jump.js';
 import { revealBooking } from './bookings.js';
 import { revealRental } from './rentals.js';
 import { $, badge, esc, toast } from '../shared/utils.js';
@@ -205,6 +205,18 @@ ACT['pay-clear'] = () => {   // "Clear filters" in the empty state
     payKind = paySrc = payMeth = '';
     renderPayments();
 };
+
+/* Used by the "Needs attention" card: show the Payments tab with this reference highlighted.
+   Status, type, source and method filters are cleared, and the closed group is opened when the row is in it, so the row is never hidden. */
+export function revealPayment(ref) {
+    const mine = [...PAY, ...damageRows(), ...lateRows()].filter(p => p.reference === ref);
+    state.payF = 'All';
+    payKind = paySrc = payMeth = '';
+    if (mine.length && mine.every(isClosedPay))
+        state.pastOpen.pay = true;
+    renderPayments();
+    focusRows('a-pay', '#apy', ref);
+}
 
 $('#apy').addEventListener('change', e => {
     if (e.target.id === 'pay-kind')
