@@ -19,6 +19,9 @@ function getViewer() {
         const go = e.target.closest('[data-iv-go]');
         if (go && gal)
             step(+go.dataset.ivGo);
+        const to = e.target.closest('[data-iv-to]');
+        if (to && gal)
+            show(+to.dataset.ivTo);
     });
     viewer.addEventListener('keydown', e => {
         if (gal && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
@@ -28,6 +31,7 @@ function getViewer() {
     });
     viewer.addEventListener('close', () => {
         viewer.innerHTML = '';
+        viewer.classList.remove('iv-wide');
         gal = null;
     });
     document.body.appendChild(viewer);
@@ -36,26 +40,52 @@ function getViewer() {
 
 /* gallery: show the next or previous picture (wraps around) and keep the focus on the arrow that was used */
 function step(d) {
-    gal.i = (gal.i + d + gal.list.length) % gal.list.length;
-    paintGallery(viewer);
+    show(gal.i + d);
     viewer.querySelector(`[data-iv-go="${d}"]`)?.focus();
 }
 
+function show(i) {
+    gal.i = (i + gal.list.length) % gal.list.length;
+    paintGallery(viewer);
+}
+
+/* Room photos: a big picture with the arrows on its sides, a header with the counter, and a strip of thumbnails.
+   The first call builds the window; later calls only swap the picture, so nothing jumps or flashes. */
 function paintGallery(v) {
-    const u = esc(gal.list[gal.i]), t = esc(`${gal.title} (${gal.i + 1} of ${gal.list.length})`);
+    const n = gal.list.length, u = esc(gal.list[gal.i]), t = esc(`${gal.title} (${gal.i + 1} of ${n})`);
     v.setAttribute('aria-label', t);
-    v.innerHTML = `<div class="in">
-      <h2>${t}</h2>
-      <div class="iv-gal">
+    v.classList.add('iv-wide');
+    if (!v.querySelector('.ivg')) {
+        v.innerHTML = `<div class="in ivg">
+      <header class="ivg-head">
+        <h2>${esc(gal.title)}</h2>
+        <span class="ivg-count" aria-hidden="true"></span>
+        <a class="ivg-open" target="_blank" rel="noopener">Open in new tab &#8599;</a>
+        <button type="button" class="ivg-x" data-iv-close aria-label="Close">&times;</button>
+      </header>
+      <div class="ivg-stage">
         <button type="button" class="iv-go" data-iv-go="-1" aria-label="Previous photo">&#8249;</button>
-        <img class="idfull" src="${u}" alt="${t}" decoding="async">
+        <div class="ivg-pic"><img class="idfull" alt="" decoding="async"></div>
         <button type="button" class="iv-go" data-iv-go="1" aria-label="Next photo">&#8250;</button>
       </div>
-      <div class="acts">
-        <a class="btn line" href="${u}" target="_blank" rel="noopener">Open in new tab</a>
-        <button type="button" class="btn gold" data-iv-close>Close</button>
-      </div>
+      <div class="ivg-thumbs" role="group" aria-label="All photos">${gal.list.map((src, k) => `<button type="button" class="ivg-th" data-iv-to="${k}" aria-label="Show photo ${k + 1} of ${n}"><img src="${esc(src)}" alt="" loading="lazy" decoding="async"></button>`).join('')}</div>
     </div>`;
+    }
+    v.querySelector('.ivg-count').textContent = `${gal.i + 1} / ${n}`;
+    v.querySelector('.ivg-open').href = gal.list[gal.i];
+    const img = v.querySelector('.ivg-pic img');
+    img.alt = t;
+    img.classList.add('loading');   // fades in once the new picture has arrived
+    img.onload = img.onerror = () => img.classList.remove('loading');
+    img.src = gal.list[gal.i];
+    if (img.complete)
+        img.classList.remove('loading');
+    v.querySelectorAll('.ivg-th').forEach((b, k) => {
+        b.classList.toggle('on', k === gal.i);
+        b.setAttribute('aria-current', String(k === gal.i));
+    });
+    v.querySelector('.ivg-th.on')?.scrollIntoView({ block: 'nearest', inline: 'center' });
+    [1, -1].forEach(d => { new Image().src = gal.list[(gal.i + d + n) % n]; });   // the next and previous pictures download in advance
 }
 
 /* 1234567890123 -> "1234 567 890123", the way GCash prints it on the receipt */
@@ -78,6 +108,7 @@ export function openImageViewer({ url, title, ref, amount, gallery, index = 0 })
         return;
     }
     gal = null;
+    v.classList.remove('iv-wide');
     const u = esc(url), t = esc(title || 'Picture');
     v.setAttribute('aria-label', t);
     const info = ref || amount ? `<div class="iv-info" role="group" aria-label="Details to compare with the screenshot">
