@@ -643,6 +643,19 @@
     background: var(--field);
 }
 
+/* "Map" label: looks like the selected segment but is not a control */
+.ct-seg-tag {
+    background: var(--brand);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 16px;
+    border-radius: 7px;
+    cursor: default;
+    user-select: none;
+    pointer-events: none;
+}
+
 .ct-seg button {
     border: 0;
     background: none;

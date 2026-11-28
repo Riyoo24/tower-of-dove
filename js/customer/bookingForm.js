@@ -559,12 +559,13 @@ export async function openBook(startIndex, prefill = null) {
                 <div class="co-due-rest" id="bk-balrow"><span>Balance to pay at the studio</span><span id="bk-bal"></span></div>
               </div>
             </div>
-        <div class="policy"><b>Pick-up and balance</b>
+        <div class="policy"><b>Check-in and balance</b>
           <ul>
             <li>Check in with our staff at <b>Studio ${s.id}</b> on <b>${longDate(d)}</b> at <b id="bk-when"></b>.</li>
             <li id="bk-balnote">Pay the remaining balance of <b id="bk-bal2"></b> at the studio when you arrive. Any add-on equipment is handed over there too.</li>
             <li id="bk-paidnote" hidden>Your booking is paid in full. Nothing is left to pay when you arrive. Any add-on equipment is handed over at the studio.</li>
             <li>Extra hours or equipment added later are paid separately, with the 50% or full payment option, and verified by staff.</li>
+            <li>If another band plays right before you, we may need about <b>2 minutes</b> to clean the room, so your session can start up to 2 minutes after your booked time.</li>
           </ul>
         </div>
           </section>

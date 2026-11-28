@@ -1113,6 +1113,7 @@ tr.row-flash > td:first-child { box-shadow: inset 3px 0 0 color-mix(in srgb, var
     100% { box-shadow: 0 0 0 2px transparent; }
 }
 @media (prefers-reduced-motion: reduce) {
+    .eqx-opt, .eqx-opt b, .eqx-opt input[type="checkbox"] { transition: none; }
     .na-hl { animation: none; box-shadow: 0 0 0 2px var(--brand-hi); }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1138,6 +1139,22 @@ tr.row-flash > td:first-child { box-shadow: inset 3px 0 0 color-mix(in srgb, var
 .so-n { flex: none; font-size: 12px; color: var(--brand-hi); }
 .so-auto { display: flex; min-width: 0; align-items: flex-start; gap: 8px; margin-top: 12px; font-weight: 400; }
 .so-auto input[type="checkbox"] { margin-top: 2px; }
+/* Equipment dialog: Add-on / Outside rent options are two selectable tiles with a checkbox */
+.eqx-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 6px; }
+.eqx-opt { display: flex; align-items: flex-start; gap: 12px; margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: var(--r); background: var(--paper); font-weight: 400; cursor: pointer; transition: border-color .15s, background-color .15s; }
+.eqx-opt:hover { border-color: var(--line-strong); }
+.eqx-opt:has(input:checked) { border-color: var(--brand-hi); background: #B3202F1F; box-shadow: inset 0 0 0 1px #CF3E4D55; }
+.eqx-opt:not(:has(input:checked)) b { color: var(--mut); }
+.eqx-opt:has(input:focus-visible) { outline: 2px solid var(--brand-hi); outline-offset: 2px; }
+/* a custom checkbox: dark box, brand fill and a white tick when on (the browser's white box clashed with the dark dialog) */
+.eqx-opt input[type="checkbox"] { appearance: none; -webkit-appearance: none; width: 22px; height: 22px; padding: 0; margin: 0; flex: none; display: grid; place-items: center; border: 1.5px solid var(--line-strong); border-radius: 7px; background: var(--surface) center / 14px no-repeat; cursor: pointer; outline: 0; box-shadow: none; transition: background-color .15s, border-color .15s, transform .12s; }
+.eqx-opt:hover input[type="checkbox"]:not(:checked) { border-color: var(--ink); }
+.eqx-opt input[type="checkbox"]:checked { background-color: var(--brand); border-color: var(--brand-hi); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E"); }
+.eqx-opt input[type="checkbox"]:active { transform: scale(.92); }
+.eqx-opt span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.eqx-opt b { font-size: 14.5px; color: var(--ink); transition: color .15s; }
+.eqx-opt small { font-size: 12.5px; line-height: 1.35; color: var(--mut); }
+@media (max-width: 420px) { .eqx-opts { grid-template-columns: 1fr; } }
 
 /* Equipment: drag handle and drop markers (order customers see) */
 #admin .eq-grip { cursor: grab; user-select: none; opacity: .6; padding: 0 8px 0 0; letter-spacing: -2px; font-weight: 700; }

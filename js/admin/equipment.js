@@ -403,7 +403,10 @@ function eqForm(id) {
       <div><label for="eqo">Outside price (₱)</label><input id="eqo" type="number" min="0" value="${num(c.outside_rate)}"></div>
     </div>
     <p class="mut" style="margin-top:6px">Add-on is per session. Outside is per 8 hours: each extra hour adds one-eighth, and late returns add the same one-eighth per hour late.</p>
-    <label>Rent options</label><div><button type="button" class="chip ${ad ? 'on' : ''}" id="eqx-ad" aria-pressed="${ad}">Add-on</button><button type="button" class="chip ${ou ? 'on' : ''}" id="eqx-ou" aria-pressed="${ou}">Outside</button></div>
+    <label id="eqx-l">Rent options</label><div class="eqx-opts" role="group" aria-labelledby="eqx-l">
+      <label class="eqx-opt"><input type="checkbox" id="eqx-ad" ${ad ? 'checked' : ''}><span><b>Add-on</b><small>Rented with a studio booking, priced per session</small></span></label>
+      <label class="eqx-opt"><input type="checkbox" id="eqx-ou" ${ou ? 'checked' : ''}><span><b>Outside</b><small>Taken off site, priced per 8 hours</small></span></label>
+    </div>
     <label>Equipment image</label><div class="eqimg prev" id="eq-prev"></div>
     <input id="eq-file" type="file" accept="image/*" aria-label="Attach an image">
     <label for="eq-url" style="margin-top:14px">Or paste an image link</label><input id="eq-url" placeholder="https://example.com/photo.jpg">
@@ -468,19 +471,13 @@ function eqForm(id) {
         $('#eqa').disabled = !ad;
         $('#eqo').disabled = !ou;
     };
-    const toggle = (btnId, on) => {
-        const b = $(btnId);
-        b.classList.toggle('on', on);
-        b.setAttribute('aria-pressed', String(on));
+    $('#eqx-ad').onchange = () => {
+        ad = $('#eqx-ad').checked;
         syncPrices();
     };
-    $('#eqx-ad').onclick = () => {
-        ad = !ad;
-        toggle('#eqx-ad', ad);
-    };
-    $('#eqx-ou').onclick = () => {
-        ou = !ou;
-        toggle('#eqx-ou', ou);
+    $('#eqx-ou').onchange = () => {
+        ou = $('#eqx-ou').checked;
+        syncPrices();
     };
     // Apply initial disabled state after the DOM is fully ready
     setTimeout(syncPrices, 0);
