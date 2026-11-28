@@ -108,6 +108,66 @@
     min-width: 0;
 }
 
+/* Registered-account picker of the onsite forms: search box, result list, chosen-account chip */
+.onsite-form-fields > .acc-pick {
+    grid-column: 1 / -1;
+    position: relative;
+}
+
+.acc-pick .acc-list {
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface);
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.acc-pick .acc-list li button {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.acc-pick .acc-list li button:hover,
+.acc-pick .acc-list li button:focus-visible {
+    background: rgba(255, 255, 255, .07);
+}
+
+.acc-pick .acc-list small,
+.acc-pick .acc-empty {
+    color: var(--mut);
+}
+
+.acc-pick .acc-empty {
+    padding: 8px 10px;
+}
+
+.acc-pick .acc-chip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+}
+
+.acc-pick .acc-chip small {
+    display: block;
+    color: var(--mut);
+}
+
 /* Onsite rental: the Browse equipment button sits level with Rent type, the item list spans the full row */
 .onsite-form-fields > #or-browsew .btn.full {
     margin-top: 0;

@@ -133,6 +133,101 @@ function gcashBlock(p) {
 const obProof = gcashBlock('ob');
 const orProof = gcashBlock('or');
 
+/* ---- Registered account picker ----
+   Staff search a registered account (supabase/102_onsite_customer_account.sql, staff_search_accounts). When one is chosen,
+   the booking / rental is saved on that account instead of a new guest. p = 'ob' or 'or'; fields = the inputs it fills.
+   Without a choice nothing changes: the form records a walk-in guest as before. */
+function accountPicker(box, p, fields) {
+    box.innerHTML = `<label for="${p}-as">Registered account <span class="mut">(optional, leave empty for a walk-in guest)</span></label>
+      <input id="${p}-as" type="search" autocomplete="off" maxlength="60" placeholder="Search name, username, email or phone" role="combobox" aria-expanded="false" aria-controls="${p}-al">
+      <ul class="acc-list" id="${p}-al" role="listbox" hidden></ul>
+      <div class="acc-chip" id="${p}-ac" hidden></div>`;
+    const input = $(`#${p}-as`), list = $(`#${p}-al`), chip = $(`#${p}-ac`);
+    let chosen = null, seq = 0, timer = 0;
+    const fill = (el, v) => {
+        if (el) el.value = v || '';
+    };
+    const lock = on => fields.lock.forEach(el => {
+        el.readOnly = on;
+        el.classList.toggle('locked', on);
+    });
+    const close = () => {
+        list.hidden = true;
+        list.innerHTML = '';
+        input.setAttribute('aria-expanded', 'false');
+    };
+    const fullName = a => `${a.first_name} ${a.last_name || ''}`.trim();
+    function choose(a) {
+        chosen = a;
+        close();
+        input.value = '';
+        input.hidden = true;
+        $(`label[for="${p}-as"]`).hidden = true;
+        chip.hidden = false;
+        chip.innerHTML = `<div><b>${esc(fullName(a))}</b><small>${esc([a.username && '@' + a.username, a.number, a.email].filter(Boolean).join(' · '))}</small>
+          <small>Saved on this customer's account</small></div><button type="button" class="btn sm line" id="${p}-ax">Change</button>`;
+        $(`#${p}-ax`).onclick = () => clear(true);
+        fill(fields.name, fullName(a));
+        fill(fields.phone, a.number);
+        fill(fields.email, a.email);
+        lock(true);
+        if (fields.onChange) fields.onChange(a);
+    }
+    function clear(focus) {
+        if (!chosen) return;
+        chosen = null;
+        chip.hidden = true;
+        chip.innerHTML = '';
+        input.hidden = false;
+        $(`label[for="${p}-as"]`).hidden = false;
+        lock(false);
+        fill(fields.name, '');
+        fill(fields.phone, '');
+        fill(fields.email, '');
+        if (fields.onChange) fields.onChange(null);
+        if (focus) input.focus();
+    }
+    async function search() {
+        const q = input.value.trim(), mine = ++seq;
+        if (q.length < 2)
+            return close();
+        const { data, error } = await sb.rpc('staff_search_accounts', { p_q: q });
+        if (mine !== seq || chosen)
+            return;   // a newer search or a choice came first
+        list.hidden = false;
+        input.setAttribute('aria-expanded', 'true');
+        if (error) {
+            list.innerHTML = '<li class="acc-empty">Could not search accounts (run supabase/102_onsite_customer_account.sql).</li>';
+            return console.warn(error.message);
+        }
+        const rows = data || [];
+        list.innerHTML = rows.length
+            ? rows.map((a, i) => `<li role="option"><button type="button" data-i="${i}"><span>${esc(fullName(a))}</span><small>${esc([a.username && '@' + a.username, a.number, a.email].filter(Boolean).join(' · '))}</small></button></li>`).join('')
+            : '<li class="acc-empty">No registered account found. Leave this empty to record a walk-in guest.</li>';
+        list.querySelectorAll('button').forEach(b => b.onclick = () => choose(rows[+b.dataset.i]));
+    }
+    input.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(search, 250);
+    });
+    input.addEventListener('keydown', e => {
+        if (e.key === 'Escape')
+            close();
+    });
+    return {
+        id: () => chosen ? chosen.customer_id : null,
+        account: () => chosen,
+        reset: () => {
+            clear(false);
+            input.value = '';
+            close();
+        }
+    };
+}
+
+const obAcc = accountPicker($('#ob-acc'), 'ob', { name: $('#ob-n'), phone: $('#ob-p'), email: $('#ob-em'), lock: [$('#ob-n'), $('#ob-p')] });
+const orAcc = accountPicker($('#or-accw'), 'or', { name: $('#or-n'), email: $('#or-em'), lock: [$('#or-n')] });
+
 const nameParts = n => {
     const [first, ...rest] = n.trim().split(/\s+/);
     return [first, rest.join(' ')];
@@ -300,11 +395,11 @@ $('#onb').onsubmit = async e => {
     };
     if (!n)
         return er('Enter the customer name.');
-    if (!isName(n))
+    if (!obAcc.id() && !isName(n))
         return er('The customer name can only contain letters.');
-    if (!$('#ob-p').value.trim())
+    if (!obAcc.id() && !$('#ob-p').value.trim())
         return er('Enter the customer\'s phone number.');
-    if (!isPhone($('#ob-p').value))
+    if (!obAcc.id() && !isPhone($('#ob-p').value))
         return er('Enter a valid phone number, like 0917 123 4567.');
     const email = normalizeEmail($('#ob-em').value);
     if (!email)
@@ -350,7 +445,7 @@ $('#onb').onsubmit = async e => {
     }
     const yes = await askConfirm({
         title: 'Record this onsite booking?',
-        message: `${n}, Studio ${STUDIOS[si].id}, ${longDate(d)}, ${SLOTS[+t]} for ${h} hour${h > 1 ? 's' : ''}. Received now: ${$('#ob-tot').textContent}, paid by ${m}${m === 'Cash' ? ` (cash given ${peso(obCash.tendered())}, change ${peso(obCash.tendered() - obDue)})` : ''}.${email ? ` The receipt is emailed to ${email}.` : ''}`,
+        message: `${n}${obAcc.id() ? ' (registered account)' : ''}, Studio ${STUDIOS[si].id}, ${longDate(d)}, ${SLOTS[+t]} for ${h} hour${h > 1 ? 's' : ''}. Received now: ${$('#ob-tot').textContent}, paid by ${m}${m === 'Cash' ? ` (cash given ${peso(obCash.tendered())}, change ${peso(obCash.tendered() - obDue)})` : ''}.${email ? ` The receipt is emailed to ${email}.` : ''}`,
         ok: 'Yes, record booking'
     });
     if (!yes)
@@ -371,7 +466,8 @@ $('#onb').onsubmit = async e => {
         p_payment_method: m,
         p_gcash_reference: m === 'GCash' ? g.replace(/\s/g, '') : null,
         p_pay_option: $('#ob-pow').hidden ? 'full' : $('#ob-po').value,   // 'down' only for a booking on a later day
-        p_token: HOLD_TOKEN
+        p_token: HOLD_TOKEN,
+        ...(obAcc.id() ? { p_customer_id: obAcc.id() } : {})   // record it on the chosen account (supabase/102)
     }));
     if (!r)
         return er('Could not record the booking. See the message above.');
@@ -381,6 +477,7 @@ $('#onb').onsubmit = async e => {
     holdNote();
     const obGiven = m === 'Cash' ? obCash.tendered() : null;
     $('#onb').reset();
+    obAcc.reset();
     obProof.reset();
     obCash.reset();
     $('#ob-cash').hidden = false;   // the form is back on Cash
@@ -559,7 +656,7 @@ function orForm() {
     ['or-aw'].forEach(x => {
         $('#' + x).hidden = m !== 'a';
     });
-    ['or-ow', 'or-rw', 'or-tw', 'or-cw', 'or-emw'].forEach(x => {   // or-emw: the receipt email is asked for outside rentals only (an add-on uses its booking's email)
+    ['or-accw', 'or-ow', 'or-rw', 'or-tw', 'or-cw', 'or-emw'].forEach(x => {   // or-emw: the receipt email is asked for outside rentals only (an add-on uses its booking's email)
         $('#' + x).hidden = m !== 'o';
     });
     $('#or-gw').hidden = $('#or-pm').value !== 'GCash';
@@ -885,7 +982,7 @@ $('#onr').onsubmit = async e => {
         const n = $('#or-n').value.trim(), ret = $('#or-r').value, sd = $('#or-sd').value;
         if (!n)
             return er('Enter the customer name.');
-        if (!isName(n))
+        if (!orAcc.id() && !isName(n))
             return er('The customer name can only contain letters.');
         if (!sd || sd < firstDay()) {
             syncRentalTimes();
@@ -904,6 +1001,10 @@ $('#onr').onsubmit = async e => {
         if (!$('#or-id').checked)
             return er('Confirm that you checked a valid ID.');
         [args.p_first_name, args.p_last_name] = nameParts(n);
+        if (orAcc.id()) {
+            args.p_customer_id = orAcc.id();   // record it on the chosen account (supabase/102)
+            args.p_number = (orAcc.account().number || '').trim() || null;
+        }
         args.p_pickup_date = manilaTS(sd, +$('#or-st').value);
         args.p_return_date = manilaTS(ret, +$('#or-rt').value);
         args.p_id_type = $('#or-t').value;
@@ -919,7 +1020,7 @@ $('#onr').onsubmit = async e => {
         }
     }
     const what = orCart.map(x => `${STK.find(y => y.equipment_id === x.equipment_id).name} x${x.quantity}`).join(', '),
-        who = m === 'a' ? `for booking ${args.p_booking_ref}` : `for ${$('#or-n').value.trim()}, pick-up ${longDate($('#or-sd').value)} ${tlabel(+$('#or-st').value)}, return ${longDate($('#or-r').value)} ${tlabel(+$('#or-rt').value)}`;
+        who = m === 'a' ? `for booking ${args.p_booking_ref}` : `for ${$('#or-n').value.trim()}${orAcc.id() ? ' (registered account)' : ''}, pick-up ${longDate($('#or-sd').value)} ${tlabel(+$('#or-st').value)}, return ${longDate($('#or-r').value)} ${tlabel(+$('#or-rt').value)}`;
     const yes = await askConfirm({
         title: 'Record this rental?',
         message: later
@@ -944,6 +1045,7 @@ $('#onr').onsubmit = async e => {
     orRelease();   // the rental is saved: free the held items
     await loadCatalog();
     $('#onr').reset();
+    orAcc.reset();
     orProof.reset();
     orCash.reset();
     $('#or-cash').hidden = false;   // the form is back on Cash

@@ -130,6 +130,7 @@
                         <div class="grid onsite-form-layout">
                             <form class="card" id="onb" novalidate>
                                 <div class="fg onsite-form-fields">
+                                    <div id="ob-acc" class="acc-pick"></div>   <!-- registered-account search: drawn by js/admin/onsite.js -->
                                     <div>
                                         <label for="ob-n">Customer name <span class="req" aria-hidden="true">*</span></label>
                                         <input id="ob-n" data-letters required aria-required="true">
@@ -244,6 +245,7 @@
                                         <label for="or-b">Booking</label>
                                         <select id="or-b"></select>
                                     </div>
+                                    <div id="or-accw" class="acc-pick" hidden></div>   <!-- registered-account search (outside rent): drawn by js/admin/onsite.js -->
                                     <div id="or-ow" hidden>
                                         <label for="or-n">Customer name <span class="req" aria-hidden="true">*</span></label>
                                         <input id="or-n" data-letters required aria-required="true">
